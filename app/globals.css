@@ -1040,6 +1040,26 @@ button.party-slot.empty:hover:not(:disabled) {
   font-weight: 700;
 }
 
+.auction-cycle-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  border: 1px solid rgba(56, 189, 248, 0.32);
+  border-radius: 8px;
+  background: rgba(8, 47, 73, 0.28);
+  color: #bae6fd;
+  padding: 9px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.auction-cycle-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #38bdf8;
+}
+
 .auction-start-row {
   justify-content: flex-end;
 }

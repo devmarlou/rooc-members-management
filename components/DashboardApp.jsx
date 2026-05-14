@@ -1123,6 +1123,13 @@ function AuctionFoundation({
           activeAuctions.map((auction) => {
             const bidRows = groupedAuctionBids(auction.units || [], auction.queue || []);
             const locked = auction.status === "locked";
+            const cycleResetItems = [
+              ...new Set(
+                bidRows.flatMap((row) => row.items
+                  .filter((item) => item.cycle_reset)
+                  .map((item) => item.item))
+              )
+            ];
             return (
               <article className={`active-auction-card auction-${auction.type}${locked ? " locked" : ""}`} key={auction.id}>
                 <div className="active-dot-row">
@@ -1136,6 +1143,12 @@ function AuctionFoundation({
                   <span><Gavel size={14} />{auction.pageCount || 0} pages</span>
                   <span><Trophy size={14} />{auction.units?.length || 0} allocations</span>
                 </div>
+                {cycleResetItems.length > 0 && (
+                  <div className="auction-cycle-note">
+                    <RefreshCw size={15} />
+                    <span>{cycleResetItems.join(", ")} cycle finished for all members, so this auction starts a fresh item cycle.</span>
+                  </div>
+                )}
                 <div className="allocation-table-wrap">
                   {bidRows.length ? (
                     <table className="allocation-table">
