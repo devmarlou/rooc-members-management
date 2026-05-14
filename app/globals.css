@@ -1158,6 +1158,19 @@ button.party-slot.empty:hover:not(:disabled) {
   color: var(--muted-2);
 }
 
+.progress-total {
+  display: inline-flex;
+  min-width: 38px;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(244, 244, 245, 0.08);
+  color: #e4e4e7;
+  padding: 4px 8px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .progress-status {
   display: inline-flex;
   border: 1px solid transparent;
@@ -1168,6 +1181,12 @@ button.party-slot.empty:hover:not(:disabled) {
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.progress-status.empty {
+  border-color: rgba(113, 113, 122, 0.34);
+  background: rgba(39, 39, 42, 0.52);
+  color: var(--muted-2);
 }
 
 .allocation-table code {

@@ -765,6 +765,13 @@ function progressCellState(received, cap) {
   return "empty";
 }
 
+function progressRowStatus(row, limitedItems) {
+  const receivedTotal = limitedItems.reduce((sum, item) => sum + (row.received[item.item_key] || 0), 0);
+  if (row.is_complete) return { label: "cycle capped", state: "capped" };
+  if (receivedTotal === 0) return { label: "in queue", state: "empty" };
+  return { label: "incomplete", state: "warning" };
+}
+
 function MemberProgressTable({ auctionItems, auctionState }) {
   const limitedItems = auctionItems.filter((item) => item.gates_round_completion);
   const rows = auctionState?.progress || [];
@@ -816,29 +823,35 @@ function MemberProgressTable({ auctionItems, auctionState }) {
               <th>Line</th>
               <th>Member</th>
               {limitedItems.map((item) => <th key={item.id}>{item.short_name}</th>)}
+              <th>Total</th>
               <th>Status</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.member.id}>
-                <td>{row.position}</td>
-                <td>
-                  <strong>{row.member.char_name}</strong>
-                  <span>{row.member.char_class}</span>
-                </td>
-                {limitedItems.map((item) => {
-                  const received = row.received[item.item_key] || 0;
-                  const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
-                  return (
-                    <td key={item.id}>
-                      <span className={`progress-count ${progressCellState(received, cap)}`}>{received}/{cap}</span>
-                    </td>
-                  );
-                })}
-                <td><em className={row.is_complete ? "progress-status capped" : "progress-status warning"}>{row.is_complete ? "cycle capped" : "incomplete"}</em></td>
-              </tr>
-            ))}
+            {rows.map((row) => {
+              const status = progressRowStatus(row, limitedItems);
+              const totalReceived = auctionItems.reduce((sum, item) => sum + (row.received[item.item_key] || 0), 0);
+              return (
+                <tr key={row.member.id}>
+                  <td>{row.position}</td>
+                  <td>
+                    <strong>{row.member.char_name}</strong>
+                    <span>{row.member.char_class}</span>
+                  </td>
+                  {limitedItems.map((item) => {
+                    const received = row.received[item.item_key] || 0;
+                    const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
+                    return (
+                      <td key={item.id}>
+                        <span className={`progress-count ${progressCellState(received, cap)}`}>{received}/{cap}</span>
+                      </td>
+                    );
+                  })}
+                  <td><span className="progress-total">{totalReceived}</span></td>
+                  <td><em className={`progress-status ${status.state}`}>{status.label}</em></td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
