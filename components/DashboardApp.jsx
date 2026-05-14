@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   Ban,
   Copy,
+  RefreshCw,
   LayoutGrid,
   List
 } from "lucide-react";
