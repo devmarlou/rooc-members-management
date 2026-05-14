@@ -20,7 +20,8 @@ import {
   Check,
   Loader2,
   AlertTriangle,
-  Ban
+  Ban,
+  Copy
 } from "lucide-react";
 import { classByName, classes, classOrder, colorGroups } from "@/components/data";
 
@@ -609,14 +610,34 @@ function compactSlots(units) {
           previous = slot;
           continue;
         }
-        ranges.push(start === previous ? `S${start}` : `S${start}-${previous}`);
+        ranges.push(start === previous ? String(start) : `${start}-${previous}`);
         start = slot;
         previous = slot;
       }
 
-      return `P${page} ${ranges.join(",")}`;
+      return `Page ${page} and Slot ${ranges.join(", ")}`;
     })
     .join(" · ");
+}
+
+function formatDiscordBidList(auction, bidRows) {
+  const lines = [
+    `**${auction.name || auctionTypeLabel(auction.type)}**`,
+    ""
+  ];
+
+  for (const row of bidRows) {
+    const memberName = row.member?.char_name || "Unknown";
+    const linePrefix = Number.isFinite(row.queuePosition) && row.queuePosition !== Number.MAX_SAFE_INTEGER
+      ? `Line ${row.queuePosition} - `
+      : "";
+    const itemText = row.items
+      .map((item) => `${item.item}: ${item.positions}${item.quantity > 1 ? ` x${item.quantity}` : ""}`)
+      .join("; ");
+    lines.push(`${linePrefix}${memberName}: ${itemText}`);
+  }
+
+  return lines.join("\n");
 }
 
 function groupedAuctionBids(units = [], queue = []) {
@@ -901,6 +922,8 @@ function AuctionFoundation({
   onLockAuction,
   onCantPay,
   onDoneAuction,
+  onDoneEvent,
+  onCopyAuctionList,
   busy
 }) {
   const activeRound = auctionState?.activeRound;
@@ -909,6 +932,7 @@ function AuctionFoundation({
   const glAuction = activeAuctions.find((auction) => auction.type === "gl_woe");
   const leagueAuction = activeAuctions.find((auction) => auction.type === "league_prize");
   const lockedGlReadyForLeague = glAuction?.status === "locked";
+  const pairedEventActive = Boolean(lockedGlReadyForLeague && leagueAuction);
   const canStartLeague = Boolean(activeRound && lockedGlReadyForLeague && !leagueAuction);
   const leagueHint = glAuction
     ? lockedGlReadyForLeague
@@ -1015,15 +1039,20 @@ function AuctionFoundation({
                   )}
                 </div>
                 <div className="active-actions">
+                  <button className="ghost-button" type="button" onClick={() => onCopyAuctionList(auction, bidRows)} disabled={!bidRows.length}>
+                    <Copy size={15} />Copy list
+                  </button>
                   {auction.type === "gl_woe" && !locked && (
                     <button className="ghost-button" type="button" onClick={() => onLockAuction(auction)} disabled={busy}>
                       <Shield size={15} />Lock-in list
                     </button>
                   )}
-                  <button className="primary-button" type="button" onClick={() => onDoneAuction(auction)} disabled={busy}>
-                    {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
-                    Done
-                  </button>
+                  {!pairedEventActive && (
+                    <button className="primary-button" type="button" onClick={() => onDoneAuction(auction)} disabled={busy}>
+                      {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
+                      Done
+                    </button>
+                  )}
                 </div>
               </article>
             );
@@ -1049,6 +1078,12 @@ function AuctionFoundation({
       <div className="auction-start-row">
         <button className="primary-button" type="button" disabled={!activeRound || Boolean(glAuction) || Boolean(leagueAuction)} onClick={() => onOpenStartAuction("gl_woe")}><Plus size={16} />New GL/WoE Auction</button>
         <button className="ghost-button" type="button" disabled={!canStartLeague} onClick={() => onOpenStartAuction("league_prize")} title={canStartLeague ? "Start League Prize" : "Lock-in GL/WoE first"}><Plus size={16} />New League Prize Auction</button>
+        {pairedEventActive && (
+          <button className="primary-button" type="button" onClick={() => onDoneEvent([glAuction, leagueAuction])} disabled={busy}>
+            {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
+            Done event
+          </button>
+        )}
       </div>
       <p className={canStartLeague ? "auction-flow-note ready" : "auction-flow-note"}>{leagueHint}</p>
 
@@ -1429,6 +1464,43 @@ export default function DashboardApp() {
     });
   }
 
+  function requestDoneEvent(auctions) {
+    const eventAuctions = (auctions || []).filter(Boolean);
+    if (!eventAuctions.length) return;
+    const orderedAuctions = [
+      ...eventAuctions.filter((auction) => auction.type === "gl_woe"),
+      ...eventAuctions.filter((auction) => auction.type !== "gl_woe")
+    ];
+
+    setConfirmAction({
+      title: "Finish event auctions",
+      body: "Finalize GL/WoE and League Prize together? GL/WoE progress will be applied first, then League Prize. This cannot be undone.",
+      confirmLabel: "Finalize event",
+      tone: "default",
+      run: async () => {
+        let nextAuctionState = null;
+        for (const auction of orderedAuctions) {
+          const data = await api("/api/auctions/active/done", {
+            method: "POST",
+            body: JSON.stringify({ auctionId: auction.id })
+          });
+          nextAuctionState = data.auctionState;
+        }
+        if (nextAuctionState) setAuctionState(nextAuctionState);
+        setToast("Event auctions finalized");
+      }
+    });
+  }
+
+  async function copyAuctionList(auction, bidRows) {
+    try {
+      await navigator.clipboard.writeText(formatDiscordBidList(auction, bidRows));
+      setToast("Auction list copied for Discord");
+    } catch (err) {
+      setError("Could not copy the auction list.");
+    }
+  }
+
   function requestResetLineup() {
     setConfirmAction({
       title: "Reset test lineup",
@@ -1508,6 +1580,8 @@ export default function DashboardApp() {
               onLockAuction={requestLockAuction}
               onCantPay={requestCantPay}
               onDoneAuction={requestDoneAuction}
+              onDoneEvent={requestDoneEvent}
+              onCopyAuctionList={copyAuctionList}
             />
           </>
         )}
