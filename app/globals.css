@@ -1343,7 +1343,7 @@ button.party-slot.empty:hover:not(:disabled) {
   min-width: 54px;
   justify-content: center;
   border: 1px solid rgba(63, 63, 70, 0.8);
-  border-radius: 999px;
+  border-radius: 4px;
   padding: 4px 8px;
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 11px;
@@ -1377,8 +1377,8 @@ button.party-slot.empty:hover:not(:disabled) {
 
 .progress-held-stack {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  align-items: flex-end;
+  flex-direction: column;
   gap: 6px;
 }
 
@@ -1386,10 +1386,10 @@ button.party-slot.empty:hover:not(:disabled) {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-width: 112px;
+  width: 132px;
   justify-content: center;
   border: 1px solid rgba(63, 63, 70, 0.8);
-  border-radius: 999px;
+  border-radius: 4px;
   background: rgba(39, 39, 42, 0.46);
   color: #d4d4d8;
   margin-top: 0;
