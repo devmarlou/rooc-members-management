@@ -265,7 +265,7 @@ function RosterLimitForm({ current, minimum, onCancel, onSave }) {
   );
 }
 
-function Header({ username, onLogout, publicView = false }) {
+function Header({ username, onLogout, publicView = false, publicGlAuction = null }) {
   return (
     <header className="topbar">
       <div className="topbar-inner">
@@ -289,6 +289,12 @@ function Header({ username, onLogout, publicView = false }) {
           {!publicView && <button className="ghost-button" onClick={onLogout}><LogOut size={15} />Log out</button>}
         </div>
       </div>
+      {publicGlAuction && (
+        <div className="topbar-announcement">
+          <Gavel size={15} />
+          <span>{publicGlAuction.status === "locked" ? "GL/WoE Auction list is locked. League Prize may be prepared next." : "GL/WoE Auction is running. Check the auction table for current bid instructions."}</span>
+        </div>
+      )}
     </header>
   );
 }
@@ -1768,7 +1774,7 @@ export default function DashboardApp({ publicView = false }) {
   return (
     <>
       <NoiseLayer />
-      <Header username={session.username} onLogout={logout} publicView={publicView} />
+      <Header username={session.username} onLogout={logout} publicView={publicView} publicGlAuction={publicGlAuction} />
       <main className="dashboard">
         <Stats
           members={members}
@@ -1783,12 +1789,6 @@ export default function DashboardApp({ publicView = false }) {
             <AlertTriangle size={17} />
             <span>{error}</span>
             <button onClick={() => setError("")}>Dismiss</button>
-          </div>
-        )}
-        {publicGlAuction && (
-          <div className="alert-panel auction-running-notice">
-            <Gavel size={17} />
-            <span>{publicGlAuction.status === "locked" ? "GL/WoE Auction list is locked. League Prize may be prepared next." : "GL/WoE Auction is running. Check the auction table for current bid instructions."}</span>
           </div>
         )}
         {loading ? (
@@ -1931,7 +1931,7 @@ export default function DashboardApp({ publicView = false }) {
       )}
 
       {toast && (
-        <div className="toast">
+        <div className={publicView ? "toast public-toast" : "toast"}>
           <Check size={15} />
           <span>{toast}</span>
           <button onClick={() => setToast("")}><X size={14} /></button>

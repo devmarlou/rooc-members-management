@@ -302,6 +302,25 @@ label span {
   gap: 20px;
 }
 
+.topbar-announcement {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-top: 1px solid rgba(245, 158, 11, 0.24);
+  background: linear-gradient(90deg, rgba(120, 53, 15, 0.16), rgba(245, 158, 11, 0.16), rgba(120, 53, 15, 0.16));
+  color: #fde68a;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.topbar-announcement svg {
+  flex: 0 0 auto;
+  color: var(--amber-2);
+}
+
 .brand-row,
 .admin-row {
   display: flex;
@@ -2027,6 +2046,15 @@ button.party-slot.empty:hover:not(:disabled) {
   border: 0;
   background: transparent;
   color: inherit;
+}
+
+.public-toast {
+  top: 104px;
+  bottom: auto;
+  max-width: min(520px, calc(100vw - 28px));
+  border-color: rgba(245, 158, 11, 0.42);
+  background: rgba(24, 24, 27, 0.96);
+  color: #fde68a;
 }
 
 .footer-strip {
