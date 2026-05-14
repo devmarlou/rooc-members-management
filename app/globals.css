@@ -544,6 +544,36 @@ label span {
   width: 220px;
 }
 
+.view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(63, 63, 70, 0.85);
+  border-radius: 8px;
+  background: rgba(9, 9, 11, 0.62);
+  padding: 3px;
+}
+
+.view-toggle button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.view-toggle button.active {
+  background: rgba(245, 158, 11, 0.14);
+  color: var(--amber-2);
+}
+
 .roster-table-wrap {
   overflow: auto;
   border: 1px solid rgba(63, 63, 70, 0.75);
@@ -1855,6 +1885,14 @@ button.party-slot.empty:hover:not(:disabled) {
 
   .toolbar select {
     width: 100%;
+  }
+
+  .view-toggle {
+    width: 100%;
+  }
+
+  .view-toggle button {
+    flex: 1;
   }
 
   .roster-table {

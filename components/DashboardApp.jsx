@@ -21,7 +21,9 @@ import {
   Loader2,
   AlertTriangle,
   Ban,
-  Copy
+  Copy,
+  LayoutGrid,
+  List
 } from "lucide-react";
 import { classByName, classes, classOrder, colorGroups } from "@/components/data";
 
@@ -342,6 +344,7 @@ function Stats({ members, memberLimit, activeClass, onClassFilter, onEditLimit, 
 
 function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd, onEdit, onDelete, canAddMember, memberLimit, readOnly = false }) {
   const [query, setQuery] = useState("");
+  const [viewMode, setViewMode] = useState("list");
 
   const filteredMembers = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -365,6 +368,25 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
     });
   }, [filteredMembers]);
 
+  const columns = useMemo(() => {
+    const byClass = {};
+    for (const member of orderedMembers) {
+      const key = member.char_class === "Bard" || member.char_class === "Dancer" ? "Bard / Dancer" : member.char_class;
+      byClass[key] ||= [];
+      byClass[key].push(member);
+    }
+
+    const ordered = [];
+    for (const name of classOrder) {
+      if (name === "Dancer") continue;
+      const key = name === "Bard" ? "Bard / Dancer" : name;
+      if (byClass[key]?.length && !ordered.some((col) => col.key === key)) {
+        ordered.push({ key, icon: name, members: byClass[key] });
+      }
+    }
+    return ordered;
+  }, [orderedMembers]);
+
   return (
     <section className="content-section">
       <div className="section-title-row">
@@ -387,8 +409,16 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
           <option value="">All classes</option>
           {classes.map((cls) => <option key={cls.name} value={cls.name}>{cls.name}</option>)}
         </select>
+        <div className="view-toggle" aria-label="Roster view">
+          <button type="button" className={viewMode === "list" ? "active" : ""} onClick={() => setViewMode("list")} aria-pressed={viewMode === "list"}>
+            <List size={15} />List
+          </button>
+          <button type="button" className={viewMode === "cards" ? "active" : ""} onClick={() => setViewMode("cards")} aria-pressed={viewMode === "cards"}>
+            <LayoutGrid size={15} />Cards
+          </button>
+        </div>
       </div>
-      {orderedMembers.length ? (
+      {orderedMembers.length && viewMode === "list" ? (
         <div className="roster-table-wrap">
           <table className="roster-table">
             <thead>
@@ -423,6 +453,36 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
             </tbody>
           </table>
         </div>
+      ) : orderedMembers.length ? (
+        <div className="class-grid">
+          {columns.map((column) => (
+            <article className="class-column" key={column.key}>
+              <header>
+                <ClassIcon name={column.icon} size={28} />
+                <h3>{column.key}</h3>
+                <span>{column.members.length}</span>
+              </header>
+              <div className="member-list">
+                {column.members.map((member) => (
+                  <div className="member-row" key={member.id}>
+                    <ClassIcon name={member.char_class} size={32} />
+                    <div className="member-main">
+                      <strong>{member.char_name}</strong>
+                      <span>{member.char_class}</span>
+                      <em>Party: {groupsById[member.group_id]?.name || "Unassigned"}</em>
+                    </div>
+                    {!readOnly && (
+                      <div className="row-actions">
+                        <button className="icon-button" onClick={() => onEdit(member)} aria-label={`Edit ${member.char_name}`}><Pencil size={15} /></button>
+                        <button className="icon-button danger" onClick={() => onDelete(member)} aria-label={`Delete ${member.char_name}`}><Trash2 size={15} /></button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
       ) : (
         <div className="empty-panel">No members match the current filters.</div>
       )}
@@ -440,6 +500,10 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
     return map;
   }, [groups, members]);
   const unassigned = members.filter((member) => !member.group_id);
+  const visibleGroups = useMemo(() => {
+    if (!readOnly) return groups;
+    return groups.filter((group) => (membersByGroup[group.id] || []).length > 0);
+  }, [groups, membersByGroup, readOnly]);
 
   return (
     <section className="content-section">
@@ -452,7 +516,7 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
       </div>
 
       <div className="party-grid">
-        {groups.map((group) => {
+        {visibleGroups.map((group) => {
           const roster = membersByGroup[group.id] || [];
           return (
             <article className="party-card" key={group.id}>
@@ -506,6 +570,7 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
           </button>
         )}
       </div>
+      {!visibleGroups.length && <div className="empty-panel">No party groups assigned yet.</div>}
     </section>
   );
 }
