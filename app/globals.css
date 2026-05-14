@@ -1168,6 +1168,7 @@ button.party-slot.empty:hover:not(:disabled) {
 .progress-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .allocation-table {
@@ -1175,7 +1176,27 @@ button.party-slot.empty:hover:not(:disabled) {
 }
 
 .progress-table {
-  min-width: 720px;
+  min-width: 860px;
+}
+
+.progress-col-line {
+  width: 64px;
+}
+
+.progress-col-member {
+  width: 220px;
+}
+
+.progress-col-item {
+  width: 132px;
+}
+
+.progress-col-status {
+  width: 160px;
+}
+
+.progress-col-held {
+  width: 300px;
 }
 
 .allocation-table th,
@@ -1286,48 +1307,51 @@ button.party-slot.empty:hover:not(:disabled) {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
-  min-width: 210px;
 }
 
-.progress-held-count {
+.progress-table .progress-held-count {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  min-width: 58px;
+  gap: 6px;
+  min-width: 72px;
   justify-content: center;
   border: 1px solid rgba(63, 63, 70, 0.8);
   border-radius: 999px;
   background: rgba(39, 39, 42, 0.46);
   color: #d4d4d8;
-  padding: 4px 7px;
+  margin-top: 0;
+  padding: 5px 9px;
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 10px;
   font-weight: 900;
+  line-height: 1;
 }
 
-.progress-held-count strong {
+.progress-table .progress-held-count strong {
+  display: inline;
   max-width: none;
   color: var(--muted-2);
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 10px;
+  line-height: 1;
 }
 
 .progress-held-count.held-puppet_card {
-  border-color: rgba(245, 158, 11, 0.45);
-  background: rgba(245, 158, 11, 0.12);
-  color: var(--amber-2);
+  border-color: rgba(168, 85, 247, 0.52);
+  background: rgba(88, 28, 135, 0.34);
+  color: #d8b4fe;
 }
 
 .progress-held-count.held-feather_ld {
-  border-color: rgba(59, 130, 246, 0.45);
-  background: rgba(59, 130, 246, 0.12);
-  color: #93c5fd;
+  border-color: rgba(250, 204, 21, 0.34);
+  background: rgba(245, 245, 220, 0.12);
+  color: #f5f5dc;
 }
 
 .progress-held-count.held-feather_ts {
-  border-color: rgba(16, 185, 129, 0.42);
-  background: rgba(16, 185, 129, 0.12);
-  color: #86efac;
+  border-color: rgba(248, 113, 113, 0.5);
+  background: rgba(127, 29, 29, 0.28);
+  color: #fca5a5;
 }
 
 .progress-held-count.held-puppet_card strong,

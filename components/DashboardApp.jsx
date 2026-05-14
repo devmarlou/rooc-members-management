@@ -344,7 +344,7 @@ function Stats({ members, memberLimit, activeClass, onClassFilter, onEditLimit, 
 
 function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd, onEdit, onDelete, canAddMember, memberLimit, readOnly = false }) {
   const [query, setQuery] = useState("");
-  const [viewMode, setViewMode] = useState("list");
+  const [viewMode, setViewMode] = useState("cards");
 
   const filteredMembers = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -860,6 +860,10 @@ function progressRowStatus(row, limitedItems) {
   return { label: "incomplete", state: "warning" };
 }
 
+function heldItemCount(row, item) {
+  return Math.max(row.held?.[item.item_key] || 0, row.received[item.item_key] || 0);
+}
+
 function MemberProgressTable({ auctionItems, auctionState }) {
   const limitedItems = auctionItems.filter((item) => item.gates_round_completion);
   const rows = auctionState?.progress || [];
@@ -874,7 +878,7 @@ function MemberProgressTable({ auctionItems, auctionState }) {
       const received = row.received[item.item_key] || 0;
       const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
       currentTotal += received;
-      heldTotal += row.held?.[item.item_key] || 0;
+      heldTotal += heldItemCount(row, item);
       const state = progressCellState(received, cap);
       if (state === "capped") capped += 1;
       if (state === "warning") partial += 1;
@@ -908,6 +912,13 @@ function MemberProgressTable({ auctionItems, auctionState }) {
       </div>
       <div className="progress-table-wrap">
         <table className="progress-table">
+          <colgroup>
+            <col className="progress-col-line" />
+            <col className="progress-col-member" />
+            {limitedItems.map((item) => <col className="progress-col-item" key={item.id} />)}
+            <col className="progress-col-status" />
+            <col className="progress-col-held" />
+          </colgroup>
           <thead>
             <tr>
               <th>Line</th>
@@ -941,7 +952,7 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                     <div className="progress-held-stack">
                       {limitedItems.map((item) => (
                         <span className={`progress-held-count held-${item.item_key}`} key={item.id}>
-                          <strong>{item.short_name}</strong>{row.held?.[item.item_key] || 0}
+                          <strong>{item.short_name}</strong>{heldItemCount(row, item)}
                         </span>
                       ))}
                     </div>
