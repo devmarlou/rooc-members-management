@@ -2105,10 +2105,14 @@ button.party-slot.empty:hover:not(:disabled) {
 }
 
 .public-toast {
-  top: 104px;
+  top: 132px;
+  right: 18px;
+  left: auto;
   bottom: auto;
+  transform: none;
   max-width: min(520px, calc(100vw - 28px));
   border-color: rgba(245, 158, 11, 0.42);
+  border-radius: 4px;
   background: rgba(24, 24, 27, 0.96);
   color: #fde68a;
 }
