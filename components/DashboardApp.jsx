@@ -707,6 +707,7 @@ function formatDiscordBidList(auction, bidRows) {
 function groupedAuctionBids(units = [], queue = []) {
   const memberMap = new Map();
   const queueByMemberId = new Map(queue.map((row) => [row.member_id, row]));
+  const cantPayCount = queue.filter((row) => row.status === "cant_pay").length;
 
   for (const unit of units) {
     const queueRow = queueByMemberId.get(unit.member_id);
@@ -720,13 +721,12 @@ function groupedAuctionBids(units = [], queue = []) {
         firstPage: unit.page,
         firstSlot: unit.slot,
         cycle_reset: false,
-        is_replacement: Boolean(unit.reassigned),
+        is_replacement: false,
         is_cant_pay: queueRow?.status === "cant_pay"
       });
     }
 
     const memberRow = memberMap.get(unit.member_id);
-    memberRow.is_replacement = memberRow.is_replacement || Boolean(unit.reassigned);
     const itemKey = `${unit.item_id}:${unit.cycle_reset_item_key || "current"}`;
     if (!memberRow.items.has(itemKey)) {
       memberRow.items.set(itemKey, {
@@ -750,7 +750,7 @@ function groupedAuctionBids(units = [], queue = []) {
     }
   }
 
-  return [...memberMap.values()]
+  const rows = [...memberMap.values()]
     .map((row) => ({
       ...row,
       items: [...row.items.values()]
@@ -763,6 +763,17 @@ function groupedAuctionBids(units = [], queue = []) {
         .sort((a, b) => a.firstPage - b.firstPage || a.firstSlot - b.firstSlot)
     }))
     .sort((a, b) => a.queuePosition - b.queuePosition || a.firstPage - b.firstPage || a.firstSlot - b.firstSlot);
+  if (cantPayCount > 0) {
+    const replacementIds = new Set(
+      rows
+        .filter((row) => !row.is_cant_pay)
+        .slice(-cantPayCount)
+        .map((row) => row.member_id)
+    );
+    return rows.map((row) => ({ ...row, is_replacement: replacementIds.has(row.member_id) }));
+  }
+
+  return rows;
 }
 
 function AuctionStartForm({ type, auctionItems, onCancel, onStart, busy }) {
