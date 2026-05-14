@@ -718,11 +718,14 @@ function groupedAuctionBids(units = [], queue = []) {
         quantity: 0,
         firstPage: unit.page,
         firstSlot: unit.slot,
-        cycle_reset: false
+        cycle_reset: false,
+        is_replacement: Boolean(unit.reassigned),
+        is_cant_pay: queueRow?.status === "cant_pay"
       });
     }
 
     const memberRow = memberMap.get(unit.member_id);
+    memberRow.is_replacement = memberRow.is_replacement || Boolean(unit.reassigned);
     const itemKey = `${unit.item_id}:${unit.cycle_reset_item_key || "current"}`;
     if (!memberRow.items.has(itemKey)) {
       memberRow.items.set(itemKey, {
@@ -1061,7 +1064,7 @@ function AuctionFoundation({
             const bidRows = groupedAuctionBids(auction.units || [], auction.queue || []);
             const locked = auction.status === "locked";
             return (
-              <article className={locked ? "active-auction-card locked" : "active-auction-card"} key={auction.id}>
+              <article className={`active-auction-card auction-${auction.type}${locked ? " locked" : ""}`} key={auction.id}>
                 <div className="active-dot-row">
                   <span className={locked ? "idle-dot" : "live-dot"} />
                   <strong>{auction.name || auctionTypeLabel(auction.type)}</strong>
@@ -1076,20 +1079,25 @@ function AuctionFoundation({
                 <div className="allocation-table-wrap">
                   {bidRows.length ? (
                     <table className="allocation-table">
+                      <colgroup>
+                        <col className="allocation-col-member" />
+                        <col />
+                        {!readOnly && <col className="allocation-col-actions" />}
+                      </colgroup>
                       <thead>
                         <tr>
                           <th>Member</th>
                           <th>Bid instructions</th>
-                          <th>Total</th>
                           {!readOnly && <th />}
                         </tr>
                       </thead>
                       <tbody>
                         {bidRows.map((row) => (
-                          <tr key={`${auction.id}-${row.member_id}`}>
+                          <tr className={row.is_replacement ? "replacement-row" : row.is_cant_pay ? "cant-pay-row" : ""} key={`${auction.id}-${row.member_id}`}>
                             <td>
                               <strong>{row.member?.char_name || "Unknown"}</strong>
                               {Number.isFinite(row.queuePosition) && row.queuePosition !== Number.MAX_SAFE_INTEGER && <span>Line {row.queuePosition}</span>}
+                              {row.is_replacement && <span className="replacement-label">added after can't pay</span>}
                               {row.cycle_reset && <span>cycle reset</span>}
                             </td>
                             <td>
@@ -1103,7 +1111,6 @@ function AuctionFoundation({
                                 ))}
                               </div>
                             </td>
-                            <td>{row.quantity}</td>
                             {!readOnly && (
                               <td>
                                 <button className="ghost-button mini" type="button" onClick={() => onCantPay(row.member, auction)} disabled={busy || locked}>

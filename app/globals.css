@@ -942,6 +942,20 @@ button.party-slot.empty:hover:not(:disabled) {
   padding: 18px;
 }
 
+.active-auction-card.auction-gl_woe {
+  border-color: rgba(245, 158, 11, 0.34);
+  background:
+    linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(9, 9, 11, 0.34) 46%),
+    rgba(9, 9, 11, 0.34);
+}
+
+.active-auction-card.auction-league_prize {
+  border-color: rgba(168, 85, 247, 0.36);
+  background:
+    linear-gradient(135deg, rgba(88, 28, 135, 0.22), rgba(9, 9, 11, 0.34) 48%),
+    rgba(9, 9, 11, 0.34);
+}
+
 .active-auction-card.locked {
   border-color: rgba(245, 158, 11, 0.34);
   background: linear-gradient(135deg, rgba(245, 158, 11, 0.06), rgba(9, 9, 11, 0.34) 62%);
@@ -1172,7 +1186,15 @@ button.party-slot.empty:hover:not(:disabled) {
 }
 
 .allocation-table {
-  min-width: 760px;
+  min-width: 680px;
+}
+
+.allocation-table col.allocation-col-member {
+  width: 240px;
+}
+
+.allocation-table col.allocation-col-actions {
+  width: 126px;
 }
 
 .progress-table {
@@ -1224,6 +1246,18 @@ button.party-slot.empty:hover:not(:disabled) {
 .progress-table td {
   color: #e4e4e7;
   font-size: 12px;
+}
+
+.allocation-table tr.replacement-row td {
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.allocation-table tr.replacement-row td:first-child {
+  box-shadow: inset 3px 0 0 rgba(16, 185, 129, 0.85);
+}
+
+.allocation-table tr.cant-pay-row td {
+  background: rgba(239, 68, 68, 0.06);
 }
 
 .allocation-table tr:last-child td,
@@ -1386,6 +1420,15 @@ button.party-slot.empty:hover:not(:disabled) {
   white-space: nowrap;
 }
 
+.allocation-table .replacement-label {
+  color: #86efac;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .bid-stack {
   display: grid;
   gap: 5px;
@@ -1414,7 +1457,7 @@ button.party-slot.empty:hover:not(:disabled) {
   text-align: right;
 }
 
-.allocation-table td:last-child {
+.allocation-table td:last-child:has(.ghost-button) {
   text-align: right;
 }
 
