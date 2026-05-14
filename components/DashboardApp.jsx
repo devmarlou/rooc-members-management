@@ -588,6 +588,7 @@ function itemAppliesTo(item, type) {
 }
 
 function compactSlots(units) {
+  if (!units.length) return "";
   const byPage = new Map();
   for (const unit of units) {
     if (!byPage.has(unit.page)) byPage.set(unit.page, []);
@@ -619,33 +620,56 @@ function compactSlots(units) {
 }
 
 function groupedAuctionBids(units = []) {
-  const map = new Map();
+  const memberMap = new Map();
 
   for (const unit of units) {
-    const key = `${unit.member_id}:${unit.item_id}:${unit.cycle_reset_item_key || "current"}`;
-    if (!map.has(key)) {
-      map.set(key, {
+    if (!memberMap.has(unit.member_id)) {
+      memberMap.set(unit.member_id, {
         member: unit.member,
         member_id: unit.member_id,
+        items: new Map(),
+        quantity: 0,
+        firstPage: unit.page,
+        firstSlot: unit.slot,
+        cycle_reset: false
+      });
+    }
+
+    const memberRow = memberMap.get(unit.member_id);
+    const itemKey = `${unit.item_id}:${unit.cycle_reset_item_key || "current"}`;
+    if (!memberRow.items.has(itemKey)) {
+      memberRow.items.set(itemKey, {
         item_id: unit.item_id,
         item: unit.short_name || unit.item_name,
-        quantity: 0,
         units: [],
+        quantity: 0,
         cycle_reset: Boolean(unit.cycle_reset)
       });
     }
-    const row = map.get(key);
-    row.quantity += 1;
-    row.units.push(unit);
-    row.cycle_reset = row.cycle_reset || Boolean(unit.cycle_reset);
+
+    const itemRow = memberRow.items.get(itemKey);
+    itemRow.units.push(unit);
+    itemRow.quantity += 1;
+    itemRow.cycle_reset = itemRow.cycle_reset || Boolean(unit.cycle_reset);
+    memberRow.quantity += 1;
+    memberRow.cycle_reset = memberRow.cycle_reset || Boolean(unit.cycle_reset);
+    if (unit.page < memberRow.firstPage || (unit.page === memberRow.firstPage && unit.slot < memberRow.firstSlot)) {
+      memberRow.firstPage = unit.page;
+      memberRow.firstSlot = unit.slot;
+    }
   }
 
-  return [...map.values()]
+  return [...memberMap.values()]
     .map((row) => ({
       ...row,
-      positions: compactSlots(row.units),
-      firstPage: Math.min(...row.units.map((unit) => unit.page)),
-      firstSlot: Math.min(...row.units.map((unit) => unit.slot))
+      items: [...row.items.values()]
+        .map((item) => ({
+          ...item,
+          positions: compactSlots(item.units),
+          firstPage: Math.min(...item.units.map((unit) => unit.page)),
+          firstSlot: Math.min(...item.units.map((unit) => unit.slot))
+        }))
+        .sort((a, b) => a.firstPage - b.firstPage || a.firstSlot - b.firstSlot)
     }))
     .sort((a, b) => a.firstPage - b.firstPage || a.firstSlot - b.firstSlot);
 }
@@ -875,21 +899,29 @@ function AuctionFoundation({
                   <thead>
                     <tr>
                       <th>Member</th>
-                      <th>Item</th>
-                      <th>Bid slots</th>
-                      <th>Qty</th>
+                      <th>Bid instructions</th>
+                      <th>Total</th>
                       <th />
                     </tr>
                   </thead>
                   <tbody>
                     {bidRows.map((row) => (
-                      <tr key={`${row.member_id}-${row.item_id}-${row.positions}`}>
+                      <tr key={row.member_id}>
                         <td>
                           <strong>{row.member?.char_name || "Unknown"}</strong>
                           {row.cycle_reset && <span>cycle reset</span>}
                         </td>
-                        <td>{row.item}</td>
-                        <td><code>{row.positions}</code></td>
+                        <td>
+                          <div className="bid-stack">
+                            {row.items.map((item) => (
+                              <div className="bid-line" key={`${item.item_id}-${item.positions}`}>
+                                <strong>{item.item}</strong>
+                                <code>{item.positions}</code>
+                                <span>x{item.quantity}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
                         <td>{row.quantity}</td>
                         <td>
                           <button className="ghost-button mini" type="button" onClick={() => onCantPay(row.member)} disabled={busy}>

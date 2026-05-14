@@ -1052,7 +1052,7 @@ button.party-slot.empty:hover:not(:disabled) {
 .allocation-table,
 .progress-table {
   width: 100%;
-  min-width: 560px;
+  min-width: 620px;
   border-collapse: collapse;
 }
 
@@ -1127,6 +1127,34 @@ button.party-slot.empty:hover:not(:disabled) {
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 11px;
   white-space: normal;
+}
+
+.bid-stack {
+  display: grid;
+  gap: 5px;
+}
+
+.bid-line {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 34px;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.bid-line strong {
+  max-width: none;
+  color: #e4e4e7;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.bid-line span {
+  margin-top: 0;
+  color: var(--muted-2);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: right;
 }
 
 .allocation-table td:last-child {
