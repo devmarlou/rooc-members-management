@@ -10,8 +10,17 @@ export async function POST(request) {
   try {
     const body = await request.json().catch(() => ({}));
     const supabase = getSupabaseAdmin();
+    let auctionType = "auction";
+    if (body.auctionId) {
+      const typeResult = await supabase
+        .from("auctions")
+        .select("type")
+        .eq("id", body.auctionId)
+        .maybeSingle();
+      if (!typeResult.error && typeResult.data?.type) auctionType = typeResult.data.type;
+    }
     const auctionState = await finishActiveAuction(supabase, body.auctionId);
-    await emitDashboardEvent(supabase, "auction_done");
+    await emitDashboardEvent(supabase, `${auctionType}_auction_done`);
     return NextResponse.json({ auctionState });
   } catch (error) {
     return handleApiError(error);

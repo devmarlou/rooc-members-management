@@ -648,6 +648,19 @@ function auctionTypeLabel(type) {
   return type === "league_prize" ? "League Prize" : "GL/WoE";
 }
 
+function dashboardEventMessage(eventType) {
+  const messages = {
+    gl_woe_auction_started: "GL/WoE Auction is now running.",
+    gl_woe_auction_cant_pay: "Someone skipped GL/WoE Auction. The bid list was updated.",
+    gl_woe_auction_done: "GL/WoE Auction is done. Shared progress was updated.",
+    league_prize_auction_started: "League Prize Auction is now running.",
+    league_prize_auction_cant_pay: "Someone skipped League Prize Auction. The bid list was updated.",
+    league_prize_auction_done: "League Prize Auction is done. Shared progress was updated.",
+    auction_event_done: "Event auctions are done. Shared progress was updated."
+  };
+  return messages[eventType] || "";
+}
+
 function itemAppliesTo(item, type) {
   return Array.isArray(item.applies_to_auction_types) && item.applies_to_auction_types.includes(type);
 }
@@ -1287,6 +1300,9 @@ export default function DashboardApp({ publicView = false }) {
   const groupsById = useMemo(() => Object.fromEntries(groups.map((group) => [group.id, group])), [groups]);
   const effectiveMemberLimit = Math.max(memberLimit || members.length || 0, members.length);
   const unassignedMembers = members.filter((member) => !member.group_id);
+  const publicGlAuction = publicView
+    ? (auctionState?.activeAuctions || []).find((auction) => auction.type === "gl_woe")
+    : null;
 
   const captureScrollPosition = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -1352,7 +1368,11 @@ export default function DashboardApp({ publicView = false }) {
     const supabase = getSupabaseBrowser();
     if (!supabase) return undefined;
 
-    const scheduleRefresh = () => {
+    const scheduleRefresh = (payload) => {
+      if (publicView) {
+        const message = dashboardEventMessage(payload?.new?.event_type);
+        if (message) setToast(message);
+      }
       window.clearTimeout(realtimeTimerRef.current);
       realtimeTimerRef.current = window.setTimeout(() => {
         loadData({ silent: true });
@@ -1368,7 +1388,7 @@ export default function DashboardApp({ publicView = false }) {
       window.clearTimeout(realtimeTimerRef.current);
       supabase.removeChannel(channel);
     };
-  }, [loadData, session.authenticated]);
+  }, [loadData, publicView, session.authenticated]);
 
   useEffect(() => {
     if (!members.length || memberLimit !== null) return;
@@ -1763,6 +1783,12 @@ export default function DashboardApp({ publicView = false }) {
             <AlertTriangle size={17} />
             <span>{error}</span>
             <button onClick={() => setError("")}>Dismiss</button>
+          </div>
+        )}
+        {publicGlAuction && (
+          <div className="alert-panel auction-running-notice">
+            <Gavel size={17} />
+            <span>{publicGlAuction.status === "locked" ? "GL/WoE Auction list is locked. League Prize may be prepared next." : "GL/WoE Auction is running. Check the auction table for current bid instructions."}</span>
           </div>
         )}
         {loading ? (

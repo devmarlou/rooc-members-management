@@ -11,7 +11,8 @@ export async function POST(request) {
     const body = await request.json();
     const supabase = getSupabaseAdmin();
     const auctionState = await markCantPay(supabase, body.memberId, body.auctionId);
-    await emitDashboardEvent(supabase, "auction_cant_pay");
+    const auction = (auctionState.activeAuctions || []).find((entry) => entry.id === body.auctionId) || auctionState.activeAuction;
+    await emitDashboardEvent(supabase, `${auction?.type || "auction"}_auction_cant_pay`);
     return NextResponse.json({ auctionState });
   } catch (error) {
     return handleApiError(error);

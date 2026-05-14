@@ -1725,6 +1725,16 @@ button.party-slot.empty:hover:not(:disabled) {
   font-weight: 800;
 }
 
+.auction-running-notice {
+  border-color: rgba(245, 158, 11, 0.42);
+  background: rgba(120, 53, 15, 0.18);
+  color: #fde68a;
+}
+
+.auction-running-notice svg {
+  color: var(--amber-2);
+}
+
 .class-icon {
   position: relative;
   display: inline-block;

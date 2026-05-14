@@ -9,8 +9,9 @@ export async function POST(request) {
 
   try {
     const supabase = getSupabaseAdmin();
-    const auctionState = await startAuction(supabase, await request.json());
-    await emitDashboardEvent(supabase, "auction_started");
+    const payload = await request.json();
+    const auctionState = await startAuction(supabase, payload);
+    await emitDashboardEvent(supabase, `${payload.type || "auction"}_auction_started`);
     return NextResponse.json({ auctionState });
   } catch (error) {
     return handleApiError(error);
