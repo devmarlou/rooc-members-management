@@ -681,12 +681,14 @@ function AuctionStartForm({ type, auctionItems, onCancel, onStart, busy }) {
   const applicable = auctionItems.filter((item) => itemAppliesTo(item, type));
   const [name, setName] = useState(type === "league_prize" ? "League Prize" : "GL/WoE Auction");
   const [inventory, setInventory] = useState(() => Object.fromEntries(applicable.map((item) => [item.item_key, "0"])));
+  const [hasLeaguePrize, setHasLeaguePrize] = useState(type === "league_prize");
 
   function submit(event) {
     event.preventDefault();
     onStart({
       type,
       name,
+      hasLeaguePrize,
       inventory: Object.fromEntries(applicable.map((item) => [item.item_key, Number.parseInt(inventory[item.item_key] || "0", 10) || 0]))
     });
   }
@@ -697,6 +699,12 @@ function AuctionStartForm({ type, auctionItems, onCancel, onStart, busy }) {
         <span>Auction name</span>
         <input value={name} onChange={(event) => setName(event.target.value)} autoFocus />
       </label>
+      {type === "gl_woe" && (
+        <label className="checkbox-row">
+          <input type="checkbox" checked={hasLeaguePrize} onChange={(event) => setHasLeaguePrize(event.target.checked)} />
+          <span>This event has League Prize</span>
+        </label>
+      )}
       <div className="auction-form-items">
         {applicable.map((item) => (
           <label key={item.id}>
@@ -710,7 +718,7 @@ function AuctionStartForm({ type, auctionItems, onCancel, onStart, busy }) {
           </label>
         ))}
       </div>
-      <p className="field-note">Empty inventory is allowed. The auction can still be closed with zero allocations.</p>
+      <p className="field-note">{type === "gl_woe" && hasLeaguePrize ? "After marking can't-pay members, lock this GL/WoE list to unlock League Prize." : "Empty inventory is allowed. The auction can still be closed with zero allocations."}</p>
       <div className="form-actions">
         <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
         <button className="primary-button" disabled={busy}>
@@ -900,23 +908,13 @@ function AuctionFoundation({
   const hasOpenAuctions = activeAuctions.length > 0;
   const glAuction = activeAuctions.find((auction) => auction.type === "gl_woe");
   const leagueAuction = activeAuctions.find((auction) => auction.type === "league_prize");
-  const history = auctionState?.history || [];
-  const latestDoneGlAuction = history.find((auction) => auction.type === "gl_woe");
-  const latestDoneLeagueAuction = history.find((auction) => auction.type === "league_prize");
-  const leagueAlreadyRanForLatestGl = latestDoneGlAuction && latestDoneLeagueAuction
-    ? new Date(latestDoneLeagueAuction.done_at) > new Date(latestDoneGlAuction.done_at)
-    : false;
   const lockedGlReadyForLeague = glAuction?.status === "locked";
-  const canStartLeague = Boolean(activeRound && !leagueAuction && (lockedGlReadyForLeague || (latestDoneGlAuction && !leagueAlreadyRanForLatestGl && !glAuction)));
+  const canStartLeague = Boolean(activeRound && lockedGlReadyForLeague && !leagueAuction);
   const leagueHint = glAuction
     ? lockedGlReadyForLeague
       ? "League Prize is ready. It will use current progress plus locked GL/WoE reservations."
       : "Lock-in the GL/WoE auction first, then League Prize becomes available."
-    : leagueAlreadyRanForLatestGl
-      ? "League Prize already ran for the latest GL/WoE auction."
-      : latestDoneGlAuction
-        ? "League Prize is ready from the next incomplete lineup member."
-        : "Create and lock a GL/WoE auction first, then League Prize becomes available.";
+    : "Create and lock a GL/WoE auction first, then League Prize becomes available.";
   const completedCount = activeRound?.completedCount || 0;
   const roundMemberCount = activeRound?.memberCount || memberCount;
   const progressPct = roundMemberCount ? Math.min(100, Math.round((completedCount / roundMemberCount) * 100)) : 0;
