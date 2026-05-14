@@ -1036,9 +1036,12 @@ function MemberProgressTable({ auctionItems, auctionState }) {
               const activeBidItems = activeBidStatus.biddingByMemberId.get(row.member.id);
               const skipped = activeBidStatus.skippedMemberIds.has(row.member.id);
               const biddingIncomplete = activeBidItems
-                ? [...activeBidItems.values()].some(({ item, quantity, cycleReset }) => {
+                ? limitedItems.some((item) => {
                   const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
-                  const base = cycleReset ? 0 : row.received[item.item_key] || 0;
+                  if (cap <= 0) return false;
+                  const activeItem = activeBidItems.get(item.item_key);
+                  const quantity = activeItem?.quantity || 0;
+                  const base = activeItem?.cycleReset ? 0 : row.received[item.item_key] || 0;
                   return cap > 0 && base + quantity < cap;
                 })
                 : false;
