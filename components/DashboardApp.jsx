@@ -1109,7 +1109,7 @@ function AuctionFoundation({
                             <td>
                               <strong>{row.member?.char_name || "Unknown"}</strong>
                               {Number.isFinite(row.queuePosition) && row.queuePosition !== Number.MAX_SAFE_INTEGER && <span>Line {row.queuePosition}</span>}
-                              {row.is_replacement && <span className="replacement-label">updated</span>}
+                              {row.is_replacement && <span className="replacement-label">bumped up, someone skipped today</span>}
                               {row.cycle_reset && <span>cycle reset</span>}
                             </td>
                             <td>
