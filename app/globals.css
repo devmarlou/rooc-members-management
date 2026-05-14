@@ -1536,41 +1536,25 @@ button.party-slot.empty:hover:not(:disabled) {
   color: var(--muted-2);
 }
 
-.progress-bid-items {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.progress-bid-item {
-  display: inline-flex;
-  border: 1px solid rgba(59, 130, 246, 0.42);
-  border-radius: 4px;
-  background: rgba(30, 64, 175, 0.2);
+.progress-bid-text {
+  display: block;
   color: #bfdbfe;
-  margin-top: 0;
-  padding: 4px 7px;
+  margin-top: 5px;
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 10px;
   font-weight: 900;
-  line-height: 1;
+  line-height: 1.2;
 }
 
-.progress-bid-item.bid-puppet_card {
-  border-color: rgba(168, 85, 247, 0.52);
-  background: rgba(88, 28, 135, 0.26);
+.progress-bid-text.bid-puppet_card {
   color: #d8b4fe;
 }
 
-.progress-bid-item.bid-feather_ld {
-  border-color: rgba(250, 204, 21, 0.34);
-  background: rgba(245, 245, 220, 0.1);
+.progress-bid-text.bid-feather_ld {
   color: #f5f5dc;
 }
 
-.progress-bid-item.bid-feather_ts {
-  border-color: rgba(248, 113, 113, 0.5);
-  background: rgba(127, 29, 29, 0.22);
+.progress-bid-text.bid-feather_ts {
   color: #fca5a5;
 }
 

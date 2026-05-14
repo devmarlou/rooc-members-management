@@ -1055,9 +1055,17 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                   {limitedItems.map((item) => {
                     const received = row.received[item.item_key] || 0;
                     const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
+                    const activeItem = activeBidItems?.get(item.item_key);
+                    const bidBase = activeItem?.cycleReset ? 0 : received;
+                    const bidNext = activeItem ? bidBase + activeItem.quantity : 0;
                     return (
                       <td key={item.id}>
                         <span className={`progress-count ${progressCellState(received, cap)}`}>{received}/{cap}</span>
+                        {activeItem && (
+                          <span className={`progress-bid-text bid-${item.item_key}`}>
+                            +{activeItem.quantity} → {bidNext}/{cap}
+                          </span>
+                        )}
                       </td>
                     );
                   })}
@@ -1066,21 +1074,7 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                       {skipped ? (
                         <em className="progress-status skipped">skipped</em>
                       ) : activeBidItems ? (
-                        <>
-                          <em className={`progress-status ${biddingIncomplete ? "bidding-partial" : "bidding"}`}>{biddingIncomplete ? "partial bidding" : "bidding"}</em>
-                          <div className="progress-bid-items">
-                            {[...activeBidItems.values()].map(({ item, quantity, cycleReset }) => {
-                              const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
-                              const base = cycleReset ? 0 : row.received[item.item_key] || 0;
-                              const next = base + quantity;
-                              return (
-                                <span className={`progress-bid-item bid-${item.item_key}`} key={item.id}>
-                                  {item.short_name} +{quantity} → {next}/{cap}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        </>
+                        <em className={`progress-status ${biddingIncomplete ? "bidding-partial" : "bidding"}`}>{biddingIncomplete ? "partial bidding" : "bidding"}</em>
                       ) : (
                         <>
                           {queueState.state !== "ready" && <em className={`progress-status ${queueState.state}`}>{queueState.label}</em>}
