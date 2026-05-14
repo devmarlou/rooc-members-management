@@ -765,14 +765,12 @@ function AuctionStartForm({ type, auctionItems, onCancel, onStart, busy }) {
   const applicable = auctionItems.filter((item) => itemAppliesTo(item, type));
   const [name, setName] = useState(type === "league_prize" ? "League Prize" : "GL/WoE Auction");
   const [inventory, setInventory] = useState(() => Object.fromEntries(applicable.map((item) => [item.item_key, "0"])));
-  const [hasLeaguePrize, setHasLeaguePrize] = useState(type === "league_prize");
 
   function submit(event) {
     event.preventDefault();
     onStart({
       type,
       name,
-      hasLeaguePrize,
       inventory: Object.fromEntries(applicable.map((item) => [item.item_key, Number.parseInt(inventory[item.item_key] || "0", 10) || 0]))
     });
   }
@@ -783,12 +781,6 @@ function AuctionStartForm({ type, auctionItems, onCancel, onStart, busy }) {
         <span>Auction name</span>
         <input value={name} onChange={(event) => setName(event.target.value)} autoFocus />
       </label>
-      {type === "gl_woe" && (
-        <label className="checkbox-row">
-          <input type="checkbox" checked={hasLeaguePrize} onChange={(event) => setHasLeaguePrize(event.target.checked)} />
-          <span>This event has League Prize</span>
-        </label>
-      )}
       <div className="auction-form-items">
         {applicable.map((item) => (
           <label key={item.id}>
@@ -802,7 +794,7 @@ function AuctionStartForm({ type, auctionItems, onCancel, onStart, busy }) {
           </label>
         ))}
       </div>
-      <p className="field-note">{type === "gl_woe" && hasLeaguePrize ? "After marking can't-pay members, lock this GL/WoE list to unlock League Prize." : "Empty inventory is allowed. The auction can still be closed with zero allocations."}</p>
+      <p className="field-note">{type === "gl_woe" ? "Lock this GL/WoE list if you want to run optional League Prize after reviewing can't-pay members." : "League Prize is optional. Add only the items available from the event."}</p>
       <div className="form-actions">
         <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
         <button className="primary-button" disabled={busy}>

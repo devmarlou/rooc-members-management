@@ -1776,27 +1776,6 @@ button.party-slot.empty:hover:not(:disabled) {
   grid-column: 1 / -1;
 }
 
-.checkbox-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid rgba(63, 63, 70, 0.75);
-  border-radius: 8px;
-  background: rgba(24, 24, 27, 0.44);
-  padding: 11px 12px;
-}
-
-.checkbox-row input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--amber);
-}
-
-.checkbox-row span {
-  color: #e4e4e7;
-  font-weight: 800;
-}
-
 .form-actions {
   display: flex;
   justify-content: flex-end;
