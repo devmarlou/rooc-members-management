@@ -833,19 +833,21 @@ function AuctionFoundation({
   onOpenLimits,
   onOpenRotation,
   onResetLineup,
+  onLockAuction,
   onRecalculateAuction,
   onCantPay,
   onDoneAuction,
   busy
 }) {
   const activeRound = auctionState?.activeRound;
-  const activeAuction = auctionState?.activeAuction;
+  const activeAuctions = auctionState?.activeAuctions || (auctionState?.activeAuction ? [auctionState.activeAuction] : []);
+  const hasOpenAuctions = activeAuctions.length > 0;
+  const glAuction = activeAuctions.find((auction) => auction.type === "gl_woe");
+  const leagueAuction = activeAuctions.find((auction) => auction.type === "league_prize");
   const completedCount = activeRound?.completedCount || 0;
   const roundMemberCount = activeRound?.memberCount || memberCount;
   const progressPct = roundMemberCount ? Math.min(100, Math.round((completedCount / roundMemberCount) * 100)) : 0;
   const currentCaps = auctionState?.itemCaps || {};
-  const units = activeAuction?.units || [];
-  const bidRows = groupedAuctionBids(units);
 
   return (
     <section className="content-section auction-section">
@@ -873,80 +875,91 @@ function AuctionFoundation({
         </div>
         <div className="round-actions">
           <button className="ghost-button" type="button" onClick={onOpenRotation} disabled={!activeRound}><Eye size={15} />Lineup list</button>
-          <button className="ghost-button" type="button" onClick={onOpenLimits} disabled={!activeRound || Boolean(activeAuction)}><Settings size={15} />Adjust limits</button>
+          <button className="ghost-button" type="button" onClick={onOpenLimits} disabled={!activeRound || hasOpenAuctions}><Settings size={15} />Adjust limits</button>
           <button className="danger-button soft" type="button" onClick={onResetLineup} disabled={!activeRound || busy}><Shuffle size={15} />Test reset</button>
           <button className="ghost-button" type="button" onClick={onStartRound} disabled={Boolean(activeRound) || busy}><Shuffle size={15} />Create auction lineup</button>
         </div>
       </div>
 
       <div className="auction-grid">
-        {activeAuction ? (
-          <article className="active-auction-card">
-            <div className="active-dot-row">
-              <span className="live-dot" />
-              <strong>{activeAuction.name || auctionTypeLabel(activeAuction.type)}</strong>
-              <em>{auctionTypeLabel(activeAuction.type)}</em>
-            </div>
-            <p>Review the generated page table, mark any member who cannot pay, then finalize the auction.</p>
-            <div className="active-auction-stats">
-              <span><Clock3 size={14} />Active</span>
-              <span><Gavel size={14} />{activeAuction.pageCount || 0} pages</span>
-              <span><Trophy size={14} />{units.length} allocations</span>
-            </div>
-            <div className="allocation-table-wrap">
-              {bidRows.length ? (
-                <table className="allocation-table">
-                  <thead>
-                    <tr>
-                      <th>Member</th>
-                      <th>Bid instructions</th>
-                      <th>Total</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {bidRows.map((row) => (
-                      <tr key={row.member_id}>
-                        <td>
-                          <strong>{row.member?.char_name || "Unknown"}</strong>
-                          {row.cycle_reset && <span>cycle reset</span>}
-                        </td>
-                        <td>
-                          <div className="bid-stack">
-                            {row.items.map((item) => (
-                              <div className="bid-line" key={`${item.item_id}-${item.positions}`}>
-                                <strong>{item.item}</strong>
-                                <code>{item.positions}</code>
-                                <span>x{item.quantity}</span>
+        {activeAuctions.length ? (
+          activeAuctions.map((auction) => {
+            const bidRows = groupedAuctionBids(auction.units || []);
+            const locked = auction.status === "locked";
+            return (
+              <article className={locked ? "active-auction-card locked" : "active-auction-card"} key={auction.id}>
+                <div className="active-dot-row">
+                  <span className={locked ? "idle-dot" : "live-dot"} />
+                  <strong>{auction.name || auctionTypeLabel(auction.type)}</strong>
+                  <em>{locked ? `${auctionTypeLabel(auction.type)} locked` : auctionTypeLabel(auction.type)}</em>
+                </div>
+                <p>{locked ? "This list is locked for the paired League Prize. Finalize it when payouts are done." : "Review the generated page table, mark any member who cannot pay, then finalize the auction."}</p>
+                <div className="active-auction-stats">
+                  <span><Clock3 size={14} />{locked ? "Locked" : "Active"}</span>
+                  <span><Gavel size={14} />{auction.pageCount || 0} pages</span>
+                  <span><Trophy size={14} />{auction.units?.length || 0} allocations</span>
+                </div>
+                <div className="allocation-table-wrap">
+                  {bidRows.length ? (
+                    <table className="allocation-table">
+                      <thead>
+                        <tr>
+                          <th>Member</th>
+                          <th>Bid instructions</th>
+                          <th>Total</th>
+                          <th />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bidRows.map((row) => (
+                          <tr key={`${auction.id}-${row.member_id}`}>
+                            <td>
+                              <strong>{row.member?.char_name || "Unknown"}</strong>
+                              {row.cycle_reset && <span>cycle reset</span>}
+                            </td>
+                            <td>
+                              <div className="bid-stack">
+                                {row.items.map((item) => (
+                                  <div className="bid-line" key={`${item.item_id}-${item.positions}`}>
+                                    <strong>{item.item}</strong>
+                                    <code>{item.positions}</code>
+                                    <span>x{item.quantity}</span>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
-                          </div>
-                        </td>
-                        <td>{row.quantity}</td>
-                        <td>
-                          <button className="ghost-button mini" type="button" onClick={() => onCantPay(row.member)} disabled={busy}>
-                            <Ban size={13} />Can't pay
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div className="empty-panel compact">No allocations for this auction.</div>
-              )}
-            </div>
-            <div className="active-actions">
-              <button className="ghost-button" type="button" onClick={onRecalculateAuction} disabled={busy}>
-                {busy ? <Loader2 className="spin" size={15} /> : <Shuffle size={15} />}
-                Recalculate
-              </button>
-              <button className="primary-button" type="button" onClick={onDoneAuction} disabled={busy}>
-                {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
-                Done
-              </button>
-            </div>
-          </article>
+                            </td>
+                            <td>{row.quantity}</td>
+                            <td>
+                              <button className="ghost-button mini" type="button" onClick={() => onCantPay(row.member, auction)} disabled={busy || locked}>
+                                <Ban size={13} />Can't pay
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="empty-panel compact">No allocations for this auction.</div>
+                  )}
+                </div>
+                <div className="active-actions">
+                  {auction.type === "gl_woe" && !locked && (
+                    <button className="ghost-button" type="button" onClick={() => onLockAuction(auction)} disabled={busy}>
+                      <Shield size={15} />Lock-in list
+                    </button>
+                  )}
+                  <button className="ghost-button" type="button" onClick={() => onRecalculateAuction(auction)} disabled={busy || locked}>
+                    {busy ? <Loader2 className="spin" size={15} /> : <Shuffle size={15} />}
+                    Recalculate
+                  </button>
+                  <button className="primary-button" type="button" onClick={() => onDoneAuction(auction)} disabled={busy}>
+                    {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
+                    Done
+                  </button>
+                </div>
+              </article>
+            );
+          })
         ) : (
           <article className="active-auction-card empty-active">
             <div className="active-dot-row">
@@ -966,8 +979,8 @@ function AuctionFoundation({
       </div>
 
       <div className="auction-start-row">
-        <button className="primary-button" type="button" disabled={!activeRound || Boolean(activeAuction)} onClick={() => onOpenStartAuction("gl_woe")}><Plus size={16} />New GL/WoE Auction</button>
-        <button className="ghost-button" type="button" disabled={!activeRound || Boolean(activeAuction)} onClick={() => onOpenStartAuction("league_prize")}><Plus size={16} />New League Prize Auction</button>
+        <button className="primary-button" type="button" disabled={!activeRound || Boolean(glAuction)} onClick={() => onOpenStartAuction("gl_woe")}><Plus size={16} />New GL/WoE Auction</button>
+        <button className="ghost-button" type="button" disabled={!activeRound || Boolean(leagueAuction) || glAuction?.status !== "locked"} onClick={() => onOpenStartAuction("league_prize")} title={glAuction?.status === "locked" ? "Start League Prize" : "Lock-in GL/WoE first"}><Plus size={16} />New League Prize Auction</button>
       </div>
 
       <div className="auction-items">
@@ -1265,17 +1278,18 @@ export default function DashboardApp() {
     }
   }
 
-  function requestCantPay(member) {
+  function requestCantPay(member, auction) {
     if (!member) return;
+    const auctionName = auction?.name || "this auction";
     setConfirmAction({
       title: "Mark can't pay",
-      body: `Remove ${member.char_name} from this auction only and recalculate the remaining allocations?`,
+      body: `Remove ${member.char_name} from ${auctionName} only and recalculate the remaining allocations?`,
       confirmLabel: "Recalculate",
       tone: "default",
       run: async () => {
         const data = await api("/api/auctions/active/cant-pay", {
           method: "POST",
-          body: JSON.stringify({ memberId: member.id })
+          body: JSON.stringify({ memberId: member.id, auctionId: auction?.id })
         });
         setAuctionState(data.auctionState);
         setToast("Auction allocations recalculated");
@@ -1283,15 +1297,36 @@ export default function DashboardApp() {
     });
   }
 
-  function requestDoneAuction() {
-    const activeAuction = auctionState?.activeAuction;
+  function requestLockAuction(auction) {
+    if (!auction) return;
+    setConfirmAction({
+      title: "Lock-in GL/WoE list",
+      body: `Freeze ${auction.name || "this GL/WoE auction"} so League Prize can reuse this list and exclude anyone marked can't pay? You can still finalize it after League Prize is created.`,
+      confirmLabel: "Lock list",
+      tone: "default",
+      run: async () => {
+        const data = await api("/api/auctions/active/lock", {
+          method: "POST",
+          body: JSON.stringify({ auctionId: auction.id })
+        });
+        setAuctionState(data.auctionState);
+        setToast("GL/WoE list locked");
+      }
+    });
+  }
+
+  function requestDoneAuction(auction) {
+    const activeAuction = auction || auctionState?.activeAuction;
     setConfirmAction({
       title: "Finish auction",
       body: `Finalize ${activeAuction?.name || "this auction"}? This will update member progress and cannot be undone.`,
       confirmLabel: "Finalize auction",
       tone: "default",
       run: async () => {
-        const data = await api("/api/auctions/active/done", { method: "POST" });
+        const data = await api("/api/auctions/active/done", {
+          method: "POST",
+          body: JSON.stringify({ auctionId: activeAuction?.id })
+        });
         setAuctionState(data.auctionState);
         setToast("Auction finalized");
       }
@@ -1312,10 +1347,13 @@ export default function DashboardApp() {
     });
   }
 
-  async function recalculateAuction() {
+  async function recalculateAuction(auction) {
     setSaving(true);
     try {
-      const data = await api("/api/auctions/active/recalculate", { method: "POST" });
+      const data = await api("/api/auctions/active/recalculate", {
+        method: "POST",
+        body: JSON.stringify({ auctionId: auction?.id })
+      });
       setAuctionState(data.auctionState);
       setToast("Auction allocations recalculated");
     } catch (err) {
@@ -1387,6 +1425,7 @@ export default function DashboardApp() {
               onOpenLimits={() => setAuctionLimitsOpen(true)}
               onOpenRotation={() => setRotationOpen(true)}
               onResetLineup={requestResetLineup}
+              onLockAuction={requestLockAuction}
               onRecalculateAuction={recalculateAuction}
               onCantPay={requestCantPay}
               onDoneAuction={requestDoneAuction}

@@ -126,14 +126,19 @@ create table if not exists auctions (
   round_id uuid not null references rounds(id) on delete cascade,
   type text not null check (type in ('gl_woe', 'league_prize')),
   name text,
-  status text not null check (status in ('active', 'done')),
+  status text not null check (status in ('active', 'locked', 'done')),
   started_at timestamptz not null default now(),
   done_at timestamptz
 );
 
-create unique index if not exists one_active_auction_idx
-on auctions((status))
-where status = 'active';
+alter table auctions drop constraint if exists auctions_status_check;
+alter table auctions add constraint auctions_status_check check (status in ('active', 'locked', 'done'));
+
+drop index if exists one_active_auction_idx;
+
+create unique index if not exists one_open_auction_per_type_idx
+on auctions(type)
+where status in ('active', 'locked');
 
 create table if not exists auction_inventory (
   id uuid primary key default gen_random_uuid(),

@@ -7,7 +7,8 @@ export async function POST(request) {
   if (!requireAuth(request)) return unauthorized();
 
   try {
-    const auctionState = await recalculateActiveAuction(getSupabaseAdmin());
+    const body = await request.json().catch(() => ({}));
+    const auctionState = await recalculateActiveAuction(getSupabaseAdmin(), body.auctionId);
     return NextResponse.json({ auctionState });
   } catch (error) {
     return handleApiError(error);
