@@ -763,6 +763,7 @@ function AuctionLimitsForm({ auctionItems, auctionState, onCancel, onSave, busy 
 
 function progressCellState(received, cap) {
   if (cap <= 0) return "capped";
+  if (received > cap) return "over";
   if (received >= cap) return "capped";
   if (received > 0) return "warning";
   return "empty";
@@ -899,6 +900,13 @@ function AuctionFoundation({
   const hasOpenAuctions = activeAuctions.length > 0;
   const glAuction = activeAuctions.find((auction) => auction.type === "gl_woe");
   const leagueAuction = activeAuctions.find((auction) => auction.type === "league_prize");
+  const history = auctionState?.history || [];
+  const latestDoneGlAuction = history.find((auction) => auction.type === "gl_woe");
+  const latestDoneLeagueAuction = history.find((auction) => auction.type === "league_prize");
+  const leagueAlreadyRanForLatestGl = latestDoneGlAuction && latestDoneLeagueAuction
+    ? new Date(latestDoneLeagueAuction.done_at) > new Date(latestDoneGlAuction.done_at)
+    : false;
+  const canStartLeague = Boolean(activeRound && latestDoneGlAuction && !leagueAlreadyRanForLatestGl && !glAuction && !leagueAuction);
   const completedCount = activeRound?.completedCount || 0;
   const roundMemberCount = activeRound?.memberCount || memberCount;
   const progressPct = roundMemberCount ? Math.min(100, Math.round((completedCount / roundMemberCount) * 100)) : 0;
@@ -948,7 +956,7 @@ function AuctionFoundation({
                   <strong>{auction.name || auctionTypeLabel(auction.type)}</strong>
                   <em>{locked ? `${auctionTypeLabel(auction.type)} locked` : auctionTypeLabel(auction.type)}</em>
                 </div>
-                <p>{locked ? "This list is locked for the paired League Prize. Finalize it when payouts are done." : "Review the generated page table, mark any member who cannot pay, then finalize the auction."}</p>
+                <p>{locked ? "This GL/WoE list is locked. Finalize it before starting League Prize so progress and can't-pay skips are applied." : "Review the generated page table, mark any member who cannot pay, then finalize the auction."}</p>
                 <div className="active-auction-stats">
                   <span><Clock3 size={14} />{locked ? "Locked" : "Active"}</span>
                   <span><Gavel size={14} />{auction.pageCount || 0} pages</span>
@@ -1031,8 +1039,8 @@ function AuctionFoundation({
       </div>
 
       <div className="auction-start-row">
-        <button className="primary-button" type="button" disabled={!activeRound || Boolean(glAuction)} onClick={() => onOpenStartAuction("gl_woe")}><Plus size={16} />New GL/WoE Auction</button>
-        <button className="ghost-button" type="button" disabled={!activeRound || Boolean(leagueAuction) || glAuction?.status !== "locked"} onClick={() => onOpenStartAuction("league_prize")} title={glAuction?.status === "locked" ? "Start League Prize" : "Lock-in GL/WoE first"}><Plus size={16} />New League Prize Auction</button>
+        <button className="primary-button" type="button" disabled={!activeRound || Boolean(glAuction) || Boolean(leagueAuction)} onClick={() => onOpenStartAuction("gl_woe")}><Plus size={16} />New GL/WoE Auction</button>
+        <button className="ghost-button" type="button" disabled={!canStartLeague} onClick={() => onOpenStartAuction("league_prize")} title={canStartLeague ? "Start League Prize" : "Finalize a new GL/WoE first"}><Plus size={16} />New League Prize Auction</button>
       </div>
 
       <div className="auction-items">
@@ -1380,7 +1388,7 @@ export default function DashboardApp() {
     if (!auction) return;
     setConfirmAction({
       title: "Lock-in GL/WoE list",
-      body: `Freeze ${auction.name || "this GL/WoE auction"} so League Prize can reuse this list and exclude anyone marked can't pay? You can still finalize it after League Prize is created.`,
+      body: `Freeze ${auction.name || "this GL/WoE auction"} so no more can't-pay changes are made before finalizing it for League Prize?`,
       confirmLabel: "Lock list",
       tone: "default",
       run: async () => {

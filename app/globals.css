@@ -1153,6 +1153,12 @@ button.party-slot.empty:hover:not(:disabled) {
   color: var(--amber-2);
 }
 
+.progress-table .progress-count.over {
+  border-color: rgba(248, 113, 113, 0.52);
+  background: rgba(127, 29, 29, 0.24);
+  color: #fca5a5;
+}
+
 .progress-table .progress-count.empty {
   background: rgba(39, 39, 42, 0.52);
   color: var(--muted-2);
