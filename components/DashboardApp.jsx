@@ -261,14 +261,14 @@ function RosterLimitForm({ current, minimum, onCancel, onSave }) {
   );
 }
 
-function Header({ username, onLogout }) {
+function Header({ username, onLogout, publicView = false }) {
   return (
     <header className="topbar">
       <div className="topbar-inner">
         <div className="brand-row">
           <div className="brand-mark small"><Shield size={20} /></div>
           <div>
-            <p className="eyebrow">guild · admin console</p>
+            <p className="eyebrow">{publicView ? "guild · public dashboard" : "guild · admin console"}</p>
             <h1>ENCORE</h1>
             <div className="brand-meta">
               <span>ragnarok origin classic</span>
@@ -279,17 +279,17 @@ function Header({ username, onLogout }) {
         </div>
         <div className="admin-row">
           <div className="signed-in">
-            <span>signed in as</span>
-            <strong>{username || "admin"} · admin</strong>
+            <span>{publicView ? "view mode" : "signed in as"}</span>
+            <strong>{publicView ? "public" : `${username || "admin"} · admin`}</strong>
           </div>
-          <button className="ghost-button" onClick={onLogout}><LogOut size={15} />Log out</button>
+          {!publicView && <button className="ghost-button" onClick={onLogout}><LogOut size={15} />Log out</button>}
         </div>
       </div>
     </header>
   );
 }
 
-function Stats({ members, memberLimit, activeClass, onClassFilter, onEditLimit }) {
+function Stats({ members, memberLimit, activeClass, onClassFilter, onEditLimit, readOnly = false }) {
   const statItems = useMemo(() => {
     const counts = {};
     for (const member of members) counts[member.char_class] = (counts[member.char_class] || 0) + 1;
@@ -308,7 +308,7 @@ function Stats({ members, memberLimit, activeClass, onClassFilter, onEditLimit }
 
   return (
     <section className="stats-row">
-      <button className="stat-card roster-stat" onClick={onEditLimit} title="Edit guild member limit">
+      <button className="stat-card roster-stat" onClick={onEditLimit} disabled={readOnly} title={readOnly ? "Guild member limit" : "Edit guild member limit"}>
         <span>Roster</span>
         <strong>{members.length}<small>/{memberLimit}</small></strong>
         <em>guild limit</em>
@@ -340,7 +340,7 @@ function Stats({ members, memberLimit, activeClass, onClassFilter, onEditLimit }
   );
 }
 
-function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd, onEdit, onDelete, canAddMember, memberLimit }) {
+function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd, onEdit, onDelete, canAddMember, memberLimit, readOnly = false }) {
   const [query, setQuery] = useState("");
 
   const filteredMembers = useMemo(() => {
@@ -390,9 +390,11 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
           <p className="eyebrow">member list</p>
           <h2>Roster</h2>
         </div>
-        <button className="primary-button" onClick={onAdd} disabled={!canAddMember} title={canAddMember ? "Add member" : `Roster is at ${members.length}/${memberLimit}`}>
-          <Plus size={16} />Add member
-        </button>
+        {!readOnly && (
+          <button className="primary-button" onClick={onAdd} disabled={!canAddMember} title={canAddMember ? "Add member" : `Roster is at ${members.length}/${memberLimit}`}>
+            <Plus size={16} />Add member
+          </button>
+        )}
       </div>
       <div className="toolbar">
         <label className="search-box">
@@ -422,10 +424,12 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
                       <span>{member.char_class}</span>
                       <em>Party: {groupsById[member.group_id]?.name || "Unassigned"}</em>
                     </div>
-                    <div className="row-actions">
-                      <button className="icon-button" onClick={() => onEdit(member)} aria-label={`Edit ${member.char_name}`}><Pencil size={15} /></button>
-                      <button className="icon-button danger" onClick={() => onDelete(member)} aria-label={`Delete ${member.char_name}`}><Trash2 size={15} /></button>
-                    </div>
+                    {!readOnly && (
+                      <div className="row-actions">
+                        <button className="icon-button" onClick={() => onEdit(member)} aria-label={`Edit ${member.char_name}`}><Pencil size={15} /></button>
+                        <button className="icon-button danger" onClick={() => onDelete(member)} aria-label={`Delete ${member.char_name}`}><Trash2 size={15} /></button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -439,7 +443,7 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
   );
 }
 
-function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDeleteGroup, onPickEmptySlot, onRequestUnassign, onEditMember }) {
+function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDeleteGroup, onPickEmptySlot, onRequestUnassign, onEditMember, readOnly = false }) {
   const membersByGroup = useMemo(() => {
     const map = {};
     for (const group of groups) map[group.id] = [];
@@ -457,7 +461,7 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
           <p className="eyebrow">party management</p>
           <h2>Groups</h2>
         </div>
-        <button className="ghost-button" onClick={onCreateGroup}><Plus size={16} />Create group</button>
+        {!readOnly && <button className="ghost-button" onClick={onCreateGroup}><Plus size={16} />Create group</button>}
       </div>
 
       <div className="party-grid">
@@ -470,10 +474,12 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
                   <h3>{group.name}</h3>
                   <span>{roster.length}/5 members</span>
                 </div>
-                <div className="row-actions always">
-                  <button className="icon-button" onClick={() => onRenameGroup(group)} aria-label={`Rename ${group.name}`}><Pencil size={15} /></button>
-                  <button className="icon-button danger" onClick={() => onDeleteGroup(group)} aria-label={`Delete ${group.name}`}><Trash2 size={15} /></button>
-                </div>
+                {!readOnly && (
+                  <div className="row-actions always">
+                    <button className="icon-button" onClick={() => onRenameGroup(group)} aria-label={`Rename ${group.name}`}><Pencil size={15} /></button>
+                    <button className="icon-button danger" onClick={() => onDeleteGroup(group)} aria-label={`Delete ${group.name}`}><Trash2 size={15} /></button>
+                  </div>
+                )}
               </header>
 
               <div className="party-slots">
@@ -482,17 +488,19 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
                   return member ? (
                     <div className="party-slot filled" key={member.id}>
                       <ClassIcon name={member.char_class} size={30} />
-                      <button className="slot-name" onClick={() => onEditMember(member)}>{member.char_name}</button>
-                      <button className="icon-button danger" onClick={() => onRequestUnassign(member, group)} aria-label={`Remove ${member.char_name}`}>
-                        <UserMinus size={14} />
-                      </button>
+                      <button className="slot-name" onClick={() => !readOnly && onEditMember(member)} disabled={readOnly}>{member.char_name}</button>
+                      {!readOnly && (
+                        <button className="icon-button danger" onClick={() => onRequestUnassign(member, group)} aria-label={`Remove ${member.char_name}`}>
+                          <UserMinus size={14} />
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <button
                       className="party-slot empty"
                       key={slot}
-                      onClick={() => onPickEmptySlot(group)}
-                      disabled={!unassigned.length}
+                      onClick={() => !readOnly && onPickEmptySlot(group)}
+                      disabled={readOnly || !unassigned.length}
                       title={unassigned.length ? `Add member to ${group.name}` : "No unassigned members"}
                     >
                       {unassigned.length ? "Empty slot" : "No unassigned"}
@@ -503,11 +511,13 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
             </article>
           );
         })}
-        <button className="new-party-card" onClick={onCreateGroup}>
-          <Plus size={20} />
-          <span>New group</span>
-          <em>5 open slots</em>
-        </button>
+        {!readOnly && (
+          <button className="new-party-card" onClick={onCreateGroup}>
+            <Plus size={20} />
+            <span>New group</span>
+            <em>5 open slots</em>
+          </button>
+        )}
       </div>
     </section>
   );
@@ -925,6 +935,7 @@ function AuctionFoundation({
   onDoneAuction,
   onDoneEvent,
   onCopyAuctionList,
+  readOnly = false,
   busy
 }) {
   const activeRound = auctionState?.activeRound;
@@ -971,9 +982,13 @@ function AuctionFoundation({
         </div>
         <div className="round-actions">
           <button className="ghost-button" type="button" onClick={onOpenRotation} disabled={!activeRound}><Eye size={15} />Lineup list</button>
-          <button className="ghost-button" type="button" onClick={onOpenLimits} disabled={!activeRound || hasOpenAuctions}><Settings size={15} />Adjust limits</button>
-          <button className="danger-button soft" type="button" onClick={onResetLineup} disabled={!activeRound || busy}><Shuffle size={15} />Test reset</button>
-          <button className="ghost-button" type="button" onClick={onStartRound} disabled={Boolean(activeRound) || busy}><Shuffle size={15} />Create auction lineup</button>
+          {!readOnly && (
+            <>
+              <button className="ghost-button" type="button" onClick={onOpenLimits} disabled={!activeRound || hasOpenAuctions}><Settings size={15} />Adjust limits</button>
+              <button className="danger-button soft" type="button" onClick={onResetLineup} disabled={!activeRound || busy}><Shuffle size={15} />Test reset</button>
+              <button className="ghost-button" type="button" onClick={onStartRound} disabled={Boolean(activeRound) || busy}><Shuffle size={15} />Create auction lineup</button>
+            </>
+          )}
         </div>
       </div>
 
@@ -1003,7 +1018,7 @@ function AuctionFoundation({
                           <th>Member</th>
                           <th>Bid instructions</th>
                           <th>Total</th>
-                          <th />
+                          {!readOnly && <th />}
                         </tr>
                       </thead>
                       <tbody>
@@ -1026,11 +1041,13 @@ function AuctionFoundation({
                               </div>
                             </td>
                             <td>{row.quantity}</td>
-                            <td>
-                              <button className="ghost-button mini" type="button" onClick={() => onCantPay(row.member, auction)} disabled={busy || locked}>
-                                <Ban size={13} />Can't pay
-                              </button>
-                            </td>
+                            {!readOnly && (
+                              <td>
+                                <button className="ghost-button mini" type="button" onClick={() => onCantPay(row.member, auction)} disabled={busy || locked}>
+                                  <Ban size={13} />Can't pay
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -1039,22 +1056,24 @@ function AuctionFoundation({
                     <div className="empty-panel compact">No allocations for this auction.</div>
                   )}
                 </div>
-                <div className="active-actions">
-                  <button className="ghost-button" type="button" onClick={() => onCopyAuctionList(auction, bidRows)} disabled={!bidRows.length}>
-                    <Copy size={15} />Copy list
-                  </button>
-                  {auction.type === "gl_woe" && !locked && (
-                    <button className="ghost-button" type="button" onClick={() => onLockAuction(auction)} disabled={busy}>
-                      <Shield size={15} />Lock-in list
+                {!readOnly && (
+                  <div className="active-actions">
+                    <button className="ghost-button" type="button" onClick={() => onCopyAuctionList(auction, bidRows)} disabled={!bidRows.length}>
+                      <Copy size={15} />Copy list
                     </button>
-                  )}
-                  {!pairedEventActive && (
-                    <button className="primary-button" type="button" onClick={() => onDoneAuction(auction)} disabled={busy}>
-                      {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
-                      Done
-                    </button>
-                  )}
-                </div>
+                    {auction.type === "gl_woe" && !locked && (
+                      <button className="ghost-button" type="button" onClick={() => onLockAuction(auction)} disabled={busy}>
+                        <Shield size={15} />Lock-in list
+                      </button>
+                    )}
+                    {!pairedEventActive && (
+                      <button className="primary-button" type="button" onClick={() => onDoneAuction(auction)} disabled={busy}>
+                        {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
+                        Done
+                      </button>
+                    )}
+                  </div>
+                )}
               </article>
             );
           })
@@ -1076,17 +1095,21 @@ function AuctionFoundation({
 
       </div>
 
-      <div className="auction-start-row">
-        <button className="primary-button" type="button" disabled={!activeRound || Boolean(glAuction) || Boolean(leagueAuction)} onClick={() => onOpenStartAuction("gl_woe")}><Plus size={16} />New GL/WoE Auction</button>
-        <button className="ghost-button" type="button" disabled={!canStartLeague} onClick={() => onOpenStartAuction("league_prize")} title={canStartLeague ? "Start League Prize" : "Lock-in GL/WoE first"}><Plus size={16} />New League Prize Auction</button>
-        {pairedEventActive && (
-          <button className="primary-button" type="button" onClick={() => onDoneEvent([glAuction, leagueAuction])} disabled={busy}>
-            {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
-            Done event
-          </button>
-        )}
-      </div>
-      <p className={canStartLeague ? "auction-flow-note ready" : "auction-flow-note"}>{leagueHint}</p>
+      {!readOnly && (
+        <>
+          <div className="auction-start-row">
+            <button className="primary-button" type="button" disabled={!activeRound || Boolean(glAuction) || Boolean(leagueAuction)} onClick={() => onOpenStartAuction("gl_woe")}><Plus size={16} />New GL/WoE Auction</button>
+            <button className="ghost-button" type="button" disabled={!canStartLeague} onClick={() => onOpenStartAuction("league_prize")} title={canStartLeague ? "Start League Prize" : "Lock-in GL/WoE first"}><Plus size={16} />New League Prize Auction</button>
+            {pairedEventActive && (
+              <button className="primary-button" type="button" onClick={() => onDoneEvent([glAuction, leagueAuction])} disabled={busy}>
+                {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
+                Done event
+              </button>
+            )}
+          </div>
+          <p className={canStartLeague ? "auction-flow-note ready" : "auction-flow-note"}>{leagueHint}</p>
+        </>
+      )}
 
       <div className="auction-items">
         {auctionItems.map((item) => (
@@ -1102,7 +1125,7 @@ function AuctionFoundation({
   );
 }
 
-export default function DashboardApp() {
+export default function DashboardApp({ publicView = false }) {
   const [session, setSession] = useState({ loading: true, authenticated: false, username: "" });
   const [members, setMembers] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -1128,6 +1151,11 @@ export default function DashboardApp() {
   const unassignedMembers = members.filter((member) => !member.group_id);
 
   async function checkSession() {
+    if (publicView) {
+      setSession({ loading: false, authenticated: true, username: "public" });
+      loadData();
+      return;
+    }
     const data = await api("/api/auth/session");
     setSession({ loading: false, authenticated: data.authenticated, username: data.username || "" });
     if (data.authenticated) loadData();
@@ -1137,7 +1165,7 @@ export default function DashboardApp() {
     setLoading(true);
     setError("");
     try {
-      const data = await api("/api/bootstrap");
+      const data = await api(publicView ? "/api/public/bootstrap" : "/api/bootstrap");
       setMembers(data.members || []);
       setGroups(data.groups || []);
       setAuctionItems(data.auctionItems || []);
@@ -1154,7 +1182,7 @@ export default function DashboardApp() {
       setSession({ loading: false, authenticated: false, username: "" });
       setError(err.message);
     });
-  }, []);
+  }, [publicView]);
 
   useEffect(() => {
     if (!members.length || memberLimit !== null) return;
@@ -1520,21 +1548,22 @@ export default function DashboardApp() {
     return <main className="loading-page"><Loader2 className="spin" size={28} /></main>;
   }
 
-  if (!session.authenticated) {
+  if (!publicView && !session.authenticated) {
     return <LoginScreen onLogin={checkSession} />;
   }
 
   return (
     <>
       <NoiseLayer />
-      <Header username={session.username} onLogout={logout} />
+      <Header username={session.username} onLogout={logout} publicView={publicView} />
       <main className="dashboard">
         <Stats
           members={members}
           memberLimit={effectiveMemberLimit}
           activeClass={classFilter}
           onClassFilter={setClassFilter}
-          onEditLimit={() => setLimitModalOpen(true)}
+          onEditLimit={() => !publicView && setLimitModalOpen(true)}
+          readOnly={publicView}
         />
         {error && (
           <div className="alert-panel">
@@ -1557,6 +1586,7 @@ export default function DashboardApp() {
               onAdd={() => setMemberModal({})}
               onEdit={setMemberModal}
               onDelete={deleteMember}
+              readOnly={publicView}
             />
             <PartiesSection
               members={members}
@@ -1567,6 +1597,7 @@ export default function DashboardApp() {
               onPickEmptySlot={setPartyPickerGroup}
               onRequestUnassign={requestUnassign}
               onEditMember={setMemberModal}
+              readOnly={publicView}
             />
             <AuctionFoundation
               auctionItems={auctionItems}
@@ -1583,11 +1614,12 @@ export default function DashboardApp() {
               onDoneAuction={requestDoneAuction}
               onDoneEvent={requestDoneEvent}
               onCopyAuctionList={copyAuctionList}
+              readOnly={publicView}
             />
           </>
         )}
       </main>
-      <FooterStrip memberCount={members.length} partyCount={groups.length} />
+      <FooterStrip memberCount={members.length} partyCount={groups.length} publicView={publicView} />
 
       {memberModal && (
         <Modal title={memberModal.id ? "Edit member" : "Add member"} onClose={() => setMemberModal(null)}>
@@ -1690,10 +1722,10 @@ export default function DashboardApp() {
   );
 }
 
-function FooterStrip({ memberCount, partyCount }) {
+function FooterStrip({ memberCount, partyCount, publicView = false }) {
   return (
     <footer className="footer-strip">
-      <span>encore · admin console · v0.1.0</span>
+      <span>encore · {publicView ? "public dashboard" : "admin console"} · v0.1.0</span>
       <span>{memberCount} members · {partyCount} groups · auctions pending</span>
     </footer>
   );
