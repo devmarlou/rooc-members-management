@@ -915,6 +915,18 @@ button.party-slot.empty:hover:not(:disabled) {
   justify-content: flex-end;
 }
 
+.auction-flow-note {
+  margin: 8px 0 0;
+  color: var(--muted-2);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.auction-flow-note.ready {
+  color: #86efac;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;

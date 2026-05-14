@@ -907,6 +907,13 @@ function AuctionFoundation({
     ? new Date(latestDoneLeagueAuction.done_at) > new Date(latestDoneGlAuction.done_at)
     : false;
   const canStartLeague = Boolean(activeRound && latestDoneGlAuction && !leagueAlreadyRanForLatestGl && !glAuction && !leagueAuction);
+  const leagueHint = glAuction
+    ? "Click Done on the GL/WoE auction first. League Prize uses the finalized progress cursor."
+    : leagueAlreadyRanForLatestGl
+      ? "League Prize already ran for the latest GL/WoE auction."
+      : latestDoneGlAuction
+        ? "League Prize is ready from the next incomplete lineup member."
+        : "Finish a GL/WoE auction first, then League Prize becomes available.";
   const completedCount = activeRound?.completedCount || 0;
   const roundMemberCount = activeRound?.memberCount || memberCount;
   const progressPct = roundMemberCount ? Math.min(100, Math.round((completedCount / roundMemberCount) * 100)) : 0;
@@ -1042,6 +1049,7 @@ function AuctionFoundation({
         <button className="primary-button" type="button" disabled={!activeRound || Boolean(glAuction) || Boolean(leagueAuction)} onClick={() => onOpenStartAuction("gl_woe")}><Plus size={16} />New GL/WoE Auction</button>
         <button className="ghost-button" type="button" disabled={!canStartLeague} onClick={() => onOpenStartAuction("league_prize")} title={canStartLeague ? "Start League Prize" : "Finalize a new GL/WoE first"}><Plus size={16} />New League Prize Auction</button>
       </div>
+      <p className={canStartLeague ? "auction-flow-note ready" : "auction-flow-note"}>{leagueHint}</p>
 
       <div className="auction-items">
         {auctionItems.map((item) => (
