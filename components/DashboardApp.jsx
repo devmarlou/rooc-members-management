@@ -868,39 +868,77 @@ function progressCellState(received, cap) {
   return "empty";
 }
 
-function progressRowStatus(row, limitedItems) {
+function progressRowNextNeed(row, limitedItems) {
+  const missingItems = limitedItems.filter((item) => {
+    const received = row.received[item.item_key] || 0;
+    const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
+    return cap > 0 && received < cap;
+  });
   const receivedTotal = limitedItems.reduce((sum, item) => sum + (row.received[item.item_key] || 0), 0);
-  if (row.is_complete) return { label: "cycle capped", state: "capped" };
-  if (receivedTotal === 0) return { label: "in queue", state: "empty" };
-  return { label: "incomplete", state: "warning" };
+  if (!missingItems.length) return { label: "ready next cycle", state: "capped" };
+  const names = missingItems.slice(0, 2).map((item) => item.short_name);
+  const suffix = missingItems.length > 2 ? ` +${missingItems.length - 2}` : "";
+  return {
+    label: `needs ${names.join(", ")}${suffix}`,
+    state: receivedTotal === 0 ? "empty" : "warning"
+  };
+}
+
+function progressRowReady(row, limitedItems) {
+  return limitedItems.every((item) => {
+    const received = row.received[item.item_key] || 0;
+    const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
+    return cap <= 0 || received >= cap;
+  });
+}
+
+function progressReceivedTotal(row, limitedItems) {
+  return limitedItems.reduce((sum, item) => sum + (row.received[item.item_key] || 0), 0);
+}
+
+function progressRowQueueState(row, limitedItems, priorityMemberId) {
+  if (progressRowReady(row, limitedItems)) return { label: "ready", state: "ready" };
+  if (row.member.id === priorityMemberId) return { label: "priority", state: "priority" };
+  if (progressReceivedTotal(row, limitedItems) > 0) return { label: "partial", state: "partial" };
+  return { label: "in queue", state: "queue" };
 }
 
 function heldItemCount(row, item) {
   return Math.max(row.held?.[item.item_key] || 0, row.received[item.item_key] || 0);
 }
 
+function itemCycleCount(row, item) {
+  const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
+  if (cap <= 0) return 0;
+  return Math.floor(heldItemCount(row, item) / cap);
+}
+
 function MemberProgressTable({ auctionItems, auctionState }) {
   const limitedItems = auctionItems.filter((item) => item.gates_round_completion);
   const rows = auctionState?.progress || [];
+  const priorityMemberId = rows.find((row) => !progressRowReady(row, limitedItems))?.member.id || null;
   const itemSummaries = limitedItems.map((item) => {
     let capped = 0;
     let partial = 0;
     let empty = 0;
     let currentTotal = 0;
     let heldTotal = 0;
+    const cycleCounts = [];
 
     for (const row of rows) {
       const received = row.received[item.item_key] || 0;
       const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
       currentTotal += received;
       heldTotal += heldItemCount(row, item);
+      if (cap > 0) cycleCounts.push(itemCycleCount(row, item));
       const state = progressCellState(received, cap);
       if (state === "capped") capped += 1;
       if (state === "warning") partial += 1;
       if (state === "empty") empty += 1;
     }
 
-    return { item, capped, partial, empty, currentTotal, heldTotal };
+    const completedCycles = cycleCounts.length ? Math.min(...cycleCounts) : 0;
+    return { item, capped, partial, empty, currentTotal, heldTotal, completedCycles };
   });
 
   if (!rows.length) {
@@ -917,11 +955,11 @@ function MemberProgressTable({ auctionItems, auctionState }) {
         <span>{rows.length} members</span>
       </header>
       <div className="progress-summary-grid">
-        {itemSummaries.map(({ item, capped, partial, empty, currentTotal, heldTotal }) => (
+        {itemSummaries.map(({ item, capped, partial, empty, currentTotal, heldTotal, completedCycles }) => (
           <div className="progress-summary-card" key={item.id}>
             <strong>{item.short_name}</strong>
             <span>{heldTotal} held total</span>
-            <em>{capped} capped · {partial} incomplete · {empty} none · {currentTotal} current</em>
+            <em>C{completedCycles} complete · {capped} capped · {partial} incomplete · {empty} none · {currentTotal} current</em>
           </div>
         ))}
       </div>
@@ -939,13 +977,14 @@ function MemberProgressTable({ auctionItems, auctionState }) {
               <th>Line</th>
               <th>Member</th>
               {limitedItems.map((item) => <th key={item.id}>{item.short_name}</th>)}
-              <th>Status</th>
+              <th>Priority / need</th>
               <th>Held totals</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => {
-              const status = progressRowStatus(row, limitedItems);
+              const nextNeed = progressRowNextNeed(row, limitedItems);
+              const queueState = progressRowQueueState(row, limitedItems, priorityMemberId);
               return (
                 <tr key={row.member.id}>
                   <td>{row.position}</td>
@@ -962,12 +1001,19 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                       </td>
                     );
                   })}
-                  <td><em className={`progress-status ${status.state}`}>{status.label}</em></td>
+                  <td>
+                    <div className="progress-status-stack">
+                      <em className={`progress-status ${queueState.state}`}>{queueState.label}</em>
+                      <em className={`progress-status ${nextNeed.state}`}>{nextNeed.label}</em>
+                    </div>
+                  </td>
                   <td>
                     <div className="progress-held-stack">
                       {limitedItems.map((item) => (
                         <span className={`progress-held-count held-${item.item_key}`} key={item.id}>
-                          <strong>{item.short_name}</strong>{heldItemCount(row, item)}
+                          <strong>{item.short_name}</strong>
+                          <span className="held-value">{heldItemCount(row, item)}</span>
+                          <em>C{itemCycleCount(row, item)}</em>
                         </span>
                       ))}
                     </div>

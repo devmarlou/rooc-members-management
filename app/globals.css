@@ -1232,7 +1232,7 @@ button.party-slot.empty:hover:not(:disabled) {
 }
 
 .progress-col-status {
-  width: 160px;
+  width: 210px;
 }
 
 .progress-col-held {
@@ -1365,8 +1365,8 @@ button.party-slot.empty:hover:not(:disabled) {
 .progress-table .progress-held-count {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-width: 72px;
+  gap: 5px;
+  min-width: 86px;
   justify-content: center;
   border: 1px solid rgba(63, 63, 70, 0.8);
   border-radius: 999px;
@@ -1387,6 +1387,22 @@ button.party-slot.empty:hover:not(:disabled) {
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 10px;
   line-height: 1;
+}
+
+.progress-table .progress-held-count .held-value,
+.progress-table .progress-held-count em {
+  display: inline;
+  margin: 0;
+  color: currentColor;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.progress-table .progress-held-count em {
+  opacity: 0.72;
 }
 
 .progress-held-count.held-puppet_card {
@@ -1416,6 +1432,7 @@ button.party-slot.empty:hover:not(:disabled) {
 
 .progress-status {
   display: inline-flex;
+  width: max-content;
   border: 1px solid transparent;
   border-radius: 999px;
   padding: 4px 8px;
@@ -1424,6 +1441,36 @@ button.party-slot.empty:hover:not(:disabled) {
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.progress-status-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.progress-status.priority {
+  border-color: rgba(251, 191, 36, 0.62);
+  background: rgba(120, 53, 15, 0.38);
+  color: #fde68a;
+}
+
+.progress-status.partial {
+  border-color: rgba(56, 189, 248, 0.44);
+  background: rgba(8, 47, 73, 0.42);
+  color: #bae6fd;
+}
+
+.progress-status.queue {
+  border-color: rgba(113, 113, 122, 0.34);
+  background: rgba(39, 39, 42, 0.52);
+  color: var(--muted-2);
+}
+
+.progress-status.ready {
+  border-color: rgba(34, 197, 94, 0.38);
+  background: rgba(34, 197, 94, 0.12);
+  color: #86efac;
 }
 
 .progress-status.empty {
