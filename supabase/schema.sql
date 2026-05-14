@@ -170,6 +170,28 @@ create table if not exists auction_allocations (
   fulfilled boolean not null default true
 );
 
+create table if not exists dashboard_events (
+  id uuid primary key default gen_random_uuid(),
+  event_type text not null default 'dashboard_update',
+  created_at timestamptz not null default now()
+);
+
+alter table dashboard_events enable row level security;
+
+drop policy if exists "Public can listen to dashboard events" on dashboard_events;
+create policy "Public can listen to dashboard events"
+on dashboard_events
+for select
+using (true);
+
+do $$
+begin
+  alter publication supabase_realtime add table public.dashboard_events;
+exception
+  when duplicate_object then null;
+  when undefined_object then null;
+end $$;
+
 insert into groups (name, sort_order)
 values
   ('Alpha 1', 10),
@@ -193,3 +215,4 @@ alter table auctions enable row level security;
 alter table auction_inventory enable row level security;
 alter table auction_queue enable row level security;
 alter table auction_allocations enable row level security;
+alter table dashboard_events enable row level security;

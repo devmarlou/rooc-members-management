@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   LogOut,
   Plus,
@@ -26,6 +26,7 @@ import {
   List
 } from "lucide-react";
 import { classByName, classes, classOrder, colorGroups } from "@/components/data";
+import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 
 const emptyMember = {
   char_name: "",
@@ -1206,10 +1207,31 @@ export default function DashboardApp({ publicView = false }) {
   const [saving, setSaving] = useState(false);
   const [classFilter, setClassFilter] = useState("");
   const [memberLimit, setMemberLimit] = useState(null);
+  const realtimeTimerRef = useRef(null);
+  const realtimeLoadingRef = useRef(false);
 
   const groupsById = useMemo(() => Object.fromEntries(groups.map((group) => [group.id, group])), [groups]);
   const effectiveMemberLimit = Math.max(memberLimit || members.length || 0, members.length);
   const unassignedMembers = members.filter((member) => !member.group_id);
+
+  const loadData = useCallback(async ({ silent = false } = {}) => {
+    if (realtimeLoadingRef.current) return;
+    realtimeLoadingRef.current = true;
+    if (!silent) setLoading(true);
+    setError("");
+    try {
+      const data = await api(publicView ? "/api/public/bootstrap" : "/api/bootstrap");
+      setMembers(data.members || []);
+      setGroups(data.groups || []);
+      setAuctionItems(data.auctionItems || []);
+      setAuctionState(data.auctionState || null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      if (!silent) setLoading(false);
+      realtimeLoadingRef.current = false;
+    }
+  }, [publicView]);
 
   async function checkSession() {
     if (publicView) {
@@ -1222,28 +1244,35 @@ export default function DashboardApp({ publicView = false }) {
     if (data.authenticated) loadData();
   }
 
-  async function loadData() {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await api(publicView ? "/api/public/bootstrap" : "/api/bootstrap");
-      setMembers(data.members || []);
-      setGroups(data.groups || []);
-      setAuctionItems(data.auctionItems || []);
-      setAuctionState(data.auctionState || null);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
     checkSession().catch((err) => {
       setSession({ loading: false, authenticated: false, username: "" });
       setError(err.message);
     });
-  }, [publicView]);
+  }, [loadData, publicView]);
+
+  useEffect(() => {
+    if (!session.authenticated) return undefined;
+    const supabase = getSupabaseBrowser();
+    if (!supabase) return undefined;
+
+    const scheduleRefresh = () => {
+      window.clearTimeout(realtimeTimerRef.current);
+      realtimeTimerRef.current = window.setTimeout(() => {
+        loadData({ silent: true });
+      }, 450);
+    };
+
+    const channel = supabase
+      .channel("auction-dashboard")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "dashboard_events" }, scheduleRefresh)
+      .subscribe();
+
+    return () => {
+      window.clearTimeout(realtimeTimerRef.current);
+      supabase.removeChannel(channel);
+    };
+  }, [loadData, session.authenticated]);
 
   useEffect(() => {
     if (!members.length || memberLimit !== null) return;
