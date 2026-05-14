@@ -357,30 +357,12 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
     });
   }, [classFilter, groupsById, members, query]);
 
-  const columns = useMemo(() => {
-    const byClass = {};
-    for (const member of filteredMembers) {
-      const key = member.char_class === "Dancer" ? "Bard / Dancer" : member.char_class;
-      if (member.char_class === "Bard") {
-        byClass["Bard / Dancer"] ||= [];
-        byClass["Bard / Dancer"].push(member);
-      } else if (member.char_class === "Dancer") {
-        byClass["Bard / Dancer"] ||= [];
-        byClass["Bard / Dancer"].push(member);
-      } else {
-        byClass[key] ||= [];
-        byClass[key].push(member);
-      }
-    }
-    const ordered = [];
-    for (const name of classOrder) {
-      if (name === "Dancer") continue;
-      const key = name === "Bard" ? "Bard / Dancer" : name;
-      if (byClass[key]?.length && !ordered.some((col) => col.key === key)) {
-        ordered.push({ key, icon: name, members: byClass[key] });
-      }
-    }
-    return ordered;
+  const orderedMembers = useMemo(() => {
+    return [...filteredMembers].sort((a, b) => {
+      const classDelta = classOrder.indexOf(a.char_class) - classOrder.indexOf(b.char_class);
+      if (classDelta) return classDelta;
+      return a.char_name.localeCompare(b.char_name);
+    });
   }, [filteredMembers]);
 
   return (
@@ -406,35 +388,40 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
           {classes.map((cls) => <option key={cls.name} value={cls.name}>{cls.name}</option>)}
         </select>
       </div>
-      {columns.length ? (
-        <div className="class-grid">
-          {columns.map((column) => (
-            <article className="class-column" key={column.key}>
-              <header>
-                <ClassIcon name={column.icon} size={28} />
-                <h3>{column.key}</h3>
-                <span>{column.members.length}</span>
-              </header>
-              <div className="member-list">
-                {column.members.map((member) => (
-                  <div className="member-row" key={member.id}>
-                    <ClassIcon name={member.char_class} size={32} />
-                    <div className="member-main">
+      {orderedMembers.length ? (
+        <div className="roster-table-wrap">
+          <table className="roster-table">
+            <thead>
+              <tr>
+                <th>Member</th>
+                <th>Class</th>
+                <th>Party</th>
+                {!readOnly && <th />}
+              </tr>
+            </thead>
+            <tbody>
+              {orderedMembers.map((member) => (
+                <tr key={member.id}>
+                  <td>
+                    <div className="roster-member">
+                      <ClassIcon name={member.char_class} size={30} />
                       <strong>{member.char_name}</strong>
-                      <span>{member.char_class}</span>
-                      <em>Party: {groupsById[member.group_id]?.name || "Unassigned"}</em>
                     </div>
-                    {!readOnly && (
-                      <div className="row-actions">
+                  </td>
+                  <td>{member.char_class}</td>
+                  <td>{groupsById[member.group_id]?.name || "Unassigned"}</td>
+                  {!readOnly && (
+                    <td className="roster-actions-cell">
+                      <div className="row-actions always">
                         <button className="icon-button" onClick={() => onEdit(member)} aria-label={`Edit ${member.char_name}`}><Pencil size={15} /></button>
                         <button className="icon-button danger" onClick={() => onDelete(member)} aria-label={`Delete ${member.char_name}`}><Trash2 size={15} /></button>
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </article>
-          ))}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
         <div className="empty-panel">No members match the current filters.</div>
@@ -954,7 +941,6 @@ function AuctionFoundation({
   const completedCount = activeRound?.completedCount || 0;
   const roundMemberCount = activeRound?.memberCount || memberCount;
   const progressPct = roundMemberCount ? Math.min(100, Math.round((completedCount / roundMemberCount) * 100)) : 0;
-  const currentCaps = auctionState?.itemCaps || {};
 
   return (
     <section className="content-section auction-section">
@@ -1111,15 +1097,6 @@ function AuctionFoundation({
         </>
       )}
 
-      <div className="auction-items">
-        {auctionItems.map((item) => (
-          <div className="auction-item" key={item.id}>
-            <strong>{item.short_name}</strong>
-            <span>{currentCaps[item.item_key] ?? item.default_per_round_cap}/round</span>
-            <em>{item.gates_round_completion ? "gating" : "bonus"}</em>
-          </div>
-        ))}
-      </div>
       <MemberProgressTable auctionItems={auctionItems} auctionState={auctionState} />
     </section>
   );
