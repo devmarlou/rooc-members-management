@@ -1166,7 +1166,11 @@ function AuctionFoundation({
                 {cycleResetItems.length > 0 && (
                   <div className="auction-cycle-note">
                     <RefreshCw size={15} />
-                    <span>{cycleResetItems.join(", ")} cycle finished for all members, so this auction starts a fresh item cycle.</span>
+                    <span>
+                      {cycleResetItems.join(", ")} {cycleResetItems.length === 1
+                        ? "cycle finished for all members, so this auction starts a fresh item cycle."
+                        : "cycles finished for all members, so this auction starts fresh item cycles."}
+                    </span>
                   </div>
                 )}
                 <div className="allocation-table-wrap">
