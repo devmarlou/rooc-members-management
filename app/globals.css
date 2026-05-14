@@ -2266,13 +2266,88 @@ button.party-slot.empty:hover:not(:disabled) {
     flex: 1 1 auto;
   }
 
+  .allocation-table-wrap {
+    overflow: visible;
+  }
+
   .allocation-table {
-    min-width: 700px;
+    display: block;
+    min-width: 0;
+  }
+
+  .allocation-table colgroup,
+  .allocation-table thead {
+    display: none;
+  }
+
+  .allocation-table tbody {
+    display: grid;
+    gap: 8px;
+  }
+
+  .allocation-table tr {
+    display: grid;
+    gap: 8px;
+    border: 1px solid rgba(63, 63, 70, 0.75);
+    border-radius: 6px;
+    background: rgba(9, 9, 11, 0.34);
+    padding: 10px;
+  }
+
+  .allocation-table tr.replacement-row {
+    border-color: rgba(16, 185, 129, 0.36);
+    background: rgba(16, 185, 129, 0.07);
+  }
+
+  .allocation-table tr.cant-pay-row {
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.06);
+  }
+
+  .allocation-table tr.replacement-row td,
+  .allocation-table tr.replacement-row td:first-child,
+  .allocation-table tr.cant-pay-row td {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .allocation-table td {
+    display: block;
+    border-bottom: 0;
+    padding: 0;
+  }
+
+  .allocation-table td:first-child,
+  .allocation-table td:nth-child(2) {
+    color: inherit;
+  }
+
+  .allocation-table td:first-child {
+    display: grid;
+    gap: 2px;
+  }
+
+  .allocation-table td:last-child:has(.ghost-button) {
+    text-align: left;
+  }
+
+  .allocation-table .ghost-button {
+    width: 100%;
+  }
+
+  .bid-stack {
+    gap: 6px;
   }
 
   .bid-line {
-    grid-template-columns: 52px minmax(0, 1fr) 24px;
+    grid-template-columns: 52px minmax(0, 1fr) auto;
     gap: 6px;
+  }
+
+  .allocation-table code {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .round-main,
