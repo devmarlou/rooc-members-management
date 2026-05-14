@@ -1500,6 +1500,18 @@ button.party-slot.empty:hover:not(:disabled) {
   color: #bae6fd;
 }
 
+.progress-status.bidding {
+  border-color: rgba(59, 130, 246, 0.58);
+  background: rgba(30, 64, 175, 0.34);
+  color: #bfdbfe;
+}
+
+.progress-status.skipped {
+  border-color: rgba(248, 113, 113, 0.52);
+  background: rgba(127, 29, 29, 0.24);
+  color: #fca5a5;
+}
+
 .progress-status.queue {
   border-color: rgba(113, 113, 122, 0.34);
   background: rgba(39, 39, 42, 0.52);
@@ -1516,6 +1528,44 @@ button.party-slot.empty:hover:not(:disabled) {
   border-color: rgba(113, 113, 122, 0.34);
   background: rgba(39, 39, 42, 0.52);
   color: var(--muted-2);
+}
+
+.progress-bid-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.progress-bid-item {
+  display: inline-flex;
+  border: 1px solid rgba(59, 130, 246, 0.42);
+  border-radius: 4px;
+  background: rgba(30, 64, 175, 0.2);
+  color: #bfdbfe;
+  margin-top: 0;
+  padding: 4px 7px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.progress-bid-item.bid-puppet_card {
+  border-color: rgba(168, 85, 247, 0.52);
+  background: rgba(88, 28, 135, 0.26);
+  color: #d8b4fe;
+}
+
+.progress-bid-item.bid-feather_ld {
+  border-color: rgba(250, 204, 21, 0.34);
+  background: rgba(245, 245, 220, 0.1);
+  color: #f5f5dc;
+}
+
+.progress-bid-item.bid-feather_ts {
+  border-color: rgba(248, 113, 113, 0.5);
+  background: rgba(127, 29, 29, 0.22);
+  color: #fca5a5;
 }
 
 .allocation-table code {

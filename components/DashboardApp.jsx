@@ -934,10 +934,36 @@ function itemCycleCount(row, item) {
   return Math.floor(heldItemCount(row, item) / cap);
 }
 
+function buildActiveBidStatus(auctionState, limitedItems) {
+  const itemById = new Map(limitedItems.map((item) => [item.id, item]));
+  const biddingByMemberId = new Map();
+  const skippedMemberIds = new Set();
+
+  for (const auction of auctionState?.activeAuctions || []) {
+    for (const queueRow of auction.queue || []) {
+      if (queueRow.status === "cant_pay") skippedMemberIds.add(queueRow.member_id);
+    }
+
+    for (const unit of auction.units || []) {
+      const item = itemById.get(unit.item_id);
+      if (!item || !unit.member_id) continue;
+      const memberItems = biddingByMemberId.get(unit.member_id) || new Map();
+      const current = memberItems.get(item.item_key) || { item, quantity: 0, cycleReset: false };
+      current.quantity += 1;
+      current.cycleReset = current.cycleReset || Boolean(unit.cycle_reset);
+      memberItems.set(item.item_key, current);
+      biddingByMemberId.set(unit.member_id, memberItems);
+    }
+  }
+
+  return { biddingByMemberId, skippedMemberIds };
+}
+
 function MemberProgressTable({ auctionItems, auctionState }) {
   const limitedItems = auctionItems.filter((item) => item.gates_round_completion);
   const rows = auctionState?.progress || [];
   const priorityMemberId = rows.find((row) => !progressRowReady(row, limitedItems))?.member.id || null;
+  const activeBidStatus = buildActiveBidStatus(auctionState, limitedItems);
   const itemSummaries = limitedItems.map((item) => {
     let capped = 0;
     let partial = 0;
@@ -1007,6 +1033,8 @@ function MemberProgressTable({ auctionItems, auctionState }) {
             {rows.map((row) => {
               const nextNeed = progressRowNextNeed(row, limitedItems);
               const queueState = progressRowQueueState(row, limitedItems, priorityMemberId);
+              const activeBidItems = activeBidStatus.biddingByMemberId.get(row.member.id);
+              const skipped = activeBidStatus.skippedMemberIds.has(row.member.id);
               return (
                 <tr key={row.member.id}>
                   <td>{row.position}</td>
@@ -1025,8 +1053,30 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                   })}
                   <td>
                     <div className="progress-status-stack">
-                      {queueState.state !== "ready" && <em className={`progress-status ${queueState.state}`}>{queueState.label}</em>}
-                      {nextNeed && <em className={`progress-status ${nextNeed.state}`}>{nextNeed.label}</em>}
+                      {skipped ? (
+                        <em className="progress-status skipped">skipped</em>
+                      ) : activeBidItems ? (
+                        <>
+                          <em className="progress-status bidding">bidding</em>
+                          <div className="progress-bid-items">
+                            {[...activeBidItems.values()].map(({ item, quantity, cycleReset }) => {
+                              const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
+                              const base = cycleReset ? 0 : row.received[item.item_key] || 0;
+                              const next = base + quantity;
+                              return (
+                                <span className={`progress-bid-item bid-${item.item_key}`} key={item.id}>
+                                  {item.short_name} {next}/{cap}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {queueState.state !== "ready" && <em className={`progress-status ${queueState.state}`}>{queueState.label}</em>}
+                          {nextNeed && <em className={`progress-status ${nextNeed.state}`}>{nextNeed.label}</em>}
+                        </>
+                      )}
                     </div>
                   </td>
                   <td>
