@@ -767,8 +767,7 @@ button.party-slot.empty:hover:not(:disabled) {
 }
 
 .round-main h3,
-.active-auction-card strong,
-.auction-history-card h3 {
+.active-auction-card strong {
   margin: 0;
   font-family: Cinzel, Georgia, serif;
   letter-spacing: 0.01em;
@@ -833,13 +832,12 @@ button.party-slot.empty:hover:not(:disabled) {
 
 .auction-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   margin-top: 14px;
 }
 
-.active-auction-card,
-.auction-history-card {
+.active-auction-card {
   border: 1px solid rgba(63, 63, 70, 0.75);
   border-radius: 10px;
   background: rgba(9, 9, 11, 0.34);
@@ -906,55 +904,6 @@ button.party-slot.empty:hover:not(:disabled) {
   padding: 7px 9px;
   font-size: 12px;
   font-weight: 700;
-}
-
-.auction-history-card header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.auction-history-card h3 {
-  font-size: 17px;
-}
-
-.history-list {
-  display: grid;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.history-row {
-  border: 1px solid rgba(63, 63, 70, 0.75);
-  border-radius: 8px;
-  background: rgba(24, 24, 27, 0.5);
-  padding: 10px;
-}
-
-.history-row strong,
-.history-row span {
-  display: block;
-}
-
-.history-row strong {
-  font-family: Cinzel, Georgia, serif;
-}
-
-.history-row span {
-  margin-top: 4px;
-  color: var(--muted-2);
-  font-size: 12px;
-}
-
-.history-empty {
-  margin-top: 14px;
-  border: 1px dashed rgba(63, 63, 70, 0.8);
-  border-radius: 8px;
-  color: var(--muted-2);
-  padding: 14px;
-  font-size: 13px;
-  line-height: 1.5;
 }
 
 .auction-start-row {

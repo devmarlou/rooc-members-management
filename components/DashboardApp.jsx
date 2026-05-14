@@ -15,7 +15,6 @@ import {
   Shuffle,
   Gavel,
   Trophy,
-  ChevronDown,
   Clock3,
   X,
   Check,
@@ -817,7 +816,6 @@ function AuctionFoundation({
 }) {
   const activeRound = auctionState?.activeRound;
   const activeAuction = auctionState?.activeAuction;
-  const history = auctionState?.history || [];
   const completedCount = activeRound?.completedCount || 0;
   const roundMemberCount = activeRound?.memberCount || memberCount;
   const progressPct = roundMemberCount ? Math.min(100, Math.round((completedCount / roundMemberCount) * 100)) : 0;
@@ -933,29 +931,6 @@ function AuctionFoundation({
           </article>
         )}
 
-        <article className="auction-history-card">
-          <header>
-            <div>
-              <p className="eyebrow">{activeRound ? `lineup ${activeRound.round_number} history` : "history"}</p>
-              <h3>{history.length ? `${history.length} completed auction${history.length === 1 ? "" : "s"}` : "No completed auctions"}</h3>
-            </div>
-            <ChevronDown size={16} />
-          </header>
-          {history.length ? (
-            <div className="history-list">
-              {history.slice(0, 5).map((auction) => (
-                <div className="history-row" key={auction.id}>
-                  <strong>{auction.name || auctionTypeLabel(auction.type)}</strong>
-                  <span>{auctionTypeLabel(auction.type)} · {auction.allocatedCount} items · {auction.pageCount} pages</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="history-empty">
-              Completed GL/WoE and League Prize runs will appear here with item totals, pages, and completed-member counts.
-            </div>
-          )}
-        </article>
       </div>
 
       <div className="auction-start-row">
