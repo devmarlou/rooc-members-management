@@ -1541,15 +1541,11 @@ export default function DashboardApp({ publicView = false }) {
       confirmLabel: "Finalize event",
       tone: "default",
       run: async () => {
-        let nextAuctionState = null;
-        for (const auction of orderedAuctions) {
-          const data = await api("/api/auctions/active/done", {
-            method: "POST",
-            body: JSON.stringify({ auctionId: auction.id })
-          });
-          nextAuctionState = data.auctionState;
-        }
-        if (nextAuctionState) setAuctionState(nextAuctionState);
+        const data = await api("/api/auctions/active/done-event", {
+          method: "POST",
+          body: JSON.stringify({ auctionIds: orderedAuctions.map((auction) => auction.id) })
+        });
+        setAuctionState(data.auctionState);
         setToast("Event auctions finalized");
       }
     });
