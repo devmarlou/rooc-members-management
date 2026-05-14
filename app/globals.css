@@ -235,6 +235,11 @@ label span {
   background: rgba(239, 68, 68, 0.22);
 }
 
+.danger-button.soft {
+  min-height: 38px;
+  color: #fca5a5;
+}
+
 .primary-button.full {
   width: 100%;
 }
@@ -1098,7 +1103,7 @@ button.party-slot.empty:hover:not(:disabled) {
 .allocation-table,
 .progress-table {
   width: 100%;
-  min-width: 620px;
+  min-width: 560px;
   border-collapse: collapse;
 }
 
@@ -1166,6 +1171,13 @@ button.party-slot.empty:hover:not(:disabled) {
   color: var(--muted-2);
   font-size: 11px;
   font-style: normal;
+}
+
+.allocation-table code {
+  color: var(--amber-2);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  white-space: normal;
 }
 
 .allocation-table td:last-child {

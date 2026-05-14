@@ -588,6 +588,69 @@ function itemAppliesTo(item, type) {
   return Array.isArray(item.applies_to_auction_types) && item.applies_to_auction_types.includes(type);
 }
 
+function compactSlots(units) {
+  const byPage = new Map();
+  for (const unit of units) {
+    if (!byPage.has(unit.page)) byPage.set(unit.page, []);
+    byPage.get(unit.page).push(unit.slot);
+  }
+
+  return [...byPage.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([page, slots]) => {
+      const sortedSlots = [...new Set(slots)].sort((a, b) => a - b);
+      const ranges = [];
+      let start = sortedSlots[0];
+      let previous = sortedSlots[0];
+
+      for (let index = 1; index <= sortedSlots.length; index += 1) {
+        const slot = sortedSlots[index];
+        if (slot === previous + 1) {
+          previous = slot;
+          continue;
+        }
+        ranges.push(start === previous ? `S${start}` : `S${start}-${previous}`);
+        start = slot;
+        previous = slot;
+      }
+
+      return `P${page} ${ranges.join(",")}`;
+    })
+    .join(" · ");
+}
+
+function groupedAuctionBids(units = []) {
+  const map = new Map();
+
+  for (const unit of units) {
+    const key = `${unit.member_id}:${unit.item_id}:${unit.cycle_reset_item_key || "current"}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        member: unit.member,
+        member_id: unit.member_id,
+        item_id: unit.item_id,
+        item: unit.short_name || unit.item_name,
+        quantity: 0,
+        units: [],
+        cycle_reset: Boolean(unit.cycle_reset)
+      });
+    }
+    const row = map.get(key);
+    row.quantity += 1;
+    row.units.push(unit);
+    row.cycle_reset = row.cycle_reset || Boolean(unit.cycle_reset);
+  }
+
+  return [...map.values()]
+    .map((row) => ({
+      ...row,
+      positions: compactSlots(row.units),
+      firstPage: Math.min(...row.units.map((unit) => unit.page)),
+      firstSlot: Math.min(...row.units.map((unit) => unit.slot))
+    }))
+    .sort((a, b) => a.firstPage - b.firstPage || a.firstSlot - b.firstSlot);
+}
+
 function AuctionStartForm({ type, auctionItems, onCancel, onStart, busy }) {
   const applicable = auctionItems.filter((item) => itemAppliesTo(item, type));
   const [name, setName] = useState(type === "league_prize" ? "League Prize" : "GL/WoE Auction");
@@ -746,6 +809,7 @@ function AuctionFoundation({
   onOpenStartAuction,
   onOpenLimits,
   onOpenRotation,
+  onResetLineup,
   onRecalculateAuction,
   onCantPay,
   onDoneAuction,
@@ -759,6 +823,7 @@ function AuctionFoundation({
   const progressPct = roundMemberCount ? Math.min(100, Math.round((completedCount / roundMemberCount) * 100)) : 0;
   const currentCaps = auctionState?.itemCaps || {};
   const units = activeAuction?.units || [];
+  const bidRows = groupedAuctionBids(units);
 
   return (
     <section className="content-section auction-section">
@@ -787,6 +852,7 @@ function AuctionFoundation({
         <div className="round-actions">
           <button className="ghost-button" type="button" onClick={onOpenRotation} disabled={!activeRound}><Eye size={15} />Lineup list</button>
           <button className="ghost-button" type="button" onClick={onOpenLimits} disabled={!activeRound || Boolean(activeAuction)}><Settings size={15} />Adjust limits</button>
+          <button className="danger-button soft" type="button" onClick={onResetLineup} disabled={!activeRound || busy}><Shuffle size={15} />Test reset</button>
           <button className="ghost-button" type="button" onClick={onStartRound} disabled={Boolean(activeRound) || busy}><Shuffle size={15} />Create auction lineup</button>
         </div>
       </div>
@@ -806,29 +872,29 @@ function AuctionFoundation({
               <span><Trophy size={14} />{units.length} allocations</span>
             </div>
             <div className="allocation-table-wrap">
-              {units.length ? (
+              {bidRows.length ? (
                 <table className="allocation-table">
                   <thead>
                     <tr>
-                      <th>Page</th>
-                      <th>Slot</th>
                       <th>Member</th>
                       <th>Item</th>
+                      <th>Bid slots</th>
+                      <th>Qty</th>
                       <th />
                     </tr>
                   </thead>
                   <tbody>
-                    {units.map((unit) => (
-                      <tr key={`${unit.page}-${unit.slot}-${unit.member_id}-${unit.item_id}`}>
-                        <td>{unit.page}</td>
-                        <td>{unit.slot}</td>
+                    {bidRows.map((row) => (
+                      <tr key={`${row.member_id}-${row.item_id}-${row.positions}`}>
                         <td>
-                          <strong>{unit.member?.char_name || "Unknown"}</strong>
-                          {unit.cycle_reset && <span>cycle reset</span>}
+                          <strong>{row.member?.char_name || "Unknown"}</strong>
+                          {row.cycle_reset && <span>cycle reset</span>}
                         </td>
-                        <td>{unit.short_name || unit.item_name}</td>
+                        <td>{row.item}</td>
+                        <td><code>{row.positions}</code></td>
+                        <td>{row.quantity}</td>
                         <td>
-                          <button className="ghost-button mini" type="button" onClick={() => onCantPay(unit.member)} disabled={busy}>
+                          <button className="ghost-button mini" type="button" onClick={() => onCantPay(row.member)} disabled={busy}>
                             <Ban size={13} />Can't pay
                           </button>
                         </td>
@@ -1225,6 +1291,20 @@ export default function DashboardApp() {
     });
   }
 
+  function requestResetLineup() {
+    setConfirmAction({
+      title: "Reset test lineup",
+      body: "Reset shared limit progress to zero, rerandomize the current roster, and clear auction test history for this lineup? This is only for testing.",
+      confirmLabel: "Reset test data",
+      tone: "danger",
+      run: async () => {
+        const data = await api("/api/auctions/lineup/reset", { method: "POST" });
+        setAuctionState(data.auctionState);
+        setToast("Auction lineup reset for testing");
+      }
+    });
+  }
+
   async function recalculateAuction() {
     setSaving(true);
     try {
@@ -1299,6 +1379,7 @@ export default function DashboardApp() {
               onOpenStartAuction={setAuctionStartType}
               onOpenLimits={() => setAuctionLimitsOpen(true)}
               onOpenRotation={() => setRotationOpen(true)}
+              onResetLineup={requestResetLineup}
               onRecalculateAuction={recalculateAuction}
               onCantPay={requestCantPay}
               onDoneAuction={requestDoneAuction}
