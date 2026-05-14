@@ -20,7 +20,8 @@ import {
   X,
   Check,
   Loader2,
-  AlertTriangle
+  AlertTriangle,
+  Ban
 } from "lucide-react";
 import { classByName, classes, classOrder, colorGroups } from "@/components/data";
 
@@ -579,8 +580,146 @@ function PartyMemberPicker({ group, members, currentCount, onCancel, onPickMany,
   );
 }
 
-function AuctionFoundation({ auctionItems, memberCount }) {
-  const totalItems = auctionItems.reduce((sum, item) => sum + (item.default_per_round_cap || 0), 0);
+function auctionTypeLabel(type) {
+  return type === "league_prize" ? "League Prize" : "GL/WoE";
+}
+
+function itemAppliesTo(item, type) {
+  return Array.isArray(item.applies_to_auction_types) && item.applies_to_auction_types.includes(type);
+}
+
+function groupedPages(units = []) {
+  const map = new Map();
+  for (const unit of units) {
+    if (!map.has(unit.page)) map.set(unit.page, []);
+    map.get(unit.page).push(unit);
+  }
+  return [...map.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([page, pageUnits]) => ({ page, units: pageUnits.sort((a, b) => a.slot - b.slot) }));
+}
+
+function AuctionStartForm({ type, auctionItems, onCancel, onStart, busy }) {
+  const applicable = auctionItems.filter((item) => itemAppliesTo(item, type));
+  const [name, setName] = useState(type === "league_prize" ? "League Prize" : "GL/WoE Auction");
+  const [inventory, setInventory] = useState(() => Object.fromEntries(applicable.map((item) => [item.item_key, "0"])));
+
+  function submit(event) {
+    event.preventDefault();
+    onStart({
+      type,
+      name,
+      inventory: Object.fromEntries(applicable.map((item) => [item.item_key, Number.parseInt(inventory[item.item_key] || "0", 10) || 0]))
+    });
+  }
+
+  return (
+    <form onSubmit={submit} className="form-grid single">
+      <label>
+        <span>Auction name</span>
+        <input value={name} onChange={(event) => setName(event.target.value)} autoFocus />
+      </label>
+      <div className="auction-form-items">
+        {applicable.map((item) => (
+          <label key={item.id}>
+            <span>{item.name}</span>
+            <input
+              type="number"
+              min="0"
+              value={inventory[item.item_key] ?? "0"}
+              onChange={(event) => setInventory((current) => ({ ...current, [item.item_key]: event.target.value }))}
+            />
+          </label>
+        ))}
+      </div>
+      <p className="field-note">Empty inventory is allowed. The auction can still be closed with zero allocations.</p>
+      <div className="form-actions">
+        <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
+        <button className="primary-button" disabled={busy}>
+          {busy ? <Loader2 className="spin" size={15} /> : <Gavel size={15} />}
+          Start {auctionTypeLabel(type)}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function AuctionLimitsForm({ auctionItems, auctionState, onCancel, onSave, busy }) {
+  const currentCaps = auctionState?.itemCaps || {};
+  const [caps, setCaps] = useState(() => Object.fromEntries(
+    auctionItems.map((item) => [item.item_key, String(currentCaps[item.item_key] ?? item.default_per_round_cap ?? 0)])
+  ));
+
+  function submit(event) {
+    event.preventDefault();
+    onSave(Object.fromEntries(auctionItems.map((item) => [item.item_key, Number.parseInt(caps[item.item_key] || "0", 10) || 0])));
+  }
+
+  return (
+    <form onSubmit={submit} className="form-grid single">
+      <div className="auction-form-items">
+        {auctionItems.map((item) => (
+          <label key={item.id}>
+            <span>{item.name}</span>
+            <input
+              type="number"
+              min="0"
+              value={caps[item.item_key] ?? "0"}
+              onChange={(event) => setCaps((current) => ({ ...current, [item.item_key]: event.target.value }))}
+            />
+          </label>
+        ))}
+      </div>
+      <p className="field-note">These caps apply to the active round. They do not rewrite older auction history.</p>
+      <div className="form-actions">
+        <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
+        <button className="primary-button" disabled={busy}>
+          {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
+          Save limits
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function RotationList({ auctionState }) {
+  const progress = auctionState?.progress || [];
+  return (
+    <div className="rotation-list">
+      {progress.length ? progress.map((row) => (
+        <div className={row.is_complete ? "rotation-row complete" : "rotation-row"} key={row.member.id}>
+          <span>{row.position}</span>
+          <ClassIcon name={row.member.char_class} size={28} glow={false} />
+          <strong>{row.member.char_name}</strong>
+          <em>{row.is_complete ? "complete" : "active"}</em>
+        </div>
+      )) : (
+        <div className="empty-panel compact">Start a round to generate a randomized rotation list.</div>
+      )}
+    </div>
+  );
+}
+
+function AuctionFoundation({
+  auctionItems,
+  memberCount,
+  auctionState,
+  onStartRound,
+  onOpenStartAuction,
+  onOpenLimits,
+  onOpenRotation,
+  onCantPay,
+  onDoneAuction,
+  busy
+}) {
+  const activeRound = auctionState?.activeRound;
+  const activeAuction = auctionState?.activeAuction;
+  const history = auctionState?.history || [];
+  const completedCount = activeRound?.completedCount || 0;
+  const roundMemberCount = activeRound?.memberCount || memberCount;
+  const progressPct = roundMemberCount ? Math.min(100, Math.round((completedCount / roundMemberCount) * 100)) : 0;
+  const currentCaps = auctionState?.itemCaps || {};
+  const pages = groupedPages(activeAuction?.units || []);
 
   return (
     <section className="content-section auction-section">
@@ -589,69 +728,121 @@ function AuctionFoundation({ auctionItems, memberCount }) {
           <p className="eyebrow">reward rotation</p>
           <h2>Auctions</h2>
         </div>
-        <span className="status-pill"><Swords size={14} />Design ready</span>
+        <span className="status-pill"><Swords size={14} />{activeRound ? "Functional" : "No active round"}</span>
       </div>
 
       <div className="round-card">
         <div className="round-main">
           <div>
-            <h3>Round 1</h3>
-            <p>ready after first auction setup</p>
+            <h3>{activeRound ? `Round ${activeRound.round_number}` : "No active round"}</h3>
+            <p>{activeRound ? "manual rotation is locked for this round" : "start a round to randomize all current members"}</p>
           </div>
           <div className="round-progress-meta">
-            <strong>0 / {memberCount}</strong>
+            <strong>{completedCount} / {roundMemberCount}</strong>
             <span>members complete</span>
           </div>
         </div>
         <div className="round-progress-track">
-          <span style={{ width: "0%" }} />
+          <span style={{ width: `${progressPct}%` }} />
         </div>
         <div className="round-actions">
-          <button className="ghost-button" type="button" disabled><Eye size={15} />Rotation list</button>
-          <button className="ghost-button" type="button" disabled><Settings size={15} />Adjust limits</button>
-          <button className="ghost-button" type="button" disabled><Shuffle size={15} />New round</button>
+          <button className="ghost-button" type="button" onClick={onOpenRotation} disabled={!activeRound}><Eye size={15} />Rotation list</button>
+          <button className="ghost-button" type="button" onClick={onOpenLimits} disabled={!activeRound || Boolean(activeAuction)}><Settings size={15} />Adjust limits</button>
+          <button className="ghost-button" type="button" onClick={onStartRound} disabled={Boolean(activeRound) || busy}><Shuffle size={15} />Start new round</button>
         </div>
       </div>
 
       <div className="auction-grid">
-        <article className="active-auction-card empty-active">
-          <div className="active-dot-row">
-            <span className="idle-dot" />
-            <strong>No active auction</strong>
-            <em>sequential mode</em>
-          </div>
-          <p>Start a GL/WoE auction when the engine is wired. League Prize stays optional and follows GL/WoE.</p>
-          <div className="active-auction-stats">
-            <span><Clock3 size={14} />Waiting</span>
-            <span><Gavel size={14} />0 pages</span>
-            <span><Trophy size={14} />{totalItems} default caps</span>
-          </div>
-        </article>
+        {activeAuction ? (
+          <article className="active-auction-card">
+            <div className="active-dot-row">
+              <span className="live-dot" />
+              <strong>{activeAuction.name || auctionTypeLabel(activeAuction.type)}</strong>
+              <em>{auctionTypeLabel(activeAuction.type)}</em>
+            </div>
+            <p>Review the generated pages, mark any member who cannot pay, then finalize the auction.</p>
+            <div className="active-auction-stats">
+              <span><Clock3 size={14} />Active</span>
+              <span><Gavel size={14} />{activeAuction.pageCount || 0} pages</span>
+              <span><Trophy size={14} />{activeAuction.units?.length || 0} allocations</span>
+            </div>
+            <div className="allocation-pages">
+              {pages.length ? pages.map((page) => (
+                <div className="allocation-page" key={page.page}>
+                  <h4>Page {page.page}</h4>
+                  {page.units.map((unit) => (
+                    <div className="allocation-row" key={`${unit.page}-${unit.slot}-${unit.member_id}-${unit.item_id}`}>
+                      <span>{unit.slot}</span>
+                      <strong>{unit.member?.char_name || "Unknown"}</strong>
+                      <em>{unit.short_name || unit.item_name}</em>
+                      <button className="ghost-button mini" type="button" onClick={() => onCantPay(unit.member)} disabled={busy}>
+                        <Ban size={13} />Can't pay
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )) : (
+                <div className="empty-panel compact">No allocations for this auction.</div>
+              )}
+            </div>
+            <div className="active-actions">
+              <button className="primary-button" type="button" onClick={onDoneAuction} disabled={busy}>
+                {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
+                Done
+              </button>
+            </div>
+          </article>
+        ) : (
+          <article className="active-auction-card empty-active">
+            <div className="active-dot-row">
+              <span className="idle-dot" />
+              <strong>No active auction</strong>
+              <em>{activeRound ? "ready" : "waiting"}</em>
+            </div>
+            <p>{activeRound ? "Start GL/WoE or optional League Prize when you are ready to distribute items." : "Start a round first so the app can lock a randomized rotation."}</p>
+            <div className="active-auction-stats">
+              <span><Clock3 size={14} />Waiting</span>
+              <span><Gavel size={14} />0 pages</span>
+              <span><Trophy size={14} />{auctionItems.length} tracked items</span>
+            </div>
+          </article>
+        )}
 
         <article className="auction-history-card">
           <header>
             <div>
-              <p className="eyebrow">round 1 history</p>
-              <h3>No completed auctions</h3>
+              <p className="eyebrow">{activeRound ? `round ${activeRound.round_number} history` : "history"}</p>
+              <h3>{history.length ? `${history.length} completed auction${history.length === 1 ? "" : "s"}` : "No completed auctions"}</h3>
             </div>
             <ChevronDown size={16} />
           </header>
-          <div className="history-empty">
-            Completed GL/WoE and League Prize runs will appear here with item totals, pages, and completed-member counts.
-          </div>
+          {history.length ? (
+            <div className="history-list">
+              {history.slice(0, 5).map((auction) => (
+                <div className="history-row" key={auction.id}>
+                  <strong>{auction.name || auctionTypeLabel(auction.type)}</strong>
+                  <span>{auctionTypeLabel(auction.type)} · {auction.allocatedCount} items · {auction.pageCount} pages</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="history-empty">
+              Completed GL/WoE and League Prize runs will appear here with item totals, pages, and completed-member counts.
+            </div>
+          )}
         </article>
       </div>
 
       <div className="auction-start-row">
-        <button className="primary-button" type="button" disabled><Plus size={16} />New GL/WoE Auction</button>
-        <button className="ghost-button" type="button" disabled><Plus size={16} />New League Prize Auction</button>
+        <button className="primary-button" type="button" disabled={!activeRound || Boolean(activeAuction)} onClick={() => onOpenStartAuction("gl_woe")}><Plus size={16} />New GL/WoE Auction</button>
+        <button className="ghost-button" type="button" disabled={!activeRound || Boolean(activeAuction)} onClick={() => onOpenStartAuction("league_prize")}><Plus size={16} />New League Prize Auction</button>
       </div>
 
       <div className="auction-items">
         {auctionItems.map((item) => (
           <div className="auction-item" key={item.id}>
             <strong>{item.short_name}</strong>
-            <span>{item.default_per_round_cap}/round</span>
+            <span>{currentCaps[item.item_key] ?? item.default_per_round_cap}/round</span>
             <em>{item.gates_round_completion ? "gating" : "bonus"}</em>
           </div>
         ))}
@@ -665,12 +856,16 @@ export default function DashboardApp() {
   const [members, setMembers] = useState([]);
   const [groups, setGroups] = useState([]);
   const [auctionItems, setAuctionItems] = useState([]);
+  const [auctionState, setAuctionState] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [memberModal, setMemberModal] = useState(null);
   const [groupModal, setGroupModal] = useState(null);
   const [limitModalOpen, setLimitModalOpen] = useState(false);
+  const [auctionStartType, setAuctionStartType] = useState(null);
+  const [auctionLimitsOpen, setAuctionLimitsOpen] = useState(false);
+  const [rotationOpen, setRotationOpen] = useState(false);
   const [partyPickerGroup, setPartyPickerGroup] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -695,6 +890,7 @@ export default function DashboardApp() {
       setMembers(data.members || []);
       setGroups(data.groups || []);
       setAuctionItems(data.auctionItems || []);
+      setAuctionState(data.auctionState || null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -727,6 +923,8 @@ export default function DashboardApp() {
     setSession({ loading: false, authenticated: false, username: "" });
     setMembers([]);
     setGroups([]);
+    setAuctionItems([]);
+    setAuctionState(null);
   }
 
   async function saveMember(payload) {
@@ -886,6 +1084,87 @@ export default function DashboardApp() {
     setToast("Guild member limit updated");
   }
 
+  function requestStartRound() {
+    setConfirmAction({
+      title: "Start new round",
+      body: `Start a new auction round with all ${members.length} current members in a randomized rotation?`,
+      confirmLabel: "Start round",
+      tone: "default",
+      run: async () => {
+        const data = await api("/api/auctions/rounds", { method: "POST" });
+        setAuctionState(data.auctionState);
+        setToast("Auction round started");
+      }
+    });
+  }
+
+  async function startAuction(payload) {
+    setSaving(true);
+    try {
+      const data = await api("/api/auctions/start", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      setAuctionState(data.auctionState);
+      setAuctionStartType(null);
+      setToast(`${auctionTypeLabel(payload.type)} auction started`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveAuctionLimits(caps) {
+    setSaving(true);
+    try {
+      const data = await api("/api/auctions/limits", {
+        method: "PATCH",
+        body: JSON.stringify({ caps })
+      });
+      setAuctionState(data.auctionState);
+      setAuctionLimitsOpen(false);
+      setToast("Auction limits updated");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function requestCantPay(member) {
+    if (!member) return;
+    setConfirmAction({
+      title: "Mark can't pay",
+      body: `Remove ${member.char_name} from this auction only and recalculate the remaining allocations?`,
+      confirmLabel: "Recalculate",
+      tone: "default",
+      run: async () => {
+        const data = await api("/api/auctions/active/cant-pay", {
+          method: "POST",
+          body: JSON.stringify({ memberId: member.id })
+        });
+        setAuctionState(data.auctionState);
+        setToast("Auction allocations recalculated");
+      }
+    });
+  }
+
+  function requestDoneAuction() {
+    const activeAuction = auctionState?.activeAuction;
+    setConfirmAction({
+      title: "Finish auction",
+      body: `Finalize ${activeAuction?.name || "this auction"}? This will update member progress and cannot be undone.`,
+      confirmLabel: "Finalize auction",
+      tone: "default",
+      run: async () => {
+        const data = await api("/api/auctions/active/done", { method: "POST" });
+        setAuctionState(data.auctionState);
+        setToast(data.auctionState?.activeRound ? "Auction finalized" : "Auction finalized and round completed");
+      }
+    });
+  }
+
   if (session.loading) {
     return <main className="loading-page"><Loader2 className="spin" size={28} /></main>;
   }
@@ -938,7 +1217,18 @@ export default function DashboardApp() {
               onRequestUnassign={requestUnassign}
               onEditMember={setMemberModal}
             />
-            <AuctionFoundation auctionItems={auctionItems} memberCount={members.length} />
+            <AuctionFoundation
+              auctionItems={auctionItems}
+              memberCount={members.length}
+              auctionState={auctionState}
+              busy={saving}
+              onStartRound={requestStartRound}
+              onOpenStartAuction={setAuctionStartType}
+              onOpenLimits={() => setAuctionLimitsOpen(true)}
+              onOpenRotation={() => setRotationOpen(true)}
+              onCantPay={requestCantPay}
+              onDoneAuction={requestDoneAuction}
+            />
           </>
         )}
       </main>
@@ -990,6 +1280,36 @@ export default function DashboardApp() {
             setPartyPickerGroup(null);
           }}
         />
+      )}
+
+      {auctionStartType && (
+        <Modal title={`New ${auctionTypeLabel(auctionStartType)} Auction`} onClose={() => setAuctionStartType(null)}>
+          <AuctionStartForm
+            type={auctionStartType}
+            auctionItems={auctionItems}
+            busy={saving}
+            onCancel={() => setAuctionStartType(null)}
+            onStart={startAuction}
+          />
+        </Modal>
+      )}
+
+      {auctionLimitsOpen && (
+        <Modal title="Adjust auction limits" onClose={() => setAuctionLimitsOpen(false)}>
+          <AuctionLimitsForm
+            auctionItems={auctionItems}
+            auctionState={auctionState}
+            busy={saving}
+            onCancel={() => setAuctionLimitsOpen(false)}
+            onSave={saveAuctionLimits}
+          />
+        </Modal>
+      )}
+
+      {rotationOpen && (
+        <Modal title="Rotation list" onClose={() => setRotationOpen(false)}>
+          <RotationList auctionState={auctionState} />
+        </Modal>
       )}
 
       {confirmAction && (

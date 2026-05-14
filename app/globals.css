@@ -875,6 +875,14 @@ button.party-slot.empty:hover:not(:disabled) {
   box-shadow: 0 0 12px rgba(113, 113, 122, 0.55);
 }
 
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #34d399;
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.68);
+}
+
 .active-auction-stats {
   display: flex;
   flex-wrap: wrap;
@@ -904,6 +912,34 @@ button.party-slot.empty:hover:not(:disabled) {
 
 .auction-history-card h3 {
   font-size: 17px;
+}
+
+.history-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.history-row {
+  border: 1px solid rgba(63, 63, 70, 0.75);
+  border-radius: 8px;
+  background: rgba(24, 24, 27, 0.5);
+  padding: 10px;
+}
+
+.history-row strong,
+.history-row span {
+  display: block;
+}
+
+.history-row strong {
+  font-family: Cinzel, Georgia, serif;
+}
+
+.history-row span {
+  margin-top: 4px;
+  color: var(--muted-2);
+  font-size: 12px;
 }
 
 .history-empty {
@@ -970,6 +1006,135 @@ button.party-slot.empty:hover:not(:disabled) {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.1em;
+}
+
+.allocation-pages {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.allocation-page {
+  border: 1px solid rgba(63, 63, 70, 0.75);
+  border-radius: 8px;
+  background: rgba(24, 24, 27, 0.45);
+  overflow: hidden;
+}
+
+.allocation-page h4 {
+  margin: 0;
+  border-bottom: 1px solid rgba(63, 63, 70, 0.65);
+  background: rgba(39, 39, 42, 0.35);
+  padding: 9px 11px;
+  color: var(--amber-2);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.allocation-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) minmax(70px, auto) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  border-top: 1px solid rgba(39, 39, 42, 0.75);
+}
+
+.allocation-row:first-of-type {
+  border-top: 0;
+}
+
+.allocation-row > span {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--amber-2);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.allocation-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: Cinzel, Georgia, serif;
+}
+
+.allocation-row em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.ghost-button.mini {
+  min-height: 30px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+.active-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.auction-form-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.rotation-list {
+  display: grid;
+  gap: 8px;
+  max-height: 460px;
+  overflow: auto;
+}
+
+.rotation-row {
+  display: grid;
+  grid-template-columns: 34px 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(63, 63, 70, 0.75);
+  border-radius: 8px;
+  background: rgba(9, 9, 11, 0.35);
+  padding: 9px;
+}
+
+.rotation-row > span {
+  color: var(--amber-2);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.rotation-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: Cinzel, Georgia, serif;
+}
+
+.rotation-row em {
+  color: var(--muted-2);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.rotation-row.complete {
+  opacity: 0.62;
 }
 
 .empty-panel,

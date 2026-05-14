@@ -55,7 +55,7 @@ insert into auction_items
   (item_key, name, short_name, sort_order, default_per_round_cap, applies_to_auction_types, gates_round_completion)
 values
   ('puppet_card', 'Puppet Card', 'Puppet', 1, 1, array['gl_woe', 'league_prize'], true),
-  ('puppet_fragment', 'Puppet Fragment', 'Fragment', 2, 3, array['league_prize'], false),
+  ('puppet_fragment', 'Puppet Fragment', 'Fragment', 2, 5, array['league_prize'], false),
   ('feather_ld', 'Feather of L&D', 'L&D', 3, 5, array['gl_woe', 'league_prize'], true),
   ('feather_ts', 'Feather of T&S', 'T&S', 4, 5, array['gl_woe', 'league_prize'], true)
 on conflict (item_key) do update set
@@ -106,6 +106,20 @@ create table if not exists member_cap_overrides (
   cap int not null check (cap >= 0),
   unique (round_id, member_id, item_id)
 );
+
+create table if not exists round_item_cap_overrides (
+  id uuid primary key default gen_random_uuid(),
+  round_id uuid not null references rounds(id) on delete cascade,
+  item_id uuid not null references auction_items(id) on delete cascade,
+  cap int not null check (cap >= 0),
+  updated_at timestamptz not null default now(),
+  unique (round_id, item_id)
+);
+
+drop trigger if exists round_item_cap_overrides_set_updated_at on round_item_cap_overrides;
+create trigger round_item_cap_overrides_set_updated_at
+before update on round_item_cap_overrides
+for each row execute function set_updated_at();
 
 create table if not exists auctions (
   id uuid primary key default gen_random_uuid(),
@@ -169,6 +183,7 @@ alter table rounds enable row level security;
 alter table rotation_list enable row level security;
 alter table member_round_progress enable row level security;
 alter table member_cap_overrides enable row level security;
+alter table round_item_cap_overrides enable row level security;
 alter table auctions enable row level security;
 alter table auction_inventory enable row level security;
 alter table auction_queue enable row level security;
