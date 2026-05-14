@@ -913,8 +913,8 @@ function MemberProgressTable({ auctionItems, auctionState }) {
               <th>Line</th>
               <th>Member</th>
               {limitedItems.map((item) => <th key={item.id}>{item.short_name}</th>)}
-              <th>Held totals</th>
               <th>Status</th>
+              <th>Held totals</th>
             </tr>
           </thead>
           <tbody>
@@ -936,16 +936,16 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                       </td>
                     );
                   })}
+                  <td><em className={`progress-status ${status.state}`}>{status.label}</em></td>
                   <td>
                     <div className="progress-held-stack">
                       {limitedItems.map((item) => (
-                        <span className="progress-held-count" key={item.id}>
+                        <span className={`progress-held-count held-${item.item_key}`} key={item.id}>
                           <strong>{item.short_name}</strong>{row.held?.[item.item_key] || 0}
                         </span>
                       ))}
                     </div>
                   </td>
-                  <td><em className={`progress-status ${status.state}`}>{status.label}</em></td>
                 </tr>
               );
             })}

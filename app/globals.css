@@ -1175,7 +1175,7 @@ button.party-slot.empty:hover:not(:disabled) {
 }
 
 .progress-table {
-  min-width: 780px;
+  min-width: 720px;
 }
 
 .allocation-table th,
@@ -1284,17 +1284,21 @@ button.party-slot.empty:hover:not(:disabled) {
 .progress-held-stack {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  min-width: 190px;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 210px;
 }
 
 .progress-held-count {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  min-width: 58px;
+  justify-content: center;
+  border: 1px solid rgba(63, 63, 70, 0.8);
   border-radius: 999px;
-  background: rgba(244, 244, 245, 0.08);
-  color: #e4e4e7;
+  background: rgba(39, 39, 42, 0.46);
+  color: #d4d4d8;
   padding: 4px 7px;
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 10px;
@@ -1306,6 +1310,31 @@ button.party-slot.empty:hover:not(:disabled) {
   color: var(--muted-2);
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 10px;
+}
+
+.progress-held-count.held-puppet_card {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--amber-2);
+}
+
+.progress-held-count.held-feather_ld {
+  border-color: rgba(59, 130, 246, 0.45);
+  background: rgba(59, 130, 246, 0.12);
+  color: #93c5fd;
+}
+
+.progress-held-count.held-feather_ts {
+  border-color: rgba(16, 185, 129, 0.42);
+  background: rgba(16, 185, 129, 0.12);
+  color: #86efac;
+}
+
+.progress-held-count.held-puppet_card strong,
+.progress-held-count.held-feather_ld strong,
+.progress-held-count.held-feather_ts strong {
+  color: currentColor;
+  opacity: 0.72;
 }
 
 .progress-status {
