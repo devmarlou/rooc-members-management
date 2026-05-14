@@ -746,6 +746,7 @@ function AuctionFoundation({
   onOpenStartAuction,
   onOpenLimits,
   onOpenRotation,
+  onRecalculateAuction,
   onCantPay,
   onDoneAuction,
   busy
@@ -840,6 +841,10 @@ function AuctionFoundation({
               )}
             </div>
             <div className="active-actions">
+              <button className="ghost-button" type="button" onClick={onRecalculateAuction} disabled={busy}>
+                {busy ? <Loader2 className="spin" size={15} /> : <Shuffle size={15} />}
+                Recalculate
+              </button>
               <button className="primary-button" type="button" onClick={onDoneAuction} disabled={busy}>
                 {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
                 Done
@@ -1220,6 +1225,19 @@ export default function DashboardApp() {
     });
   }
 
+  async function recalculateAuction() {
+    setSaving(true);
+    try {
+      const data = await api("/api/auctions/active/recalculate", { method: "POST" });
+      setAuctionState(data.auctionState);
+      setToast("Auction allocations recalculated");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (session.loading) {
     return <main className="loading-page"><Loader2 className="spin" size={28} /></main>;
   }
@@ -1281,6 +1299,7 @@ export default function DashboardApp() {
               onOpenStartAuction={setAuctionStartType}
               onOpenLimits={() => setAuctionLimitsOpen(true)}
               onOpenRotation={() => setRotationOpen(true)}
+              onRecalculateAuction={recalculateAuction}
               onCantPay={requestCantPay}
               onDoneAuction={requestDoneAuction}
             />

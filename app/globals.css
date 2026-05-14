@@ -1082,6 +1082,7 @@ button.party-slot.empty:hover:not(:disabled) {
 .active-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 9px;
   margin-top: 14px;
 }
 
