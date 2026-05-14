@@ -1220,14 +1220,36 @@ export default function DashboardApp({ publicView = false }) {
   const [memberLimit, setMemberLimit] = useState(null);
   const realtimeTimerRef = useRef(null);
   const realtimeLoadingRef = useRef(false);
+  const scrollRestoreRef = useRef(null);
 
   const groupsById = useMemo(() => Object.fromEntries(groups.map((group) => [group.id, group])), [groups]);
   const effectiveMemberLimit = Math.max(memberLimit || members.length || 0, members.length);
   const unassignedMembers = members.filter((member) => !member.group_id);
 
+  const captureScrollPosition = useCallback(() => {
+    if (typeof window === "undefined") return;
+    scrollRestoreRef.current = {
+      x: window.scrollX,
+      y: window.scrollY
+    };
+  }, []);
+
+  const restoreScrollPosition = useCallback(() => {
+    if (typeof window === "undefined" || !scrollRestoreRef.current) return;
+    const position = scrollRestoreRef.current;
+    scrollRestoreRef.current = null;
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ left: position.x, top: position.y, behavior: "auto" });
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ left: position.x, top: position.y, behavior: "auto" });
+      });
+    });
+  }, []);
+
   const loadData = useCallback(async ({ silent = false } = {}) => {
     if (realtimeLoadingRef.current) return;
     realtimeLoadingRef.current = true;
+    if (silent) captureScrollPosition();
     if (!silent) setLoading(true);
     setError("");
     try {
@@ -1241,8 +1263,9 @@ export default function DashboardApp({ publicView = false }) {
     } finally {
       if (!silent) setLoading(false);
       realtimeLoadingRef.current = false;
+      if (silent) restoreScrollPosition();
     }
-  }, [publicView]);
+  }, [captureScrollPosition, publicView, restoreScrollPosition]);
 
   async function checkSession() {
     if (publicView) {
@@ -1319,6 +1342,15 @@ export default function DashboardApp({ publicView = false }) {
         activeAuction: current.activeAuction ? patchAuction(current.activeAuction) : activeAuctions[0] || null
       };
     });
+  }
+
+  async function runWithScrollRestore(action) {
+    captureScrollPosition();
+    try {
+      return await action();
+    } finally {
+      restoreScrollPosition();
+    }
   }
 
   async function logout() {
@@ -1475,7 +1507,7 @@ export default function DashboardApp({ publicView = false }) {
     if (!confirmAction) return;
     setSaving(true);
     try {
-      await confirmAction.run();
+      await runWithScrollRestore(confirmAction.run);
       setConfirmAction(null);
     } catch (err) {
       setError(err.message);
@@ -1508,13 +1540,15 @@ export default function DashboardApp({ publicView = false }) {
   async function startAuction(payload) {
     setSaving(true);
     try {
-      const data = await api("/api/auctions/start", {
-        method: "POST",
-        body: JSON.stringify(payload)
+      await runWithScrollRestore(async () => {
+        const data = await api("/api/auctions/start", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        });
+        setAuctionState(data.auctionState);
+        setAuctionStartType(null);
+        setToast(`${auctionTypeLabel(payload.type)} auction started`);
       });
-      setAuctionState(data.auctionState);
-      setAuctionStartType(null);
-      setToast(`${auctionTypeLabel(payload.type)} auction started`);
     } catch (err) {
       setError(err.message);
     } finally {
