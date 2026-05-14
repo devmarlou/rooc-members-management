@@ -758,9 +758,34 @@ function AuctionLimitsForm({ auctionItems, auctionState, onCancel, onSave, busy 
   );
 }
 
+function progressCellState(received, cap) {
+  if (cap <= 0) return "capped";
+  if (received >= cap) return "capped";
+  if (received > 0) return "warning";
+  return "empty";
+}
+
 function MemberProgressTable({ auctionItems, auctionState }) {
   const limitedItems = auctionItems.filter((item) => item.gates_round_completion);
   const rows = auctionState?.progress || [];
+  const itemSummaries = limitedItems.map((item) => {
+    let capped = 0;
+    let partial = 0;
+    let empty = 0;
+    let total = 0;
+
+    for (const row of rows) {
+      const received = row.received[item.item_key] || 0;
+      const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
+      total += received;
+      const state = progressCellState(received, cap);
+      if (state === "capped") capped += 1;
+      if (state === "warning") partial += 1;
+      if (state === "empty") empty += 1;
+    }
+
+    return { item, capped, partial, empty, total };
+  });
 
   if (!rows.length) {
     return <div className="empty-panel compact">Create an auction lineup to track member item progress.</div>;
@@ -775,6 +800,15 @@ function MemberProgressTable({ auctionItems, auctionState }) {
         </div>
         <span>{rows.length} members</span>
       </header>
+      <div className="progress-summary-grid">
+        {itemSummaries.map(({ item, capped, partial, empty, total }) => (
+          <div className="progress-summary-card" key={item.id}>
+            <strong>{item.short_name}</strong>
+            <span>{capped + partial} received</span>
+            <em>{capped} capped · {partial} incomplete · {empty} none · {total} total</em>
+          </div>
+        ))}
+      </div>
       <div className="progress-table-wrap">
         <table className="progress-table">
           <thead>
@@ -793,10 +827,16 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                   <strong>{row.member.char_name}</strong>
                   <span>{row.member.char_class}</span>
                 </td>
-                {limitedItems.map((item) => (
-                  <td key={item.id}>{row.received[item.item_key] || 0}/{row.caps[item.item_key] ?? item.default_per_round_cap}</td>
-                ))}
-                <td><em>{row.is_complete ? "cycle capped" : "open"}</em></td>
+                {limitedItems.map((item) => {
+                  const received = row.received[item.item_key] || 0;
+                  const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
+                  return (
+                    <td key={item.id}>
+                      <span className={`progress-count ${progressCellState(received, cap)}`}>{received}/{cap}</span>
+                    </td>
+                  );
+                })}
+                <td><em className={row.is_complete ? "progress-status capped" : "progress-status warning"}>{row.is_complete ? "cycle capped" : "incomplete"}</em></td>
               </tr>
             ))}
           </tbody>
@@ -834,7 +874,6 @@ function AuctionFoundation({
   onOpenRotation,
   onResetLineup,
   onLockAuction,
-  onRecalculateAuction,
   onCantPay,
   onDoneAuction,
   busy
@@ -948,10 +987,6 @@ function AuctionFoundation({
                       <Shield size={15} />Lock-in list
                     </button>
                   )}
-                  <button className="ghost-button" type="button" onClick={() => onRecalculateAuction(auction)} disabled={busy || locked}>
-                    {busy ? <Loader2 className="spin" size={15} /> : <Shuffle size={15} />}
-                    Recalculate
-                  </button>
                   <button className="primary-button" type="button" onClick={() => onDoneAuction(auction)} disabled={busy}>
                     {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
                     Done
@@ -1064,6 +1099,29 @@ export default function DashboardApp() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  function syncAuctionMember(updatedMember) {
+    setAuctionState((current) => {
+      if (!current) return current;
+      const mergeMember = (member) => member?.id === updatedMember.id ? { ...member, ...updatedMember } : member;
+      const patchAuction = (auction) => {
+        if (!auction) return auction;
+        return {
+          ...auction,
+          queue: auction.queue?.map((row) => ({ ...row, member: mergeMember(row.member) })) || [],
+          units: auction.units?.map((unit) => ({ ...unit, member: mergeMember(unit.member) })) || []
+        };
+      };
+      const activeAuctions = current.activeAuctions?.map(patchAuction) || [];
+
+      return {
+        ...current,
+        progress: current.progress?.map((row) => ({ ...row, member: mergeMember(row.member) })) || [],
+        activeAuctions,
+        activeAuction: current.activeAuction ? patchAuction(current.activeAuction) : activeAuctions[0] || null
+      };
+    });
+  }
+
   async function logout() {
     await api("/api/auth/logout", { method: "POST" });
     setSession({ loading: false, authenticated: false, username: "" });
@@ -1088,6 +1146,10 @@ export default function DashboardApp() {
       setMembers((current) => editing
         ? current.map((member) => member.id === data.member.id ? data.member : member)
         : [...current, data.member].sort((a, b) => a.char_name.localeCompare(b.char_name)));
+      syncAuctionMember(data.member);
+      if (!editing && auctionState?.activeRound) {
+        await loadData();
+      }
       setMemberModal(null);
       setToast(editing ? "Member updated" : "Member added");
     } catch (err) {
@@ -1283,8 +1345,8 @@ export default function DashboardApp() {
     const auctionName = auction?.name || "this auction";
     setConfirmAction({
       title: "Mark can't pay",
-      body: `Remove ${member.char_name} from ${auctionName} only and recalculate the remaining allocations?`,
-      confirmLabel: "Recalculate",
+      body: `Remove ${member.char_name} from ${auctionName} only? The remaining allocations will update automatically.`,
+      confirmLabel: "Mark can't pay",
       tone: "default",
       run: async () => {
         const data = await api("/api/auctions/active/cant-pay", {
@@ -1345,22 +1407,6 @@ export default function DashboardApp() {
         setToast("Auction lineup reset for testing");
       }
     });
-  }
-
-  async function recalculateAuction(auction) {
-    setSaving(true);
-    try {
-      const data = await api("/api/auctions/active/recalculate", {
-        method: "POST",
-        body: JSON.stringify({ auctionId: auction?.id })
-      });
-      setAuctionState(data.auctionState);
-      setToast("Auction allocations recalculated");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
   }
 
   if (session.loading) {
@@ -1426,7 +1472,6 @@ export default function DashboardApp() {
               onOpenRotation={() => setRotationOpen(true)}
               onResetLineup={requestResetLineup}
               onLockAuction={requestLockAuction}
-              onRecalculateAuction={recalculateAuction}
               onCantPay={requestCantPay}
               onDoneAuction={requestDoneAuction}
             />

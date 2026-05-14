@@ -1127,6 +1127,49 @@ button.party-slot.empty:hover:not(:disabled) {
   font-style: normal;
 }
 
+.progress-table .progress-count {
+  display: inline-flex;
+  min-width: 54px;
+  justify-content: center;
+  border: 1px solid rgba(63, 63, 70, 0.8);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.progress-table .progress-count.capped,
+.progress-status.capped {
+  border-color: rgba(34, 197, 94, 0.38);
+  background: rgba(34, 197, 94, 0.12);
+  color: #86efac;
+}
+
+.progress-table .progress-count.warning,
+.progress-status.warning {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--amber-2);
+}
+
+.progress-table .progress-count.empty {
+  background: rgba(39, 39, 42, 0.52);
+  color: var(--muted-2);
+}
+
+.progress-status {
+  display: inline-flex;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .allocation-table code {
   color: var(--amber-2);
   font-family: "JetBrains Mono", ui-monospace, monospace;
@@ -1192,6 +1235,48 @@ button.party-slot.empty:hover:not(:disabled) {
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 11px;
   font-weight: 800;
+}
+
+.progress-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.progress-summary-card {
+  border: 1px solid rgba(63, 63, 70, 0.68);
+  border-radius: 8px;
+  background: rgba(24, 24, 27, 0.48);
+  padding: 10px;
+}
+
+.progress-summary-card strong,
+.progress-summary-card span,
+.progress-summary-card em {
+  display: block;
+}
+
+.progress-summary-card strong {
+  color: var(--amber-2);
+  font-family: Cinzel, Georgia, serif;
+  font-size: 14px;
+}
+
+.progress-summary-card span {
+  margin-top: 5px;
+  color: #86efac;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.progress-summary-card em {
+  margin-top: 3px;
+  color: var(--muted-2);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
 }
 
 .auction-form-items {
