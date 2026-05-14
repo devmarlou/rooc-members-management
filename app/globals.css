@@ -1394,6 +1394,13 @@ button.party-slot.empty:hover:not(:disabled) {
   color: var(--muted-2);
 }
 
+.progress-item-stack {
+  display: inline-grid;
+  justify-items: center;
+  gap: 10px;
+  min-width: 86px;
+}
+
 .progress-held-stack {
   display: flex;
   align-items: flex-end;
@@ -1539,7 +1546,7 @@ button.party-slot.empty:hover:not(:disabled) {
 .progress-bid-text {
   display: block;
   color: #bfdbfe;
-  margin-top: 8px;
+  margin-top: 0;
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 10px;
   font-weight: 900;

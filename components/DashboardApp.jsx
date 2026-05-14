@@ -1060,12 +1060,14 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                     const bidNext = activeItem ? bidBase + activeItem.quantity : 0;
                     return (
                       <td key={item.id}>
-                        <span className={`progress-count ${progressCellState(received, cap)}`}>{received}/{cap}</span>
-                        {activeItem && (
-                          <span className={`progress-bid-text bid-${item.item_key}`}>
-                            +{activeItem.quantity} → {bidNext}/{cap}
-                          </span>
-                        )}
+                        <div className="progress-item-stack">
+                          <span className={`progress-count ${progressCellState(received, cap)}`}>{received}/{cap}</span>
+                          {activeItem && (
+                            <span className={`progress-bid-text bid-${item.item_key}`}>
+                              +{activeItem.quantity} → {bidNext}/{cap}
+                            </span>
+                          )}
+                        </div>
                       </td>
                     );
                   })}
