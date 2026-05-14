@@ -1386,7 +1386,7 @@ button.party-slot.empty:hover:not(:disabled) {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-width: 86px;
+  min-width: 112px;
   justify-content: center;
   border: 1px solid rgba(63, 63, 70, 0.8);
   border-radius: 999px;

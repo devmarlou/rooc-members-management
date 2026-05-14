@@ -961,11 +961,11 @@ function MemberProgressTable({ auctionItems, auctionState }) {
           <div className="progress-summary-card" key={item.id}>
             <strong>{item.short_name}</strong>
             <span>{heldTotal} held total</span>
-            <em>C{completedCycles} complete · {capped} capped · {partial} incomplete · {empty} none · {currentTotal} current</em>
+            <em>{completedCycles} cycles complete · {capped} capped · {partial} incomplete · {empty} none · {currentTotal} current</em>
           </div>
         ))}
       </div>
-      <p className="progress-cycle-note">Held totals: C means completed item cycles based on the current item cap.</p>
+      <p className="progress-cycle-note">Held totals show total items held and completed cycles for each item.</p>
       <div className="progress-table-wrap">
         <table className="progress-table">
           <colgroup>
@@ -1016,7 +1016,7 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                         <span className={`progress-held-count held-${item.item_key}`} key={item.id}>
                           <strong>{item.short_name}</strong>
                           <span className="held-value">{heldItemCount(row, item)}</span>
-                          <em>C{itemCycleCount(row, item)}</em>
+                          <em>{itemCycleCount(row, item)} cycles</em>
                         </span>
                       ))}
                     </div>
