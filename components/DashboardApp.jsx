@@ -906,14 +906,17 @@ function AuctionFoundation({
   const leagueAlreadyRanForLatestGl = latestDoneGlAuction && latestDoneLeagueAuction
     ? new Date(latestDoneLeagueAuction.done_at) > new Date(latestDoneGlAuction.done_at)
     : false;
-  const canStartLeague = Boolean(activeRound && latestDoneGlAuction && !leagueAlreadyRanForLatestGl && !glAuction && !leagueAuction);
+  const lockedGlReadyForLeague = glAuction?.status === "locked";
+  const canStartLeague = Boolean(activeRound && !leagueAuction && (lockedGlReadyForLeague || (latestDoneGlAuction && !leagueAlreadyRanForLatestGl && !glAuction)));
   const leagueHint = glAuction
-    ? "Click Done on the GL/WoE auction first. League Prize uses the finalized progress cursor."
+    ? lockedGlReadyForLeague
+      ? "League Prize is ready. It will use current progress plus locked GL/WoE reservations."
+      : "Lock-in the GL/WoE auction first, then League Prize becomes available."
     : leagueAlreadyRanForLatestGl
       ? "League Prize already ran for the latest GL/WoE auction."
       : latestDoneGlAuction
         ? "League Prize is ready from the next incomplete lineup member."
-        : "Finish a GL/WoE auction first, then League Prize becomes available.";
+        : "Create and lock a GL/WoE auction first, then League Prize becomes available.";
   const completedCount = activeRound?.completedCount || 0;
   const roundMemberCount = activeRound?.memberCount || memberCount;
   const progressPct = roundMemberCount ? Math.min(100, Math.round((completedCount / roundMemberCount) * 100)) : 0;
@@ -963,7 +966,7 @@ function AuctionFoundation({
                   <strong>{auction.name || auctionTypeLabel(auction.type)}</strong>
                   <em>{locked ? `${auctionTypeLabel(auction.type)} locked` : auctionTypeLabel(auction.type)}</em>
                 </div>
-                <p>{locked ? "This GL/WoE list is locked. Finalize it before starting League Prize so progress and can't-pay skips are applied." : "Review the generated page table, mark any member who cannot pay, then finalize the auction."}</p>
+                <p>{locked ? "This GL/WoE list is locked. League Prize can now use these reserved bids while skipping can't-pay members." : "Review the generated page table, mark any member who cannot pay, then finalize the auction."}</p>
                 <div className="active-auction-stats">
                   <span><Clock3 size={14} />{locked ? "Locked" : "Active"}</span>
                   <span><Gavel size={14} />{auction.pageCount || 0} pages</span>
@@ -1047,7 +1050,7 @@ function AuctionFoundation({
 
       <div className="auction-start-row">
         <button className="primary-button" type="button" disabled={!activeRound || Boolean(glAuction) || Boolean(leagueAuction)} onClick={() => onOpenStartAuction("gl_woe")}><Plus size={16} />New GL/WoE Auction</button>
-        <button className="ghost-button" type="button" disabled={!canStartLeague} onClick={() => onOpenStartAuction("league_prize")} title={canStartLeague ? "Start League Prize" : "Finalize a new GL/WoE first"}><Plus size={16} />New League Prize Auction</button>
+        <button className="ghost-button" type="button" disabled={!canStartLeague} onClick={() => onOpenStartAuction("league_prize")} title={canStartLeague ? "Start League Prize" : "Lock-in GL/WoE first"}><Plus size={16} />New League Prize Auction</button>
       </div>
       <p className={canStartLeague ? "auction-flow-note ready" : "auction-flow-note"}>{leagueHint}</p>
 
@@ -1396,7 +1399,7 @@ export default function DashboardApp() {
     if (!auction) return;
     setConfirmAction({
       title: "Lock-in GL/WoE list",
-      body: `Freeze ${auction.name || "this GL/WoE auction"} so no more can't-pay changes are made before finalizing it for League Prize?`,
+      body: `Freeze ${auction.name || "this GL/WoE auction"} so League Prize can start from the next incomplete member using these reserved bids?`,
       confirmLabel: "Lock list",
       tone: "default",
       run: async () => {
