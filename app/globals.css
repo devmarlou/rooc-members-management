@@ -1085,6 +1085,120 @@ button.party-slot.empty:hover:not(:disabled) {
   margin-top: 14px;
 }
 
+.allocation-table-wrap,
+.progress-table-wrap {
+  overflow: auto;
+  margin-top: 14px;
+  border: 1px solid rgba(63, 63, 70, 0.75);
+  border-radius: 8px;
+  background: rgba(9, 9, 11, 0.32);
+}
+
+.allocation-table,
+.progress-table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+}
+
+.allocation-table th,
+.allocation-table td,
+.progress-table th,
+.progress-table td {
+  border-bottom: 1px solid rgba(63, 63, 70, 0.62);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.allocation-table th,
+.progress-table th {
+  color: var(--muted-2);
+  background: rgba(39, 39, 42, 0.35);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.allocation-table td,
+.progress-table td {
+  color: #e4e4e7;
+  font-size: 12px;
+}
+
+.allocation-table tr:last-child td,
+.progress-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.allocation-table td:first-child,
+.allocation-table td:nth-child(2),
+.progress-table td:first-child {
+  color: var(--amber-2);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-weight: 800;
+}
+
+.allocation-table strong,
+.progress-table strong,
+.allocation-table span,
+.progress-table span {
+  display: block;
+}
+
+.allocation-table strong,
+.progress-table strong {
+  overflow: hidden;
+  max-width: 170px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 13px;
+}
+
+.allocation-table span,
+.progress-table span,
+.progress-table em {
+  margin-top: 2px;
+  color: var(--muted-2);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.allocation-table td:last-child {
+  text-align: right;
+}
+
+.member-progress-card {
+  margin-top: 14px;
+  border: 1px solid rgba(63, 63, 70, 0.75);
+  border-radius: 10px;
+  background: rgba(9, 9, 11, 0.34);
+  padding: 14px;
+}
+
+.member-progress-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.member-progress-card h3 {
+  margin: 0;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 17px;
+}
+
+.member-progress-card header span {
+  color: var(--muted);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .auction-form-items {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

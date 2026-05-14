@@ -588,17 +588,6 @@ function itemAppliesTo(item, type) {
   return Array.isArray(item.applies_to_auction_types) && item.applies_to_auction_types.includes(type);
 }
 
-function groupedPages(units = []) {
-  const map = new Map();
-  for (const unit of units) {
-    if (!map.has(unit.page)) map.set(unit.page, []);
-    map.get(unit.page).push(unit);
-  }
-  return [...map.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([page, pageUnits]) => ({ page, units: pageUnits.sort((a, b) => a.slot - b.slot) }));
-}
-
 function AuctionStartForm({ type, auctionItems, onCancel, onStart, busy }) {
   const applicable = auctionItems.filter((item) => itemAppliesTo(item, type));
   const [name, setName] = useState(type === "league_prize" ? "League Prize" : "GL/WoE Auction");
@@ -646,19 +635,20 @@ function AuctionStartForm({ type, auctionItems, onCancel, onStart, busy }) {
 
 function AuctionLimitsForm({ auctionItems, auctionState, onCancel, onSave, busy }) {
   const currentCaps = auctionState?.itemCaps || {};
+  const limitedItems = auctionItems.filter((item) => item.gates_round_completion);
   const [caps, setCaps] = useState(() => Object.fromEntries(
-    auctionItems.map((item) => [item.item_key, String(currentCaps[item.item_key] ?? item.default_per_round_cap ?? 0)])
+    limitedItems.map((item) => [item.item_key, String(currentCaps[item.item_key] ?? item.default_per_round_cap ?? 0)])
   ));
 
   function submit(event) {
     event.preventDefault();
-    onSave(Object.fromEntries(auctionItems.map((item) => [item.item_key, Number.parseInt(caps[item.item_key] || "0", 10) || 0])));
+    onSave(Object.fromEntries(limitedItems.map((item) => [item.item_key, Number.parseInt(caps[item.item_key] || "0", 10) || 0])));
   }
 
   return (
     <form onSubmit={submit} className="form-grid single">
       <div className="auction-form-items">
-        {auctionItems.map((item) => (
+        {limitedItems.map((item) => (
           <label key={item.id}>
             <span>{item.name}</span>
             <input
@@ -670,7 +660,7 @@ function AuctionLimitsForm({ auctionItems, auctionState, onCancel, onSave, busy 
           </label>
         ))}
       </div>
-      <p className="field-note">These caps apply to the active round. They do not rewrite older auction history.</p>
+      <p className="field-note">These shared caps apply to every member in the auction lineup. Illusion Fragments are free-for-all and do not affect limits.</p>
       <div className="form-actions">
         <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
         <button className="primary-button" disabled={busy}>
@@ -679,6 +669,54 @@ function AuctionLimitsForm({ auctionItems, auctionState, onCancel, onSave, busy 
         </button>
       </div>
     </form>
+  );
+}
+
+function MemberProgressTable({ auctionItems, auctionState }) {
+  const limitedItems = auctionItems.filter((item) => item.gates_round_completion);
+  const rows = auctionState?.progress || [];
+
+  if (!rows.length) {
+    return <div className="empty-panel compact">Create an auction lineup to track member item progress.</div>;
+  }
+
+  return (
+    <div className="member-progress-card">
+      <header>
+        <div>
+          <p className="eyebrow">member item tracker</p>
+          <h3>Shared Limit Progress</h3>
+        </div>
+        <span>{rows.length} members</span>
+      </header>
+      <div className="progress-table-wrap">
+        <table className="progress-table">
+          <thead>
+            <tr>
+              <th>Line</th>
+              <th>Member</th>
+              {limitedItems.map((item) => <th key={item.id}>{item.short_name}</th>)}
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.member.id}>
+                <td>{row.position}</td>
+                <td>
+                  <strong>{row.member.char_name}</strong>
+                  <span>{row.member.char_class}</span>
+                </td>
+                {limitedItems.map((item) => (
+                  <td key={item.id}>{row.received[item.item_key] || 0}/{row.caps[item.item_key] ?? item.default_per_round_cap}</td>
+                ))}
+                <td><em>{row.is_complete ? "cycle capped" : "open"}</em></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -691,10 +729,10 @@ function RotationList({ auctionState }) {
           <span>{row.position}</span>
           <ClassIcon name={row.member.char_class} size={28} glow={false} />
           <strong>{row.member.char_name}</strong>
-          <em>{row.is_complete ? "complete" : "active"}</em>
+          <em>{row.is_complete ? "cycle capped" : "open"}</em>
         </div>
       )) : (
-        <div className="empty-panel compact">Start a round to generate a randomized rotation list.</div>
+        <div className="empty-panel compact">Create an auction lineup to generate the randomized source list.</div>
       )}
     </div>
   );
@@ -719,7 +757,7 @@ function AuctionFoundation({
   const roundMemberCount = activeRound?.memberCount || memberCount;
   const progressPct = roundMemberCount ? Math.min(100, Math.round((completedCount / roundMemberCount) * 100)) : 0;
   const currentCaps = auctionState?.itemCaps || {};
-  const pages = groupedPages(activeAuction?.units || []);
+  const units = activeAuction?.units || [];
 
   return (
     <section className="content-section auction-section">
@@ -728,27 +766,27 @@ function AuctionFoundation({
           <p className="eyebrow">reward rotation</p>
           <h2>Auctions</h2>
         </div>
-        <span className="status-pill"><Swords size={14} />{activeRound ? "Functional" : "No active round"}</span>
+        <span className="status-pill"><Swords size={14} />{activeRound ? "Lineup active" : "No lineup"}</span>
       </div>
 
       <div className="round-card">
         <div className="round-main">
           <div>
-            <h3>{activeRound ? `Round ${activeRound.round_number}` : "No active round"}</h3>
-            <p>{activeRound ? "manual rotation is locked for this round" : "start a round to randomize all current members"}</p>
+            <h3>{activeRound ? `Auction Lineup ${activeRound.round_number}` : "No auction lineup"}</h3>
+            <p>{activeRound ? "randomized source list stays active over time" : "create a lineup to randomize all current members once"}</p>
           </div>
           <div className="round-progress-meta">
             <strong>{completedCount} / {roundMemberCount}</strong>
-            <span>members complete</span>
+            <span>cycle capped</span>
           </div>
         </div>
         <div className="round-progress-track">
           <span style={{ width: `${progressPct}%` }} />
         </div>
         <div className="round-actions">
-          <button className="ghost-button" type="button" onClick={onOpenRotation} disabled={!activeRound}><Eye size={15} />Rotation list</button>
+          <button className="ghost-button" type="button" onClick={onOpenRotation} disabled={!activeRound}><Eye size={15} />Lineup list</button>
           <button className="ghost-button" type="button" onClick={onOpenLimits} disabled={!activeRound || Boolean(activeAuction)}><Settings size={15} />Adjust limits</button>
-          <button className="ghost-button" type="button" onClick={onStartRound} disabled={Boolean(activeRound) || busy}><Shuffle size={15} />Start new round</button>
+          <button className="ghost-button" type="button" onClick={onStartRound} disabled={Boolean(activeRound) || busy}><Shuffle size={15} />Create auction lineup</button>
         </div>
       </div>
 
@@ -760,28 +798,44 @@ function AuctionFoundation({
               <strong>{activeAuction.name || auctionTypeLabel(activeAuction.type)}</strong>
               <em>{auctionTypeLabel(activeAuction.type)}</em>
             </div>
-            <p>Review the generated pages, mark any member who cannot pay, then finalize the auction.</p>
+            <p>Review the generated page table, mark any member who cannot pay, then finalize the auction.</p>
             <div className="active-auction-stats">
               <span><Clock3 size={14} />Active</span>
               <span><Gavel size={14} />{activeAuction.pageCount || 0} pages</span>
-              <span><Trophy size={14} />{activeAuction.units?.length || 0} allocations</span>
+              <span><Trophy size={14} />{units.length} allocations</span>
             </div>
-            <div className="allocation-pages">
-              {pages.length ? pages.map((page) => (
-                <div className="allocation-page" key={page.page}>
-                  <h4>Page {page.page}</h4>
-                  {page.units.map((unit) => (
-                    <div className="allocation-row" key={`${unit.page}-${unit.slot}-${unit.member_id}-${unit.item_id}`}>
-                      <span>{unit.slot}</span>
-                      <strong>{unit.member?.char_name || "Unknown"}</strong>
-                      <em>{unit.short_name || unit.item_name}</em>
-                      <button className="ghost-button mini" type="button" onClick={() => onCantPay(unit.member)} disabled={busy}>
-                        <Ban size={13} />Can't pay
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )) : (
+            <div className="allocation-table-wrap">
+              {units.length ? (
+                <table className="allocation-table">
+                  <thead>
+                    <tr>
+                      <th>Page</th>
+                      <th>Slot</th>
+                      <th>Member</th>
+                      <th>Item</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {units.map((unit) => (
+                      <tr key={`${unit.page}-${unit.slot}-${unit.member_id}-${unit.item_id}`}>
+                        <td>{unit.page}</td>
+                        <td>{unit.slot}</td>
+                        <td>
+                          <strong>{unit.member?.char_name || "Unknown"}</strong>
+                          {unit.cycle_reset && <span>cycle reset</span>}
+                        </td>
+                        <td>{unit.short_name || unit.item_name}</td>
+                        <td>
+                          <button className="ghost-button mini" type="button" onClick={() => onCantPay(unit.member)} disabled={busy}>
+                            <Ban size={13} />Can't pay
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
                 <div className="empty-panel compact">No allocations for this auction.</div>
               )}
             </div>
@@ -799,7 +853,7 @@ function AuctionFoundation({
               <strong>No active auction</strong>
               <em>{activeRound ? "ready" : "waiting"}</em>
             </div>
-            <p>{activeRound ? "Start GL/WoE or optional League Prize when you are ready to distribute items." : "Start a round first so the app can lock a randomized rotation."}</p>
+            <p>{activeRound ? "Start GL/WoE or optional League Prize when you are ready to distribute items." : "Create the auction lineup first so the app can lock the randomized source list."}</p>
             <div className="active-auction-stats">
               <span><Clock3 size={14} />Waiting</span>
               <span><Gavel size={14} />0 pages</span>
@@ -811,7 +865,7 @@ function AuctionFoundation({
         <article className="auction-history-card">
           <header>
             <div>
-              <p className="eyebrow">{activeRound ? `round ${activeRound.round_number} history` : "history"}</p>
+              <p className="eyebrow">{activeRound ? `lineup ${activeRound.round_number} history` : "history"}</p>
               <h3>{history.length ? `${history.length} completed auction${history.length === 1 ? "" : "s"}` : "No completed auctions"}</h3>
             </div>
             <ChevronDown size={16} />
@@ -847,6 +901,7 @@ function AuctionFoundation({
           </div>
         ))}
       </div>
+      <MemberProgressTable auctionItems={auctionItems} auctionState={auctionState} />
     </section>
   );
 }
@@ -1086,14 +1141,14 @@ export default function DashboardApp() {
 
   function requestStartRound() {
     setConfirmAction({
-      title: "Start new round",
-      body: `Start a new auction round with all ${members.length} current members in a randomized rotation?`,
-      confirmLabel: "Start round",
+      title: "Create auction lineup",
+      body: `Create the reusable auction lineup with all ${members.length} current members in a randomized order? New members will be added to the end later.`,
+      confirmLabel: "Create lineup",
       tone: "default",
       run: async () => {
         const data = await api("/api/auctions/rounds", { method: "POST" });
         setAuctionState(data.auctionState);
-        setToast("Auction round started");
+        setToast("Auction lineup created");
       }
     });
   }
@@ -1160,7 +1215,7 @@ export default function DashboardApp() {
       run: async () => {
         const data = await api("/api/auctions/active/done", { method: "POST" });
         setAuctionState(data.auctionState);
-        setToast(data.auctionState?.activeRound ? "Auction finalized" : "Auction finalized and round completed");
+        setToast("Auction finalized");
       }
     });
   }
