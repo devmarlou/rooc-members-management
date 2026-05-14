@@ -327,7 +327,7 @@ function Stats({ members, memberLimit, activeClass, onClassFilter, onEditLimit, 
               onClick={() => onClassFilter(active ? "" : item.key)}
             >
               <ClassIcon name={item.key} size={28} />
-              <span>{item.short}</span>
+              <span>{item.label}</span>
               <strong>{item.count}</strong>
             </button>
           );
