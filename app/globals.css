@@ -1539,7 +1539,7 @@ button.party-slot.empty:hover:not(:disabled) {
 .progress-bid-text {
   display: block;
   color: #bfdbfe;
-  margin-top: 5px;
+  margin-top: 8px;
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 10px;
   font-weight: 900;
