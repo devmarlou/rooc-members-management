@@ -619,14 +619,17 @@ function compactSlots(units) {
     .join(" · ");
 }
 
-function groupedAuctionBids(units = []) {
+function groupedAuctionBids(units = [], queue = []) {
   const memberMap = new Map();
+  const queueByMemberId = new Map(queue.map((row) => [row.member_id, row]));
 
   for (const unit of units) {
+    const queueRow = queueByMemberId.get(unit.member_id);
     if (!memberMap.has(unit.member_id)) {
       memberMap.set(unit.member_id, {
         member: unit.member,
         member_id: unit.member_id,
+        queuePosition: queueRow?.position || Number.MAX_SAFE_INTEGER,
         items: new Map(),
         quantity: 0,
         firstPage: unit.page,
@@ -671,7 +674,7 @@ function groupedAuctionBids(units = []) {
         }))
         .sort((a, b) => a.firstPage - b.firstPage || a.firstSlot - b.firstSlot)
     }))
-    .sort((a, b) => a.firstPage - b.firstPage || a.firstSlot - b.firstSlot);
+    .sort((a, b) => a.queuePosition - b.queuePosition || a.firstPage - b.firstPage || a.firstSlot - b.firstSlot);
 }
 
 function AuctionStartForm({ type, auctionItems, onCancel, onStart, busy }) {
@@ -936,7 +939,7 @@ function AuctionFoundation({
       <div className="auction-grid">
         {activeAuctions.length ? (
           activeAuctions.map((auction) => {
-            const bidRows = groupedAuctionBids(auction.units || []);
+            const bidRows = groupedAuctionBids(auction.units || [], auction.queue || []);
             const locked = auction.status === "locked";
             return (
               <article className={locked ? "active-auction-card locked" : "active-auction-card"} key={auction.id}>
@@ -967,6 +970,7 @@ function AuctionFoundation({
                           <tr key={`${auction.id}-${row.member_id}`}>
                             <td>
                               <strong>{row.member?.char_name || "Unknown"}</strong>
+                              {Number.isFinite(row.queuePosition) && row.queuePosition !== Number.MAX_SAFE_INTEGER && <span>Line {row.queuePosition}</span>}
                               {row.cycle_reset && <span>cycle reset</span>}
                             </td>
                             <td>
