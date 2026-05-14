@@ -1035,6 +1035,13 @@ function MemberProgressTable({ auctionItems, auctionState }) {
               const queueState = progressRowQueueState(row, limitedItems, priorityMemberId);
               const activeBidItems = activeBidStatus.biddingByMemberId.get(row.member.id);
               const skipped = activeBidStatus.skippedMemberIds.has(row.member.id);
+              const biddingIncomplete = activeBidItems
+                ? [...activeBidItems.values()].some(({ item, quantity, cycleReset }) => {
+                  const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
+                  const base = cycleReset ? 0 : row.received[item.item_key] || 0;
+                  return cap > 0 && base + quantity < cap;
+                })
+                : false;
               return (
                 <tr key={row.member.id}>
                   <td>{row.position}</td>
@@ -1057,7 +1064,7 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                         <em className="progress-status skipped">skipped</em>
                       ) : activeBidItems ? (
                         <>
-                          <em className="progress-status bidding">bidding</em>
+                          <em className={`progress-status ${biddingIncomplete ? "bidding-partial" : "bidding"}`}>{biddingIncomplete ? "partial bidding" : "bidding"}</em>
                           <div className="progress-bid-items">
                             {[...activeBidItems.values()].map(({ item, quantity, cycleReset }) => {
                               const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
@@ -1065,7 +1072,7 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                               const next = base + quantity;
                               return (
                                 <span className={`progress-bid-item bid-${item.item_key}`} key={item.id}>
-                                  {item.short_name} {next}/{cap}
+                                  {item.short_name} +{quantity} → {next}/{cap}
                                 </span>
                               );
                             })}

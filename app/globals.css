@@ -1506,6 +1506,12 @@ button.party-slot.empty:hover:not(:disabled) {
   color: #bfdbfe;
 }
 
+.progress-status.bidding-partial {
+  border-color: rgba(14, 165, 233, 0.52);
+  background: rgba(8, 47, 73, 0.42);
+  color: #7dd3fc;
+}
+
 .progress-status.skipped {
   border-color: rgba(248, 113, 113, 0.52);
   background: rgba(127, 29, 29, 0.24);
