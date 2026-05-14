@@ -628,16 +628,17 @@ function formatDiscordBidList(auction, bidRows) {
 
   for (const row of bidRows) {
     const memberName = row.member?.char_name || "Unknown";
-    const linePrefix = Number.isFinite(row.queuePosition) && row.queuePosition !== Number.MAX_SAFE_INTEGER
-      ? `Line ${row.queuePosition} - `
-      : "";
-    const itemText = row.items
-      .map((item) => `${item.item}: ${item.positions}${item.quantity > 1 ? ` x${item.quantity}` : ""}`)
-      .join("; ");
-    lines.push(`${linePrefix}${memberName}: ${itemText}`);
+    const lineLabel = Number.isFinite(row.queuePosition) && row.queuePosition !== Number.MAX_SAFE_INTEGER
+      ? `Line ${row.queuePosition}`
+      : "Line";
+    lines.push(`**${lineLabel} - ${memberName}**`);
+    for (const item of row.items) {
+      lines.push(`- ${item.item}: ${item.positions}${item.quantity > 1 ? ` x${item.quantity}` : ""}`);
+    }
+    lines.push("");
   }
 
-  return lines.join("\n");
+  return lines.join("\n").trim();
 }
 
 function groupedAuctionBids(units = [], queue = []) {
