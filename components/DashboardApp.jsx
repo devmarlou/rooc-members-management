@@ -1157,7 +1157,9 @@ function AuctionFoundation({
                   <strong>{auction.name || auctionTypeLabel(auction.type)}</strong>
                   <em>{locked ? `${auctionTypeLabel(auction.type)} locked` : auctionTypeLabel(auction.type)}</em>
                 </div>
-                <p>{locked ? "This GL/WoE list is locked. League Prize can now use these reserved bids while skipping can't-pay members." : "Review the generated page table, mark any member who cannot pay, then finalize the auction."}</p>
+                {!readOnly && (
+                  <p>{locked ? "This GL/WoE list is locked. League Prize can now use these reserved bids while skipping can't-pay members." : "Review the generated page table, mark any member who cannot pay, then finalize the auction."}</p>
+                )}
                 <div className="active-auction-stats">
                   <span><Clock3 size={14} />{locked ? "Locked" : "Active"}</span>
                   <span><Gavel size={14} />{auction.pageCount || 0} pages</span>
