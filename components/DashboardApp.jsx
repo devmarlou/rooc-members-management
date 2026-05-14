@@ -867,19 +867,21 @@ function MemberProgressTable({ auctionItems, auctionState }) {
     let capped = 0;
     let partial = 0;
     let empty = 0;
-    let total = 0;
+    let currentTotal = 0;
+    let heldTotal = 0;
 
     for (const row of rows) {
       const received = row.received[item.item_key] || 0;
       const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
-      total += received;
+      currentTotal += received;
+      heldTotal += row.held?.[item.item_key] || 0;
       const state = progressCellState(received, cap);
       if (state === "capped") capped += 1;
       if (state === "warning") partial += 1;
       if (state === "empty") empty += 1;
     }
 
-    return { item, capped, partial, empty, total };
+    return { item, capped, partial, empty, currentTotal, heldTotal };
   });
 
   if (!rows.length) {
@@ -896,11 +898,11 @@ function MemberProgressTable({ auctionItems, auctionState }) {
         <span>{rows.length} members</span>
       </header>
       <div className="progress-summary-grid">
-        {itemSummaries.map(({ item, capped, partial, empty, total }) => (
+        {itemSummaries.map(({ item, capped, partial, empty, currentTotal, heldTotal }) => (
           <div className="progress-summary-card" key={item.id}>
             <strong>{item.short_name}</strong>
-            <span>{capped + partial} received</span>
-            <em>{capped} capped · {partial} incomplete · {empty} none · {total} total</em>
+            <span>{heldTotal} held total</span>
+            <em>{capped} capped · {partial} incomplete · {empty} none · {currentTotal} current</em>
           </div>
         ))}
       </div>
@@ -911,14 +913,13 @@ function MemberProgressTable({ auctionItems, auctionState }) {
               <th>Line</th>
               <th>Member</th>
               {limitedItems.map((item) => <th key={item.id}>{item.short_name}</th>)}
-              <th>Total</th>
+              <th>Held totals</th>
               <th>Status</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => {
               const status = progressRowStatus(row, limitedItems);
-              const totalReceived = auctionItems.reduce((sum, item) => sum + (row.received[item.item_key] || 0), 0);
               return (
                 <tr key={row.member.id}>
                   <td>{row.position}</td>
@@ -935,7 +936,15 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                       </td>
                     );
                   })}
-                  <td><span className="progress-total">{totalReceived}</span></td>
+                  <td>
+                    <div className="progress-held-stack">
+                      {limitedItems.map((item) => (
+                        <span className="progress-held-count" key={item.id}>
+                          <strong>{item.short_name}</strong>{row.held?.[item.item_key] || 0}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
                   <td><em className={`progress-status ${status.state}`}>{status.label}</em></td>
                 </tr>
               );

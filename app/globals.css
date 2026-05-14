@@ -1175,7 +1175,7 @@ button.party-slot.empty:hover:not(:disabled) {
 }
 
 .progress-table {
-  min-width: 620px;
+  min-width: 780px;
 }
 
 .allocation-table th,
@@ -1281,17 +1281,31 @@ button.party-slot.empty:hover:not(:disabled) {
   color: var(--muted-2);
 }
 
-.progress-total {
+.progress-held-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 190px;
+}
+
+.progress-held-count {
   display: inline-flex;
-  min-width: 38px;
-  justify-content: center;
+  align-items: center;
+  gap: 4px;
   border-radius: 999px;
   background: rgba(244, 244, 245, 0.08);
   color: #e4e4e7;
-  padding: 4px 8px;
+  padding: 4px 7px;
   font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
+}
+
+.progress-held-count strong {
+  max-width: none;
+  color: var(--muted-2);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
 }
 
 .progress-status {
