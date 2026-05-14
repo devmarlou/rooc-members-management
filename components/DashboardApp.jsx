@@ -876,11 +876,12 @@ function progressRowNextNeed(row, limitedItems) {
   });
   const receivedTotal = limitedItems.reduce((sum, item) => sum + (row.received[item.item_key] || 0), 0);
   if (!missingItems.length) return { label: "ready next cycle", state: "capped" };
+  if (receivedTotal === 0) return null;
   const names = missingItems.slice(0, 2).map((item) => item.short_name);
   const suffix = missingItems.length > 2 ? ` +${missingItems.length - 2}` : "";
   return {
     label: `needs ${names.join(", ")}${suffix}`,
-    state: receivedTotal === 0 ? "empty" : "warning"
+    state: "warning"
   };
 }
 
@@ -963,6 +964,7 @@ function MemberProgressTable({ auctionItems, auctionState }) {
           </div>
         ))}
       </div>
+      <p className="progress-cycle-note">Held totals: C means completed item cycles based on the current item cap.</p>
       <div className="progress-table-wrap">
         <table className="progress-table">
           <colgroup>
@@ -1003,8 +1005,8 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                   })}
                   <td>
                     <div className="progress-status-stack">
-                      <em className={`progress-status ${queueState.state}`}>{queueState.label}</em>
-                      <em className={`progress-status ${nextNeed.state}`}>{nextNeed.label}</em>
+                      {queueState.state !== "ready" && <em className={`progress-status ${queueState.state}`}>{queueState.label}</em>}
+                      {nextNeed && <em className={`progress-status ${nextNeed.state}`}>{nextNeed.label}</em>}
                     </div>
                   </td>
                   <td>

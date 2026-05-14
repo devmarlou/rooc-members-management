@@ -1599,6 +1599,16 @@ button.party-slot.empty:hover:not(:disabled) {
   font-weight: 700;
 }
 
+.progress-cycle-note {
+  margin: 10px 0 0;
+  color: var(--muted-2);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .auction-form-items {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
