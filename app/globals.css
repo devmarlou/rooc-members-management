@@ -638,7 +638,7 @@ label span {
 }
 
 .class-grid-list {
-  grid-auto-columns: minmax(250px, 310px);
+  grid-auto-columns: minmax(230px, 280px);
 }
 
 .party-grid {
@@ -681,16 +681,34 @@ label span {
   font-weight: 700;
 }
 
+.class-column-list {
+  border-radius: 6px;
+  background: rgba(9, 9, 11, 0.22);
+}
+
+.class-column-list header {
+  min-height: 40px;
+  padding: 7px 9px;
+}
+
+.class-column-list header .class-icon {
+  width: 22px !important;
+  height: 22px !important;
+}
+
+.class-column-list h3 {
+  font-size: 12px;
+}
+
+.class-column-list header span {
+  font-size: 11px;
+}
+
 .member-list,
 .party-slots {
   display: grid;
   gap: 7px;
   padding: 10px;
-}
-
-.member-list-compact {
-  gap: 5px;
-  padding: 8px;
 }
 
 .party-slot {
@@ -716,35 +734,71 @@ label span {
   padding: 8px;
 }
 
-.member-row-compact {
-  min-height: 48px;
-  grid-template-columns: 28px minmax(0, 1fr) 60px;
-  gap: 8px;
-  padding: 6px;
-}
-
-.member-row-compact .member-main strong {
-  font-size: 12px;
-}
-
-.member-row-compact .member-main span,
-.member-row-compact .member-main em {
-  margin-top: 1px;
-  font-size: 10px;
-}
-
-.member-row-compact .row-actions {
-  opacity: 0.55;
-}
-
-.member-row-compact:hover .row-actions {
-  opacity: 1;
-}
-
 .member-row:hover,
 .party-slot.filled:hover {
   border-color: #52525b;
   background: rgba(39, 39, 42, 0.6);
+}
+
+.member-table-list {
+  display: grid;
+}
+
+.member-table-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(39, 39, 42, 0.8);
+}
+
+.member-table-row .class-icon {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+.member-table-row:last-child {
+  border-bottom: 0;
+}
+
+.member-table-row:hover {
+  background: rgba(39, 39, 42, 0.42);
+}
+
+.member-table-main {
+  min-width: 0;
+}
+
+.member-table-main strong,
+.member-table-main span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-table-main strong {
+  color: #f4f4f5;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.member-table-main span {
+  margin-top: 1px;
+  color: var(--muted-2);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.member-table-row .row-actions {
+  gap: 3px;
+  opacity: 0.6;
+}
+
+.member-table-row:hover .row-actions {
+  opacity: 1;
 }
 
 .member-main,

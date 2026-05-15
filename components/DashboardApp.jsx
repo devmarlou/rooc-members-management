@@ -448,30 +448,50 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
       {orderedMembers.length ? (
         <div className={`class-grid ${viewMode === "list" ? "class-grid-list" : ""}`}>
           {columns.map((column) => (
-            <article className="class-column" key={column.key}>
+            <article className={`class-column ${viewMode === "list" ? "class-column-list" : ""}`} key={column.key}>
               <header>
                 <ClassIcon name={column.icon} size={28} />
                 <h3>{column.key}</h3>
                 <span>{column.members.length}</span>
               </header>
-              <div className={`member-list ${viewMode === "list" ? "member-list-compact" : ""}`}>
-                {column.members.map((member) => (
-                  <div className={`member-row ${viewMode === "list" ? "member-row-compact" : ""}`} key={member.id}>
-                    <ClassIcon name={member.char_class} size={viewMode === "list" ? 24 : 32} />
-                    <div className="member-main">
-                      <strong>{member.char_name}</strong>
-                      <span>{member.char_class}</span>
-                      <em>Party: {groupsById[member.group_id]?.name || "Unassigned"}</em>
-                    </div>
-                    {!readOnly && (
-                      <div className="row-actions">
-                        <button className="icon-button" onClick={() => onEdit(member)} aria-label={`Edit ${member.char_name}`}><Pencil size={15} /></button>
-                        <button className="icon-button danger" onClick={() => onDelete(member)} aria-label={`Delete ${member.char_name}`}><Trash2 size={15} /></button>
+              {viewMode === "list" ? (
+                <div className="member-table-list">
+                  {column.members.map((member) => (
+                    <div className="member-table-row" key={member.id}>
+                      <ClassIcon name={member.char_class} size={20} />
+                      <div className="member-table-main">
+                        <strong>{member.char_name}</strong>
+                        <span>{groupsById[member.group_id]?.name || "Unassigned"}</span>
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+                      {!readOnly && (
+                        <div className="row-actions">
+                          <button className="icon-button" onClick={() => onEdit(member)} aria-label={`Edit ${member.char_name}`}><Pencil size={14} /></button>
+                          <button className="icon-button danger" onClick={() => onDelete(member)} aria-label={`Delete ${member.char_name}`}><Trash2 size={14} /></button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="member-list">
+                  {column.members.map((member) => (
+                    <div className="member-row" key={member.id}>
+                      <ClassIcon name={member.char_class} size={32} />
+                      <div className="member-main">
+                        <strong>{member.char_name}</strong>
+                        <span>{member.char_class}</span>
+                        <em>Party: {groupsById[member.group_id]?.name || "Unassigned"}</em>
+                      </div>
+                      {!readOnly && (
+                        <div className="row-actions">
+                          <button className="icon-button" onClick={() => onEdit(member)} aria-label={`Edit ${member.char_name}`}><Pencil size={15} /></button>
+                          <button className="icon-button danger" onClick={() => onDelete(member)} aria-label={`Delete ${member.char_name}`}><Trash2 size={15} /></button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </article>
           ))}
         </div>
