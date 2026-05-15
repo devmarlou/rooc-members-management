@@ -445,43 +445,8 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
           </button>
         </div>
       </div>
-      {orderedMembers.length && viewMode === "list" ? (
-        <div className="roster-table-wrap">
-          <table className="roster-table">
-            <thead>
-              <tr>
-                <th>Member</th>
-                <th>Class</th>
-                <th>Party</th>
-                {!readOnly && <th />}
-              </tr>
-            </thead>
-            <tbody>
-              {orderedMembers.map((member) => (
-                <tr key={member.id}>
-                  <td>
-                    <div className="roster-member">
-                      <ClassIcon name={member.char_class} size={30} />
-                      <strong>{member.char_name}</strong>
-                    </div>
-                  </td>
-                  <td>{member.char_class}</td>
-                  <td>{groupsById[member.group_id]?.name || "Unassigned"}</td>
-                  {!readOnly && (
-                    <td className="roster-actions-cell">
-                      <div className="row-actions always">
-                        <button className="icon-button" onClick={() => onEdit(member)} aria-label={`Edit ${member.char_name}`}><Pencil size={15} /></button>
-                        <button className="icon-button danger" onClick={() => onDelete(member)} aria-label={`Delete ${member.char_name}`}><Trash2 size={15} /></button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : orderedMembers.length ? (
-        <div className="class-grid">
+      {orderedMembers.length ? (
+        <div className={`class-grid ${viewMode === "list" ? "class-grid-list" : ""}`}>
           {columns.map((column) => (
             <article className="class-column" key={column.key}>
               <header>
@@ -489,10 +454,10 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
                 <h3>{column.key}</h3>
                 <span>{column.members.length}</span>
               </header>
-              <div className="member-list">
+              <div className={`member-list ${viewMode === "list" ? "member-list-compact" : ""}`}>
                 {column.members.map((member) => (
-                  <div className="member-row" key={member.id}>
-                    <ClassIcon name={member.char_class} size={32} />
+                  <div className={`member-row ${viewMode === "list" ? "member-row-compact" : ""}`} key={member.id}>
+                    <ClassIcon name={member.char_class} size={viewMode === "list" ? 24 : 32} />
                     <div className="member-main">
                       <strong>{member.char_name}</strong>
                       <span>{member.char_class}</span>
