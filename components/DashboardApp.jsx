@@ -407,6 +407,10 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
     return ordered;
   }, [orderedMembers]);
 
+  const maxClassRows = useMemo(() => {
+    return columns.reduce((max, column) => Math.max(max, column.members.length), 0);
+  }, [columns]);
+
   return (
     <section className="content-section">
       <div className="section-title-row">
@@ -445,53 +449,79 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
           </button>
         </div>
       </div>
-      {orderedMembers.length ? (
-        <div className={`class-grid ${viewMode === "list" ? "class-grid-list" : ""}`}>
+      {orderedMembers.length && viewMode === "list" ? (
+        <div className="roster-class-table-wrap">
+          <table className="roster-class-table">
+            <thead>
+              <tr>
+                {columns.map((column) => (
+                  <th key={column.key}>
+                    <span>
+                      <ClassIcon name={column.icon} size={22} />
+                      {column.key}
+                    </span>
+                    <em>{column.members.length}</em>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: maxClassRows }, (_, rowIndex) => (
+                <tr key={rowIndex}>
+                  {columns.map((column) => {
+                    const member = column.members[rowIndex];
+                    return (
+                      <td key={`${column.key}-${rowIndex}`} className={!member ? "empty" : ""}>
+                        {member ? (
+                          <div className="roster-class-cell">
+                            <ClassIcon name={member.char_class} size={20} />
+                            <div>
+                              <strong>{member.char_name}</strong>
+                              <span>{groupsById[member.group_id]?.name || "Unassigned"}</span>
+                            </div>
+                            {!readOnly && (
+                              <div className="row-actions always">
+                                <button className="icon-button" onClick={() => onEdit(member)} aria-label={`Edit ${member.char_name}`}><Pencil size={14} /></button>
+                                <button className="icon-button danger" onClick={() => onDelete(member)} aria-label={`Delete ${member.char_name}`}><Trash2 size={14} /></button>
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : orderedMembers.length ? (
+        <div className="class-grid">
           {columns.map((column) => (
-            <article className={`class-column ${viewMode === "list" ? "class-column-list" : ""}`} key={column.key}>
+            <article className="class-column" key={column.key}>
               <header>
                 <ClassIcon name={column.icon} size={28} />
                 <h3>{column.key}</h3>
                 <span>{column.members.length}</span>
               </header>
-              {viewMode === "list" ? (
-                <div className="member-table-list">
-                  {column.members.map((member) => (
-                    <div className="member-table-row" key={member.id}>
-                      <ClassIcon name={member.char_class} size={20} />
-                      <div className="member-table-main">
-                        <strong>{member.char_name}</strong>
-                        <span>{groupsById[member.group_id]?.name || "Unassigned"}</span>
-                      </div>
-                      {!readOnly && (
-                        <div className="row-actions">
-                          <button className="icon-button" onClick={() => onEdit(member)} aria-label={`Edit ${member.char_name}`}><Pencil size={14} /></button>
-                          <button className="icon-button danger" onClick={() => onDelete(member)} aria-label={`Delete ${member.char_name}`}><Trash2 size={14} /></button>
-                        </div>
-                      )}
+              <div className="member-list">
+                {column.members.map((member) => (
+                  <div className="member-row" key={member.id}>
+                    <ClassIcon name={member.char_class} size={32} />
+                    <div className="member-main">
+                      <strong>{member.char_name}</strong>
+                      <span>{member.char_class}</span>
+                      <em>Party: {groupsById[member.group_id]?.name || "Unassigned"}</em>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="member-list">
-                  {column.members.map((member) => (
-                    <div className="member-row" key={member.id}>
-                      <ClassIcon name={member.char_class} size={32} />
-                      <div className="member-main">
-                        <strong>{member.char_name}</strong>
-                        <span>{member.char_class}</span>
-                        <em>Party: {groupsById[member.group_id]?.name || "Unassigned"}</em>
+                    {!readOnly && (
+                      <div className="row-actions">
+                        <button className="icon-button" onClick={() => onEdit(member)} aria-label={`Edit ${member.char_name}`}><Pencil size={15} /></button>
+                        <button className="icon-button danger" onClick={() => onDelete(member)} aria-label={`Delete ${member.char_name}`}><Trash2 size={15} /></button>
                       </div>
-                      {!readOnly && (
-                        <div className="row-actions">
-                          <button className="icon-button" onClick={() => onEdit(member)} aria-label={`Edit ${member.char_name}`}><Pencil size={15} /></button>
-                          <button className="icon-button danger" onClick={() => onDelete(member)} aria-label={`Delete ${member.char_name}`}><Trash2 size={15} /></button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+                    )}
+                  </div>
+                ))}
+              </div>
             </article>
           ))}
         </div>
