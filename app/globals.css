@@ -533,6 +533,30 @@ label span {
   margin-bottom: 16px;
 }
 
+.section-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.collapse-button {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.collapsed-summary {
+  border: 1px dashed rgba(63, 63, 70, 0.8);
+  border-radius: 8px;
+  background: rgba(9, 9, 11, 0.28);
+  color: var(--muted);
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .section-title-row h2 {
   margin: 0;
   color: #fafafa;
@@ -2151,6 +2175,14 @@ button.party-slot.empty:hover:not(:disabled) {
   .admin-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .section-actions {
+    justify-content: stretch;
+  }
+
+  .section-actions > * {
+    flex: 1 1 auto;
   }
 
   .topbar-inner {

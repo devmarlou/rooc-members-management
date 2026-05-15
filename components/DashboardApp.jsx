@@ -23,6 +23,8 @@ import {
   Ban,
   Copy,
   RefreshCw,
+  ChevronDown,
+  ChevronUp,
   LayoutGrid,
   List
 } from "lucide-react";
@@ -299,6 +301,15 @@ function Header({ username, onLogout, publicView = false, publicGlAuction = null
   );
 }
 
+function CollapseButton({ collapsed, onToggle }) {
+  return (
+    <button className="ghost-button collapse-button" type="button" onClick={onToggle}>
+      {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+      {collapsed ? "Show" : "Minimize"}
+    </button>
+  );
+}
+
 function Stats({ members, memberLimit, activeClass, onClassFilter, onEditLimit, readOnly = false }) {
   const statItems = useMemo(() => {
     const counts = {};
@@ -353,6 +364,7 @@ function Stats({ members, memberLimit, activeClass, onClassFilter, onEditLimit, 
 function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd, onEdit, onDelete, canAddMember, memberLimit, readOnly = false }) {
   const [query, setQuery] = useState("");
   const [viewMode, setViewMode] = useState("cards");
+  const [collapsed, setCollapsed] = useState(false);
 
   const filteredMembers = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -402,12 +414,19 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
           <p className="eyebrow">member list</p>
           <h2>Roster</h2>
         </div>
-        {!readOnly && (
-          <button className="primary-button" onClick={onAdd} disabled={!canAddMember} title={canAddMember ? "Add member" : `Roster is at ${members.length}/${memberLimit}`}>
-            <Plus size={16} />Add member
-          </button>
-        )}
+        <div className="section-actions">
+          <CollapseButton collapsed={collapsed} onToggle={() => setCollapsed((current) => !current)} />
+          {!readOnly && (
+            <button className="primary-button" onClick={onAdd} disabled={!canAddMember || collapsed} title={canAddMember ? "Add member" : `Roster is at ${members.length}/${memberLimit}`}>
+              <Plus size={16} />Add member
+            </button>
+          )}
+        </div>
       </div>
+      {collapsed ? (
+        <div className="collapsed-summary">{members.length}/{memberLimit} members · {columns.length} class groups</div>
+      ) : (
+        <>
       <div className="toolbar">
         <label className="search-box">
           <Search size={15} />
@@ -494,11 +513,14 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
       ) : (
         <div className="empty-panel">No members match the current filters.</div>
       )}
+        </>
+      )}
     </section>
   );
 }
 
 function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDeleteGroup, onPickEmptySlot, onRequestUnassign, onEditMember, readOnly = false }) {
+  const [collapsed, setCollapsed] = useState(false);
   const membersByGroup = useMemo(() => {
     const map = {};
     for (const group of groups) map[group.id] = [];
@@ -520,9 +542,16 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
           <p className="eyebrow">party management</p>
           <h2>Groups</h2>
         </div>
-        {!readOnly && <button className="ghost-button" onClick={onCreateGroup}><Plus size={16} />Create group</button>}
+        <div className="section-actions">
+          <CollapseButton collapsed={collapsed} onToggle={() => setCollapsed((current) => !current)} />
+          {!readOnly && <button className="ghost-button" onClick={onCreateGroup} disabled={collapsed}><Plus size={16} />Create group</button>}
+        </div>
       </div>
 
+      {collapsed ? (
+        <div className="collapsed-summary">{visibleGroups.length} visible groups · {members.filter((member) => member.group_id).length} assigned members</div>
+      ) : (
+        <>
       <div className="party-grid">
         {visibleGroups.map((group) => {
           const roster = membersByGroup[group.id] || [];
@@ -579,6 +608,8 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
         )}
       </div>
       {!visibleGroups.length && <div className="empty-panel">No party groups assigned yet.</div>}
+        </>
+      )}
     </section>
   );
 }
@@ -1141,6 +1172,7 @@ function AuctionFoundation({
   readOnly = false,
   busy
 }) {
+  const [collapsed, setCollapsed] = useState(false);
   const activeRound = auctionState?.activeRound;
   const activeAuctions = auctionState?.activeAuctions || (auctionState?.activeAuction ? [auctionState.activeAuction] : []);
   const hasOpenAuctions = activeAuctions.length > 0;
@@ -1165,9 +1197,18 @@ function AuctionFoundation({
           <p className="eyebrow">reward rotation</p>
           <h2>Auctions</h2>
         </div>
-        <span className="status-pill"><Swords size={14} />{activeRound ? "Lineup active" : "No lineup"}</span>
+        <div className="section-actions">
+          <CollapseButton collapsed={collapsed} onToggle={() => setCollapsed((current) => !current)} />
+          <span className="status-pill"><Swords size={14} />{activeRound ? "Lineup active" : "No lineup"}</span>
+        </div>
       </div>
 
+      {collapsed ? (
+        <div className="collapsed-summary">
+          {activeAuctions.length ? `${activeAuctions.length} active auction${activeAuctions.length === 1 ? "" : "s"} · ${completedCount}/${roundMemberCount} cycle capped` : "No active auction list"}
+        </div>
+      ) : (
+        <>
       <div className="round-card">
         <div className="round-main">
           <div>
@@ -1337,6 +1378,8 @@ function AuctionFoundation({
       )}
 
       <MemberProgressTable auctionItems={auctionItems} auctionState={auctionState} />
+        </>
+      )}
     </section>
   );
 }
