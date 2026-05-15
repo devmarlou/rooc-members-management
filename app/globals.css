@@ -627,11 +627,12 @@ label span {
   border: 1px solid rgba(63, 63, 70, 0.75);
   border-radius: 8px;
   background: rgba(9, 9, 11, 0.32);
+  -webkit-overflow-scrolling: touch;
 }
 
 .roster-table {
-  width: 100%;
-  min-width: 600px;
+  width: max-content;
+  min-width: 760px;
   border-collapse: collapse;
 }
 
@@ -693,8 +694,20 @@ label span {
 .class-grid,
 .party-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 12px;
+}
+
+.class-grid {
+  grid-auto-columns: minmax(270px, 340px);
+  grid-auto-flow: column;
+  grid-template-columns: none;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.party-grid {
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
 }
 
 .class-column,
@@ -2206,7 +2219,7 @@ button.party-slot.empty:hover:not(:disabled) {
   }
 
   .roster-table {
-    min-width: 520px;
+    min-width: 680px;
   }
 
   .roster-table th,
