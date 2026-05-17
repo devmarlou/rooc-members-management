@@ -1427,6 +1427,7 @@ function AuctionFoundation({
   onLockAuction,
   onCantPay,
   onDoneAuction,
+  onCancelAuction,
   onDoneEvent,
   onCopyAuctionList,
   readOnly = false,
@@ -1673,6 +1674,9 @@ function AuctionFoundation({
                         <Shield size={15} />Lock-in list
                       </button>
                     )}
+                    <button className="danger-button soft" type="button" onClick={() => onCancelAuction(auction)} disabled={busy}>
+                      <X size={15} />Cancel test
+                    </button>
                     {!pairedEventActive && (
                       <button className="primary-button" type="button" onClick={() => onDoneAuction(auction)} disabled={busy}>
                         {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
@@ -2150,6 +2154,24 @@ export default function DashboardApp({ publicView = false }) {
     });
   }
 
+  function requestCancelAuction(auction) {
+    if (!auction) return;
+    setConfirmAction({
+      title: "Cancel test auction",
+      body: `Cancel ${auction.name || "this auction"}? This removes only the active test auction list. Finished history and member progress will not be changed.`,
+      confirmLabel: "Cancel auction",
+      tone: "danger",
+      run: async () => {
+        const data = await api("/api/auctions/active/cancel", {
+          method: "POST",
+          body: JSON.stringify({ auctionId: auction.id })
+        });
+        setAuctionState(data.auctionState);
+        setToast("Test auction cancelled");
+      }
+    });
+  }
+
   function requestDoneEvent(auctions) {
     const eventAuctions = (auctions || []).filter(Boolean);
     if (!eventAuctions.length) return;
@@ -2262,6 +2284,7 @@ export default function DashboardApp({ publicView = false }) {
               onLockAuction={requestLockAuction}
               onCantPay={requestCantPay}
               onDoneAuction={requestDoneAuction}
+              onCancelAuction={requestCancelAuction}
               onDoneEvent={requestDoneEvent}
               onCopyAuctionList={copyAuctionList}
               readOnly={publicView}
