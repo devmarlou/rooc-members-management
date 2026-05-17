@@ -160,6 +160,26 @@ function parseClassLookup(csvPath) {
   return lookup;
 }
 
+function parseJoinedAtOverrides(args) {
+  const overrides = new Map();
+  for (let index = 0; index < args.length; index++) {
+    if (args[index] !== "--joined-at") continue;
+    const value = args[index + 1];
+    if (!value || value.startsWith("--") || !value.includes("=")) {
+      throw new Error('--joined-at must use "Member Name=YYYY-MM-DD HH:mm", e.g. --joined-at "Osnub=2026-05-14 23:00".');
+    }
+    const eq = value.indexOf("=");
+    const memberName = value.slice(0, eq).trim();
+    const joinedAt = parseJoinedAt(value.slice(eq + 1).trim());
+    if (!memberName || !joinedAt) {
+      throw new Error(`Invalid joined-at override: ${value}`);
+    }
+    overrides.set(normalizeName(memberName), joinedAt);
+    index++;
+  }
+  return overrides;
+}
+
 function parseAuctionLogRows(csvRows, classLookup) {
   const cycleHeaderIndex = csvRows.findIndex((row) => row.some((cell) => normalizeHeader(cell).startsWith("cycle")));
   const itemHeaderIndex = cycleHeaderIndex === -1 ? -1 : cycleHeaderIndex + 1;
@@ -297,6 +317,7 @@ function usage() {
     "Options:",
     "  --replace-active   Required. Rebuilds the active lineup/progress from the CSV.",
     "  --clear-auctions   Also clears existing auctions for the active lineup.",
+    '  --joined-at        Optional. Set PH joined time for a member, e.g. --joined-at "Osnub=2026-05-14 23:00".',
     "  --dry-run          Parses and validates only; does not connect to Supabase."
   ].join("\n");
 }
@@ -310,6 +331,7 @@ const classSourcePath = classSourceIndex === -1 ? null : args[classSourceIndex +
 const replaceActive = args.includes("--replace-active");
 const clearAuctions = args.includes("--clear-auctions");
 const dryRun = args.includes("--dry-run");
+const joinedAtOverrides = parseJoinedAtOverrides(args);
 
 if (!csvPath || !replaceActive) {
   throw new Error(`${usage()}\n\n--replace-active is required so accidental imports do not overwrite the lineup.`);
@@ -318,11 +340,19 @@ if (!csvPath || !replaceActive) {
 const classLookup = parseClassLookup(classSourcePath ? path.resolve(classSourcePath) : null);
 const rows = parseRows(path.resolve(csvPath), classLookup);
 if (!rows.length) throw new Error("No member rows found in CSV.");
+for (const row of rows) {
+  row.joined_at = joinedAtOverrides.get(normalizeName(row.char_name)) || row.joined_at;
+}
 
 if (dryRun) {
   const missingClasses = rows.filter((row) => !row.char_class).map((row) => row.char_name);
+  const cooldownRows = rows.filter((row) => row.joined_at);
   console.log(`Parsed ${rows.length} lineup rows.`);
   console.log(`Class source matches: ${rows.filter((row) => row.char_class).length}`);
+  if (cooldownRows.length) {
+    console.log("Joined-at cooldown rows:");
+    for (const row of cooldownRows) console.log(`- ${row.char_name}: ${row.joined_at}`);
+  }
   if (missingClasses.length) {
     console.log("Missing classes from class source:");
     for (const name of missingClasses) console.log(`- ${name}`);

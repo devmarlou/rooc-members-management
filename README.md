@@ -55,6 +55,7 @@ Dry-run first:
 ```bash
 npm run import:auction-state -- "/path/to/Copy of Encore ROOC - Auction Log.csv" \
   --class-source "/path/to/Encore Masterfile - Sheet1.csv" \
+  --joined-at "Osnub=2026-05-14 23:00" \
   --replace-active \
   --dry-run
 ```
@@ -64,6 +65,7 @@ Apply it:
 ```bash
 npm run import:auction-state -- "/path/to/Copy of Encore ROOC - Auction Log.csv" \
   --class-source "/path/to/Encore Masterfile - Sheet1.csv" \
+  --joined-at "Osnub=2026-05-14 23:00" \
   --replace-active \
   --clear-auctions
 ```
