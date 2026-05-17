@@ -43,17 +43,32 @@ const AUCTION_JOIN_COOLDOWN_HOURS = 96;
 const AUCTION_JOIN_COOLDOWN_MS = AUCTION_JOIN_COOLDOWN_HOURS * 60 * 60 * 1000;
 const PH_TIME_ZONE = "Asia/Manila";
 
-function toDateTimeLocalValue(value) {
+function toPhDateTimeParts(value) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000);
-  return local.toISOString().slice(0, 16);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: PH_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(date).reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {});
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    time: `${parts.hour}:${parts.minute}`
+  };
 }
 
-function toIsoTimestamp(value) {
-  if (!value) return null;
-  const date = new Date(value);
+function toIsoTimestamp(dateValue, timeValue) {
+  if (!dateValue && !timeValue) return null;
+  if (!dateValue) return null;
+  const date = new Date(`${dateValue}T${timeValue || "00:00"}:00+08:00`);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
@@ -209,11 +224,13 @@ function ConfirmModal({ title, body, confirmLabel = "Confirm", tone = "danger", 
 }
 
 function MemberForm({ groups, initial, onCancel, onSave, busy }) {
+  const joinedParts = toPhDateTimeParts(initial?.joined_at) || {};
   const [form, setForm] = useState(() => ({
     ...emptyMember,
     ...initial,
     group_id: initial?.group_id || "",
-    joined_at: toDateTimeLocalValue(initial?.joined_at),
+    joined_date: joinedParts.date || "",
+    joined_time: joinedParts.time || "",
     notes: initial?.notes || ""
   }));
 
@@ -223,7 +240,11 @@ function MemberForm({ groups, initial, onCancel, onSave, busy }) {
 
   function submit(event) {
     event.preventDefault();
-    onSave({ ...form, group_id: form.group_id || null, joined_at: toIsoTimestamp(form.joined_at) });
+    onSave({
+      ...form,
+      group_id: form.group_id || null,
+      joined_at: toIsoTimestamp(form.joined_date, form.joined_time)
+    });
   }
 
   return (
@@ -245,9 +266,12 @@ function MemberForm({ groups, initial, onCancel, onSave, busy }) {
           {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
         </select>
       </label>
-      <label>
+      <label className="wide">
         <span>Joined date/time</span>
-        <input type="datetime-local" value={form.joined_at || ""} onChange={(event) => update("joined_at", event.target.value)} />
+        <div className="joined-fields">
+          <input type="date" value={form.joined_date || ""} onChange={(event) => update("joined_date", event.target.value)} aria-label="Joined date" />
+          <input type="time" value={form.joined_time || ""} onChange={(event) => update("joined_time", event.target.value)} aria-label="Joined time" />
+        </div>
         <p className="field-note">Used for the 96h auction cooldown. Enter PH local time.</p>
       </label>
       <label className="wide">

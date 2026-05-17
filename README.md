@@ -37,7 +37,38 @@ Open `http://localhost:3000`.
 - Persistent member roster CRUD.
 - Persistent party/group CRUD.
 - Assign and remove members from parties.
-- Auction tables and item catalog are prepared in the database schema.
+- Auction lineup, GL/WoE, League Prize, shared progress, and public read-only views.
+- 96h auction cooldown based on each member's PH joined date/time.
+
+## Imports
+
+Import the original member masterfile:
+
+```bash
+npm run import:members -- "/path/to/Encore Masterfile - Sheet1.csv"
+```
+
+Import the current auction cycle from the ROOC Auction Log. The Auction Log is the source of truth for who is in the active lineup and in what order; the Masterfile only supplies missing class names.
+
+Dry-run first:
+
+```bash
+npm run import:auction-state -- "/path/to/Copy of Encore ROOC - Auction Log.csv" \
+  --class-source "/path/to/Encore Masterfile - Sheet1.csv" \
+  --replace-active \
+  --dry-run
+```
+
+Apply it:
+
+```bash
+npm run import:auction-state -- "/path/to/Copy of Encore ROOC - Auction Log.csv" \
+  --class-source "/path/to/Encore Masterfile - Sheet1.csv" \
+  --replace-active \
+  --clear-auctions
+```
+
+`--clear-auctions` removes open/history auctions for the active lineup so the imported cycle can be tested cleanly.
 
 ## Vercel
 

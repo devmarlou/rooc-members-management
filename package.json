@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "import:members": "node scripts/import-members.mjs",
+    "import:auction-state": "node scripts/import-auction-state.mjs",
     "start": "next start",
     "lint": "next lint"
   },

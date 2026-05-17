@@ -2185,6 +2185,12 @@ button.party-slot.empty:hover:not(:disabled) {
   line-height: 1.45;
 }
 
+.joined-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(120px, 0.8fr);
+  gap: 10px;
+}
+
 .picker-search {
   position: relative;
   margin-bottom: 12px;
@@ -2464,6 +2470,10 @@ button.party-slot.empty:hover:not(:disabled) {
   }
 
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .joined-fields {
     grid-template-columns: 1fr;
   }
 
