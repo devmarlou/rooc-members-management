@@ -27,14 +27,33 @@ const CLASS_ALIASES = new Map([
 
 const MEMBER_NAME_ALIASES = new Map([
   ["frzttt", "weefrztttbr"],
+  ["weefrztttbr", "frzttt"],
   ["boldstar", "boltstar"],
-  ["banoobsbr", "banoobsdr"]
+  ["boltstar", "boldstar"],
+  ["weehurye", "xweehurye"],
+  ["akii", "akiii"],
+  ["sh1nboo", "sh1nboo"],
+  ["aerisbr", "banoobsdr"],
+  ["alycone", "alcyone"],
+  ["nakedgarfieldwiz", "nakedgarfield0"],
+  ["nakedgarfieldpal", "nakedgarfield1"],
+  ["nakedgarfieldpally2", "nakedgarfiel2"]
 ]);
 
 const MEMBER_CLASS_HINTS = new Map([
-  ["nakedgarfieldwiz", "High Wizard"],
+  ["weehubr2", "Assassin Cross"],
+  ["weefrztttbr", "Whitesmith"],
+  ["boltstar", "Professor"],
+  ["alcyone", "Sniper"],
+  ["alycone", "Sniper"],
+  ["banoobsbr", "Whitesmith"],
+  ["banoobsdr", "Paladin"],
+  ["nakedgarfield0", "Biochemist"],
+  ["nakedgarfield1", "Paladin"],
+  ["nakedgarfiel2", "High Priest"],
+  ["nakedgarfieldwiz", "Biochemist"],
   ["nakedgarfieldpal", "Paladin"],
-  ["nakedgarfieldpally2", "Paladin"]
+  ["nakedgarfieldpally2", "High Priest"]
 ]);
 
 const UNKNOWN_CLASS = "Unknown";
@@ -89,6 +108,17 @@ function normalizeName(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function nameCandidates(value) {
+  const normalizedName = normalizeName(value);
+  const candidates = new Set([normalizedName]);
+  const alias = MEMBER_NAME_ALIASES.get(normalizedName);
+  if (alias) candidates.add(alias);
+  for (const [from, to] of MEMBER_NAME_ALIASES.entries()) {
+    if (to === normalizedName) candidates.add(from);
+  }
+  return [...candidates].filter(Boolean);
+}
+
 function findColumn(headers, names) {
   const normalized = names.map(normalizeHeader);
   return headers.findIndex((header) => normalized.includes(header));
@@ -123,11 +153,11 @@ function normalizeClass(value) {
 }
 
 function lookupClass(classLookup, memberName) {
-  const normalizedName = normalizeName(memberName);
-  return classLookup.get(normalizedName) ||
-    classLookup.get(MEMBER_NAME_ALIASES.get(normalizedName)) ||
-    MEMBER_CLASS_HINTS.get(normalizedName) ||
-    "";
+  for (const candidate of nameCandidates(memberName)) {
+    const className = classLookup.get(candidate) || MEMBER_CLASS_HINTS.get(candidate);
+    if (className) return className;
+  }
+  return "";
 }
 
 function itemKeyFromHeader(value) {
@@ -313,7 +343,7 @@ function applyRosterSource(rows, rosterNames, classLookup) {
   if (!rosterNames.length) return rows;
   const byName = new Map(rows.map((row) => [normalizeName(row.char_name), row]));
   return rosterNames.map((charName, index) => {
-    const existing = byName.get(normalizeName(charName));
+    const existing = nameCandidates(charName).map((candidate) => byName.get(candidate)).find(Boolean);
     return {
       char_name: charName,
       char_class: existing?.char_class || lookupClass(classLookup, charName),

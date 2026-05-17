@@ -1016,44 +1016,6 @@ button.party-slot.empty:hover:not(:disabled) {
   font-size: 13px;
 }
 
-.round-progress-meta {
-  text-align: right;
-}
-
-.round-progress-meta strong {
-  display: block;
-  color: #fafafa;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 13px;
-}
-
-.round-progress-meta span {
-  display: block;
-  margin-top: 3px;
-  color: var(--muted-2);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.round-progress-track {
-  height: 7px;
-  overflow: hidden;
-  margin-top: 15px;
-  border-radius: 999px;
-  background: #27272a;
-}
-
-.round-progress-track span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--amber);
-  box-shadow: 0 0 12px rgba(245, 158, 11, 0.55);
-}
-
 .round-actions,
 .auction-start-row {
   display: flex;
@@ -1167,6 +1129,70 @@ button.party-slot.empty:hover:not(:disabled) {
   font-weight: 700;
 }
 
+.auction-prize-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 11px;
+}
+
+.auction-prize-pill,
+.auction-prize-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(63, 63, 70, 0.76);
+  border-radius: 7px;
+  background: rgba(24, 24, 27, 0.58);
+  color: #d4d4d8;
+  padding: 7px 10px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.auction-prize-pill strong {
+  color: currentColor;
+  font-size: 12px;
+  opacity: 0.88;
+}
+
+.auction-prize-pill em {
+  color: #f4f4f5;
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.auction-prize-pill.prize-puppet_card {
+  border-color: rgba(168, 85, 247, 0.36);
+  background: rgba(88, 28, 135, 0.18);
+  color: #d8b4fe;
+}
+
+.auction-prize-pill.prize-puppet_fragment {
+  border-color: rgba(96, 165, 250, 0.38);
+  background: rgba(30, 64, 175, 0.16);
+  color: #bfdbfe;
+}
+
+.auction-prize-pill.prize-feather_ld {
+  border-color: rgba(250, 204, 21, 0.34);
+  background: rgba(245, 245, 220, 0.08);
+  color: #f5f5dc;
+}
+
+.auction-prize-pill.prize-feather_ts {
+  border-color: rgba(248, 113, 113, 0.34);
+  background: rgba(127, 29, 29, 0.14);
+  color: #fca5a5;
+}
+
+.auction-prize-empty {
+  color: var(--muted-2);
+}
+
 .auction-cycle-note {
   display: flex;
   align-items: flex-start;
@@ -1255,11 +1281,18 @@ button.party-slot.empty:hover:not(:disabled) {
   letter-spacing: 0.1em;
 }
 
+.auction-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
 .auction-view-toggle {
   display: inline-flex;
   width: fit-content;
   gap: 3px;
-  margin-top: 14px;
   border: 1px solid rgba(63, 63, 70, 0.82);
   border-radius: 8px;
   background: rgba(9, 9, 11, 0.5);
@@ -1283,6 +1316,64 @@ button.party-slot.empty:hover:not(:disabled) {
 
 .auction-view-toggle button.active {
   background: rgba(245, 158, 11, 0.15);
+  color: var(--amber-2);
+}
+
+.auction-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 39px;
+  min-width: 240px;
+  border: 1px solid rgba(63, 63, 70, 0.82);
+  border-radius: 8px;
+  background: rgba(9, 9, 11, 0.5);
+  color: var(--muted-2);
+  padding: 0 9px;
+}
+
+.auction-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: #f4f4f5;
+  outline: 0;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.auction-search input::placeholder {
+  color: var(--muted-2);
+}
+
+.auction-search button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 0;
+}
+
+.auction-search-result {
+  width: fit-content;
+  margin-top: 9px;
+  border: 1px solid rgba(34, 197, 94, 0.34);
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.1);
+  color: #86efac;
+  padding: 5px 9px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.auction-search-result.empty {
+  border-color: rgba(245, 158, 11, 0.34);
+  background: rgba(245, 158, 11, 0.1);
   color: var(--amber-2);
 }
 
@@ -1338,20 +1429,21 @@ button.party-slot.empty:hover:not(:disabled) {
 
 .auction-page-slots {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .auction-page-slot {
   display: grid;
-  align-content: start;
-  gap: 12px;
-  min-height: 168px;
-  border-right: 1px solid rgba(63, 63, 70, 0.62);
-  padding: 12px;
+  grid-template-columns: 72px minmax(120px, 0.75fr) minmax(180px, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 0;
+  border-bottom: 1px solid rgba(63, 63, 70, 0.62);
+  padding: 9px 11px;
 }
 
 .auction-page-slot:last-child {
-  border-right: 0;
+  border-bottom: 0;
 }
 
 .auction-page-slot.free {
@@ -1360,6 +1452,11 @@ button.party-slot.empty:hover:not(:disabled) {
 
 .auction-page-slot.empty {
   background: rgba(39, 39, 42, 0.18);
+}
+
+.auction-page-slot.search-hit {
+  background: rgba(245, 158, 11, 0.1);
+  box-shadow: inset 3px 0 0 var(--amber);
 }
 
 .auction-slot-number {
@@ -1445,7 +1542,7 @@ button.party-slot.empty:hover:not(:disabled) {
   border: 1px solid rgba(63, 63, 70, 0.66);
   border-radius: 7px;
   background: rgba(24, 24, 27, 0.58);
-  padding: 8px;
+  padding: 6px 8px;
 }
 
 .auction-slot-member span {
@@ -1624,6 +1721,7 @@ button.party-slot.empty:hover:not(:disabled) {
 }
 
 .progress-table .progress-count.capped,
+.progress-table .progress-count.ahead,
 .progress-status.capped {
   border-color: rgba(34, 197, 94, 0.38);
   background: rgba(34, 197, 94, 0.12);
@@ -1655,79 +1753,78 @@ button.party-slot.empty:hover:not(:disabled) {
   min-width: 86px;
 }
 
-.progress-held-stack {
+.progress-cycle-summary {
   display: flex;
-  align-items: flex-end;
-  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
   gap: 6px;
 }
 
-.progress-table .progress-held-count {
-  display: inline-flex;
+.progress-table .progress-cycle-pill {
+  display: inline-grid;
   align-items: center;
-  gap: 5px;
-  width: 132px;
+  gap: 4px;
+  min-width: 88px;
   justify-content: center;
-  border: 1px solid rgba(63, 63, 70, 0.8);
+  justify-items: center;
+  border: 1px solid rgba(63, 63, 70, 0.72);
   border-radius: 4px;
-  background: rgba(39, 39, 42, 0.46);
+  background: rgba(39, 39, 42, 0.34);
   color: #d4d4d8;
-  margin-top: 0;
-  padding: 5px 9px;
+  margin-bottom: 0;
+  padding: 5px 8px;
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 10px;
   font-weight: 900;
   line-height: 1;
+  text-align: center;
 }
 
-.progress-table .progress-held-count strong {
-  display: inline;
+.progress-table .progress-cycle-pill strong {
+  display: block;
   max-width: none;
+  color: currentColor;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.progress-table .progress-cycle-pill em {
+  position: static;
+  transform: none;
+  display: block;
+  margin: 0;
   color: var(--muted-2);
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 10px;
-  line-height: 1;
-}
-
-.progress-table .progress-held-count .held-value,
-.progress-table .progress-held-count em {
-  display: inline;
-  margin: 0;
-  color: currentColor;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 10px;
   font-style: normal;
-  font-weight: 900;
+  font-weight: 700;
   line-height: 1;
 }
 
-.progress-table .progress-held-count em {
-  opacity: 0.72;
-}
-
-.progress-held-count.held-puppet_card {
-  border-color: rgba(168, 85, 247, 0.52);
-  background: rgba(88, 28, 135, 0.34);
+.progress-cycle-pill.held-puppet_card {
+  border-color: rgba(168, 85, 247, 0.32);
+  background: rgba(88, 28, 135, 0.18);
   color: #d8b4fe;
 }
 
-.progress-held-count.held-feather_ld {
+.progress-cycle-pill.held-feather_ld {
   border-color: rgba(250, 204, 21, 0.34);
-  background: rgba(245, 245, 220, 0.12);
+  background: rgba(245, 245, 220, 0.08);
   color: #f5f5dc;
 }
 
-.progress-held-count.held-feather_ts {
-  border-color: rgba(248, 113, 113, 0.5);
-  background: rgba(127, 29, 29, 0.28);
+.progress-cycle-pill.held-feather_ts {
+  border-color: rgba(248, 113, 113, 0.34);
+  background: rgba(127, 29, 29, 0.14);
   color: #fca5a5;
 }
 
-.progress-held-count.held-puppet_card strong,
-.progress-held-count.held-feather_ld strong,
-.progress-held-count.held-feather_ts strong {
+.progress-cycle-pill.held-puppet_card strong,
+.progress-cycle-pill.held-feather_ld strong,
+.progress-cycle-pill.held-feather_ts strong {
   color: currentColor;
-  opacity: 0.72;
 }
 
 .progress-status {
@@ -2508,6 +2605,11 @@ button.party-slot.empty:hover:not(:disabled) {
     margin-top: 12px;
   }
 
+  .auction-tools {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .auction-view-toggle {
     width: 100%;
   }
@@ -2516,11 +2618,16 @@ button.party-slot.empty:hover:not(:disabled) {
     flex: 1;
   }
 
+  .auction-search {
+    width: 100%;
+  }
+
   .auction-page-slots {
     grid-template-columns: 1fr;
   }
 
   .auction-page-slot {
+    grid-template-columns: 1fr;
     min-height: 0;
     border-right: 0;
     border-bottom: 1px solid rgba(63, 63, 70, 0.62);
@@ -2630,10 +2737,6 @@ button.party-slot.empty:hover:not(:disabled) {
   .active-dot-row {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .round-progress-meta {
-    text-align: left;
   }
 
   .active-dot-row em {

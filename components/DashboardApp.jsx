@@ -10,7 +10,6 @@ import {
   Trash2,
   UserMinus,
   Swords,
-  Eye,
   Settings,
   Shuffle,
   Gavel,
@@ -42,6 +41,12 @@ const emptyMember = {
 const AUCTION_JOIN_COOLDOWN_HOURS = 96;
 const AUCTION_JOIN_COOLDOWN_MS = AUCTION_JOIN_COOLDOWN_HOURS * 60 * 60 * 1000;
 const PH_TIME_ZONE = "Asia/Manila";
+const DEFAULT_GUILD_MEMBER_LIMIT = 78;
+const PROGRESS_SUMMARY_ITEM_LABELS = {
+  puppet_card: "Puppet Card",
+  feather_ld: "Light and Dark",
+  feather_ts: "Time and Space"
+};
 
 function toPhDateTimeParts(value) {
   if (!value) return "";
@@ -916,7 +921,7 @@ function groupedAuctionBids(units = [], queue = []) {
         }))
         .sort((a, b) => a.firstPage - b.firstPage || a.firstSlot - b.firstSlot)
     }))
-    .sort((a, b) => a.queuePosition - b.queuePosition || a.firstPage - b.firstPage || a.firstSlot - b.firstSlot);
+    .sort((a, b) => a.firstPage - b.firstPage || a.firstSlot - b.firstSlot || a.queuePosition - b.queuePosition);
   if (cantPayCount > 0) {
     const replacementIds = new Set(
       rows
@@ -928,6 +933,32 @@ function groupedAuctionBids(units = [], queue = []) {
   }
 
   return rows;
+}
+
+function auctionSearchMatches(row, query) {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return true;
+  return String(row.member?.char_name || "").toLowerCase().includes(normalizedQuery);
+}
+
+function auctionSearchLocation(row) {
+  if (!row) return "";
+  const positions = row.items
+    .map((item) => item.positions)
+    .filter(Boolean)
+    .join(" · ");
+  return positions || "";
+}
+
+function auctionInventorySummary(auction, auctionItems) {
+  const itemById = new Map(auctionItems.map((item) => [item.id, item]));
+  return (auction.inventory || [])
+    .map((row) => ({
+      item: itemById.get(row.item_id),
+      quantity: row.quantity || 0
+    }))
+    .filter(({ item, quantity }) => item && quantity > 0)
+    .sort((a, b) => (a.item.sort_order || 0) - (b.item.sort_order || 0));
 }
 
 function buildAuctionPages(auction, auctionItems) {
@@ -970,11 +1001,12 @@ function buildAuctionPages(auction, auctionItems) {
   return pages;
 }
 
-function AuctionPageView({ auction, auctionItems, page, onPageChange }) {
+function AuctionPageView({ auction, auctionItems, page, onPageChange, searchQuery = "" }) {
   const pages = buildAuctionPages(auction, auctionItems);
   const pageCount = pages.length || 1;
   const safePage = Math.min(Math.max(page || 1, 1), pageCount);
   const currentPage = pages[safePage - 1] || { page: 1, slots: [] };
+  const normalizedSearch = searchQuery.trim().toLowerCase();
 
   function setPage(nextPage) {
     onPageChange(Math.min(Math.max(nextPage, 1), pageCount));
@@ -993,8 +1025,10 @@ function AuctionPageView({ auction, auctionItems, page, onPageChange }) {
           <strong>Page {safePage}</strong>
         </header>
         <div className="auction-page-slots">
-          {currentPage.slots.map((slot) => (
-            <div className={`auction-page-slot ${slot.member ? "assigned" : slot.freeForAll ? "free" : "empty"}`} key={`${slot.page}-${slot.slot}`}>
+          {currentPage.slots.map((slot) => {
+            const highlighted = normalizedSearch && String(slot.member?.char_name || "").toLowerCase().includes(normalizedSearch);
+            return (
+            <div className={`auction-page-slot ${slot.member ? "assigned" : slot.freeForAll ? "free" : "empty"}${highlighted ? " search-hit" : ""}`} key={`${slot.page}-${slot.slot}`}>
               <div className="auction-slot-number">Slot {slot.slot}</div>
               <div className="auction-slot-item">
                 <span className={`auction-item-dot item-${slot.item?.item_key || "empty"}`} />
@@ -1026,7 +1060,8 @@ function AuctionPageView({ auction, auctionItems, page, onPageChange }) {
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
       <div className="auction-page-controls bottom">
@@ -1124,10 +1159,15 @@ function AuctionLimitsForm({ auctionItems, auctionState, onCancel, onSave, busy 
 
 function progressCellState(received, cap) {
   if (cap <= 0) return "capped";
-  if (received > cap) return "over";
+  if (received > cap) return "ahead";
   if (received >= cap) return "capped";
   if (received > 0) return "warning";
   return "empty";
+}
+
+function progressCellValue(received, cap) {
+  if (cap <= 0) return received;
+  return Math.min(received, cap);
 }
 
 function progressRowNextNeed(row, limitedItems) {
@@ -1137,7 +1177,7 @@ function progressRowNextNeed(row, limitedItems) {
     return cap > 0 && received < cap;
   });
   const receivedTotal = limitedItems.reduce((sum, item) => sum + (row.received[item.item_key] || 0), 0);
-  if (!missingItems.length) return { label: "ready next cycle", state: "capped" };
+  if (!missingItems.length) return { label: "waiting cycle", state: "capped" };
   if (receivedTotal === 0) return null;
   const names = missingItems.slice(0, 2).map((item) => item.short_name);
   const suffix = missingItems.length > 2 ? ` +${missingItems.length - 2}` : "";
@@ -1167,7 +1207,7 @@ function progressRowQueueState(row, limitedItems, priorityMemberId) {
 }
 
 function heldItemCount(row, item) {
-  return Math.max(row.held?.[item.item_key] || 0, row.received[item.item_key] || 0);
+  return Math.max(Number(row.held?.[item.item_key] || 0), Number(row.received[item.item_key] || 0));
 }
 
 function itemCycleCount(row, item) {
@@ -1211,6 +1251,7 @@ function MemberProgressTable({ auctionItems, auctionState }) {
     let capped = 0;
     let partial = 0;
     let empty = 0;
+    let cooldown = 0;
     let currentTotal = 0;
     let heldTotal = 0;
     const cycleCounts = [];
@@ -1218,8 +1259,13 @@ function MemberProgressTable({ auctionItems, auctionState }) {
     for (const row of rows) {
       const received = row.received[item.item_key] || 0;
       const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
+      const inCooldown = Boolean(getAuctionCooldown(row.member, nowMs));
       currentTotal += received;
       heldTotal += heldItemCount(row, item);
+      if (inCooldown) {
+        cooldown += 1;
+        continue;
+      }
       if (cap > 0) cycleCounts.push(itemCycleCount(row, item));
       const state = progressCellState(received, cap);
       if (state === "capped") capped += 1;
@@ -1228,7 +1274,7 @@ function MemberProgressTable({ auctionItems, auctionState }) {
     }
 
     const completedCycles = cycleCounts.length ? Math.min(...cycleCounts) : 0;
-    return { item, capped, partial, empty, currentTotal, heldTotal, completedCycles };
+    return { item, capped, partial, empty, cooldown, currentTotal, heldTotal, completedCycles };
   });
 
   if (!rows.length) {
@@ -1245,15 +1291,15 @@ function MemberProgressTable({ auctionItems, auctionState }) {
         <span>{rows.length} members</span>
       </header>
       <div className="progress-summary-grid">
-        {itemSummaries.map(({ item, capped, partial, empty, currentTotal, heldTotal, completedCycles }) => (
+        {itemSummaries.map(({ item, capped, partial, empty, cooldown, currentTotal, heldTotal, completedCycles }) => (
           <div className="progress-summary-card" key={item.id}>
-            <strong>{item.short_name}</strong>
+            <strong>{PROGRESS_SUMMARY_ITEM_LABELS[item.item_key] || item.name || item.short_name}</strong>
             <span>{heldTotal} held total</span>
-            <em>{completedCycles} cycles complete · {capped} capped · {partial} incomplete · {empty} none · {currentTotal} current</em>
+            <em>{completedCycles} cycles complete · {capped} capped · {partial} incomplete · {empty} none · {cooldown} cooldown · {currentTotal} current</em>
           </div>
         ))}
       </div>
-      <p className="progress-cycle-note">Held totals show total items held and completed cycles for each item.</p>
+      <p className="progress-cycle-note">Item cells show the current cycle. Cycle history shows why a member is skipped for an item.</p>
       <div className="progress-table-wrap">
         <table className="progress-table">
           <colgroup>
@@ -1268,8 +1314,8 @@ function MemberProgressTable({ auctionItems, auctionState }) {
               <th>Line</th>
               <th>Member</th>
               {limitedItems.map((item) => <th key={item.id}>{item.short_name}</th>)}
-              <th>Priority / need</th>
-              <th>Held totals</th>
+              <th>Status</th>
+              <th>Cycles held</th>
             </tr>
           </thead>
           <tbody>
@@ -1304,10 +1350,11 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                     const activeItem = activeBidItems?.get(item.item_key);
                     const bidBase = activeItem?.cycleReset ? 0 : received;
                     const bidNext = activeItem ? bidBase + activeItem.quantity : 0;
+                    const displayReceived = progressCellValue(received, cap);
                     return (
                       <td key={item.id}>
                         <div className="progress-item-stack">
-                          <span className={`progress-count ${progressCellState(received, cap)}`}>{received}/{cap}</span>
+                          <span className={`progress-count ${progressCellState(received, cap)}`}>{displayReceived}/{cap}</span>
                           {activeItem && (
                             <span className={`progress-bid-text bid-${item.item_key}`}>
                               +{activeItem.quantity} → {bidNext}/{cap}
@@ -1337,12 +1384,11 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                     </div>
                   </td>
                   <td>
-                    <div className="progress-held-stack">
+                    <div className="progress-cycle-summary">
                       {limitedItems.map((item) => (
-                        <span className={`progress-held-count held-${item.item_key}`} key={item.id}>
-                          <strong>{item.short_name}</strong>
-                          <span className="held-value">{heldItemCount(row, item)}</span>
-                          <em>{itemCycleCount(row, item)} cycles</em>
+                        <span className={`progress-cycle-pill held-${item.item_key}`} key={item.id}>
+                          <em>Cycle {itemCycleCount(row, item)}</em>
+                          <strong>{item.short_name} x{heldItemCount(row, item)}</strong>
                         </span>
                       ))}
                     </div>
@@ -1357,32 +1403,11 @@ function MemberProgressTable({ auctionItems, auctionState }) {
   );
 }
 
-function RotationList({ auctionState }) {
-  const progress = auctionState?.progress || [];
-  return (
-    <div className="rotation-list">
-      {progress.length ? progress.map((row) => (
-        <div className={row.is_complete ? "rotation-row complete" : "rotation-row"} key={row.member.id}>
-          <span>{row.position}</span>
-          <ClassIcon name={row.member.char_class} size={28} glow={false} />
-          <strong>{row.member.char_name}</strong>
-          <em>{row.is_complete ? "cycle capped" : "open"}</em>
-        </div>
-      )) : (
-        <div className="empty-panel compact">Create an auction lineup to generate the randomized source list.</div>
-      )}
-    </div>
-  );
-}
-
 function AuctionFoundation({
   auctionItems,
-  memberCount,
   auctionState,
-  onStartRound,
   onOpenStartAuction,
   onOpenLimits,
-  onOpenRotation,
   onResetLineup,
   onLockAuction,
   onCantPay,
@@ -1395,6 +1420,7 @@ function AuctionFoundation({
   const [collapsed, setCollapsed] = useState(false);
   const [auctionViews, setAuctionViews] = useState({});
   const [auctionPages, setAuctionPages] = useState({});
+  const [auctionSearches, setAuctionSearches] = useState({});
   const activeRound = auctionState?.activeRound;
   const activeAuctions = auctionState?.activeAuctions || (auctionState?.activeAuction ? [auctionState.activeAuction] : []);
   const hasOpenAuctions = activeAuctions.length > 0;
@@ -1408,9 +1434,6 @@ function AuctionFoundation({
       ? "League Prize is ready. It will use current progress plus locked GL/WoE reservations."
       : "Lock-in the GL/WoE auction first, then League Prize becomes available."
     : "Create and lock a GL/WoE auction first, then League Prize becomes available.";
-  const completedCount = activeRound?.completedCount || 0;
-  const roundMemberCount = activeRound?.memberCount || memberCount;
-  const progressPct = roundMemberCount ? Math.min(100, Math.round((completedCount / roundMemberCount) * 100)) : 0;
 
   return (
     <section className="content-section auction-section">
@@ -1427,31 +1450,22 @@ function AuctionFoundation({
 
       {collapsed ? (
         <div className="collapsed-summary">
-          {activeAuctions.length ? `${activeAuctions.length} active auction${activeAuctions.length === 1 ? "" : "s"} · ${completedCount}/${roundMemberCount} cycle capped` : "No active auction list"}
+          {activeAuctions.length ? `${activeAuctions.length} active auction${activeAuctions.length === 1 ? "" : "s"}` : "No active auction list"}
         </div>
       ) : (
         <>
       <div className="round-card">
         <div className="round-main">
           <div>
-            <h3>{activeRound ? `Auction Lineup ${activeRound.round_number}` : "No auction lineup"}</h3>
-            <p>{activeRound ? "randomized source list stays active over time" : "create a lineup to randomize all current members once"}</p>
+            <h3>Auction Settings</h3>
+            <p>{activeRound ? "shared limits and test baseline controls" : "create members first, then restore or adjust auction settings"}</p>
           </div>
-          <div className="round-progress-meta">
-            <strong>{completedCount} / {roundMemberCount}</strong>
-            <span>cycle capped</span>
-          </div>
-        </div>
-        <div className="round-progress-track">
-          <span style={{ width: `${progressPct}%` }} />
         </div>
         <div className="round-actions">
-          <button className="ghost-button" type="button" onClick={onOpenRotation} disabled={!activeRound}><Eye size={15} />Lineup list</button>
           {!readOnly && (
             <>
               <button className="ghost-button" type="button" onClick={onOpenLimits} disabled={!activeRound || hasOpenAuctions}><Settings size={15} />Adjust limits</button>
               <button className="danger-button soft" type="button" onClick={onResetLineup} disabled={!activeRound || busy}><Shuffle size={15} />Test reset</button>
-              <button className="ghost-button" type="button" onClick={onStartRound} disabled={Boolean(activeRound) || busy}><Shuffle size={15} />Create auction lineup</button>
             </>
           )}
         </div>
@@ -1461,9 +1475,20 @@ function AuctionFoundation({
         {activeAuctions.length ? (
           activeAuctions.map((auction) => {
             const bidRows = groupedAuctionBids(auction.units || [], auction.queue || []);
+            const inventorySummary = auctionInventorySummary(auction, auctionItems);
             const locked = auction.status === "locked";
             const activeView = auctionViews[auction.id] || (readOnly ? "page" : "list");
             const currentPage = auctionPages[auction.id] || 1;
+            const searchQuery = auctionSearches[auction.id] || "";
+            const filteredBidRows = searchQuery.trim()
+              ? bidRows.filter((row) => auctionSearchMatches(row, searchQuery))
+              : bidRows;
+            const searchMatch = filteredBidRows[0] || null;
+            const searchLocation = searchQuery.trim()
+              ? searchMatch
+                ? auctionSearchLocation(searchMatch)
+                : "No matching bid"
+              : "";
             const cycleResetItems = [
               ...new Set(
                 bidRows.flatMap((row) => row.items
@@ -1486,24 +1511,71 @@ function AuctionFoundation({
                   <span><Gavel size={14} />{auction.pageCount || 0} pages</span>
                   <span><Trophy size={14} />{auction.units?.length || 0} allocations</span>
                 </div>
-                <div className="auction-view-toggle" aria-label={`${auction.name || auctionTypeLabel(auction.type)} view`}>
-                  <button
-                    type="button"
-                    className={activeView === "list" ? "active" : ""}
-                    onClick={() => setAuctionViews((current) => ({ ...current, [auction.id]: "list" }))}
-                    aria-pressed={activeView === "list"}
-                  >
-                    <List size={14} />List View
-                  </button>
-                  <button
-                    type="button"
-                    className={activeView === "page" ? "active" : ""}
-                    onClick={() => setAuctionViews((current) => ({ ...current, [auction.id]: "page" }))}
-                    aria-pressed={activeView === "page"}
-                  >
-                    <LayoutGrid size={14} />Page View
-                  </button>
+                <div className="auction-prize-summary" aria-label="Auction prize inventory">
+                  {inventorySummary.length ? inventorySummary.map(({ item, quantity }) => (
+                    <span className={`auction-prize-pill prize-${item.item_key}`} key={item.id}>
+                      <strong>{item.short_name}</strong>
+                      <em>x{quantity}</em>
+                    </span>
+                  )) : (
+                    <span className="auction-prize-empty">No prizes entered</span>
+                  )}
                 </div>
+                <div className="auction-tools">
+                  <div className="auction-view-toggle" aria-label={`${auction.name || auctionTypeLabel(auction.type)} view`}>
+                    <button
+                      type="button"
+                      className={activeView === "list" ? "active" : ""}
+                      onClick={() => setAuctionViews((current) => ({ ...current, [auction.id]: "list" }))}
+                      aria-pressed={activeView === "list"}
+                    >
+                      <List size={14} />List View
+                    </button>
+                    <button
+                      type="button"
+                      className={activeView === "page" ? "active" : ""}
+                      onClick={() => setAuctionViews((current) => ({ ...current, [auction.id]: "page" }))}
+                      aria-pressed={activeView === "page"}
+                    >
+                      <LayoutGrid size={14} />Page View
+                    </button>
+                  </div>
+                  <label className="auction-search">
+                    <Search size={14} />
+                    <input
+                      value={searchQuery}
+                      onChange={(event) => {
+                        const nextQuery = event.target.value;
+                        const nextMatch = nextQuery.trim()
+                          ? bidRows.find((row) => auctionSearchMatches(row, nextQuery))
+                          : null;
+                        setAuctionSearches((current) => ({ ...current, [auction.id]: nextQuery }));
+                        if (nextMatch?.firstPage) {
+                          setAuctionPages((current) => ({ ...current, [auction.id]: nextMatch.firstPage }));
+                        }
+                      }}
+                      placeholder="Find member"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setAuctionSearches((current) => ({ ...current, [auction.id]: "" }))}
+                        aria-label="Clear member search"
+                      >
+                        <X size={13} />
+                      </button>
+                    )}
+                  </label>
+                </div>
+                {searchLocation && (
+                  <div className={searchMatch ? "auction-search-result" : "auction-search-result empty"}>
+                    {searchMatch ? (
+                      <span>{searchMatch.member?.char_name} · {searchLocation}</span>
+                    ) : (
+                      <span>No member with active bids matches “{searchQuery.trim()}”.</span>
+                    )}
+                  </div>
+                )}
                 {cycleResetItems.length > 0 && (
                   <div className="auction-cycle-note">
                     <RefreshCw size={15} />
@@ -1520,10 +1592,11 @@ function AuctionFoundation({
                     auctionItems={auctionItems}
                     page={currentPage}
                     onPageChange={(page) => setAuctionPages((current) => ({ ...current, [auction.id]: page }))}
+                    searchQuery={searchQuery}
                   />
                 ) : (
                   <div className="allocation-table-wrap">
-                    {bidRows.length ? (
+                    {filteredBidRows.length ? (
                       <table className="allocation-table">
                         <colgroup>
                           <col className="allocation-col-member" />
@@ -1538,7 +1611,7 @@ function AuctionFoundation({
                           </tr>
                         </thead>
                         <tbody>
-                          {bidRows.map((row) => (
+                          {filteredBidRows.map((row) => (
                             <tr className={row.is_replacement ? "replacement-row" : row.is_cant_pay ? "cant-pay-row" : ""} key={`${auction.id}-${row.member_id}`}>
                               <td>
                                 <strong>{row.member?.char_name || "Unknown"}</strong>
@@ -1569,7 +1642,7 @@ function AuctionFoundation({
                         </tbody>
                       </table>
                     ) : (
-                      <div className="empty-panel compact">No allocations for this auction.</div>
+                      <div className="empty-panel compact">{searchQuery.trim() ? "No matching member has active bids in this auction." : "No allocations for this auction."}</div>
                     )}
                   </div>
                 )}
@@ -1649,7 +1722,6 @@ export default function DashboardApp({ publicView = false }) {
   const [limitModalOpen, setLimitModalOpen] = useState(false);
   const [auctionStartType, setAuctionStartType] = useState(null);
   const [auctionLimitsOpen, setAuctionLimitsOpen] = useState(false);
-  const [rotationOpen, setRotationOpen] = useState(false);
   const [partyPickerGroup, setPartyPickerGroup] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -1660,7 +1732,7 @@ export default function DashboardApp({ publicView = false }) {
   const scrollRestoreRef = useRef(null);
 
   const groupsById = useMemo(() => Object.fromEntries(groups.map((group) => [group.id, group])), [groups]);
-  const effectiveMemberLimit = Math.max(memberLimit || members.length || 0, members.length);
+  const effectiveMemberLimit = Math.max(memberLimit || DEFAULT_GUILD_MEMBER_LIMIT, members.length);
   const unassignedMembers = members.filter((member) => !member.group_id);
   const publicGlAuction = publicView
     ? (auctionState?.activeAuctions || []).find((auction) => auction.type === "gl_woe")
@@ -1756,7 +1828,10 @@ export default function DashboardApp({ publicView = false }) {
     if (!members.length || memberLimit !== null) return;
     const stored = window.localStorage.getItem("encore_member_limit");
     const parsed = stored ? Number.parseInt(stored, 10) : NaN;
-    setMemberLimit(Number.isFinite(parsed) ? Math.max(parsed, members.length) : members.length);
+    const savedLimit = Number.isFinite(parsed)
+      ? Math.min(parsed, DEFAULT_GUILD_MEMBER_LIMIT)
+      : DEFAULT_GUILD_MEMBER_LIMIT;
+    setMemberLimit(Math.max(savedLimit, members.length));
   }, [memberLimit, members.length]);
 
   useEffect(() => {
@@ -1967,20 +2042,6 @@ export default function DashboardApp({ publicView = false }) {
     setToast("Guild member limit updated");
   }
 
-  function requestStartRound() {
-    setConfirmAction({
-      title: "Create auction lineup",
-      body: `Create the reusable auction lineup with all ${members.length} current members in a randomized order? New members will be added to the end later.`,
-      confirmLabel: "Create lineup",
-      tone: "default",
-      run: async () => {
-        const data = await api("/api/auctions/rounds", { method: "POST" });
-        setAuctionState(data.auctionState);
-        setToast("Auction lineup created");
-      }
-    });
-  }
-
   async function startAuction(payload) {
     setSaving(true);
     try {
@@ -2107,14 +2168,14 @@ export default function DashboardApp({ publicView = false }) {
 
   function requestResetLineup() {
     setConfirmAction({
-      title: "Reset test lineup",
-      body: "Reset shared limit progress to zero, rerandomize the current roster, and clear auction test history for this lineup? This is only for testing.",
-      confirmLabel: "Reset test data",
+      title: "Restore test baseline",
+      body: "Clear auction simulation history and restore the real 78-member queue with the corrected Cycle 1/2 item progress? Current bids and test auctions for this lineup will be removed.",
+      confirmLabel: "Restore baseline",
       tone: "danger",
       run: async () => {
         const data = await api("/api/auctions/lineup/reset", { method: "POST" });
         setAuctionState(data.auctionState);
-        setToast("Auction lineup reset for testing");
+        setToast("Test baseline restored");
       }
     });
   }
@@ -2176,13 +2237,10 @@ export default function DashboardApp({ publicView = false }) {
             />
             <AuctionFoundation
               auctionItems={auctionItems}
-              memberCount={members.length}
               auctionState={auctionState}
               busy={saving}
-              onStartRound={requestStartRound}
               onOpenStartAuction={setAuctionStartType}
               onOpenLimits={() => setAuctionLimitsOpen(true)}
-              onOpenRotation={() => setRotationOpen(true)}
               onResetLineup={requestResetLineup}
               onLockAuction={requestLockAuction}
               onCantPay={requestCantPay}
@@ -2265,12 +2323,6 @@ export default function DashboardApp({ publicView = false }) {
             onCancel={() => setAuctionLimitsOpen(false)}
             onSave={saveAuctionLimits}
           />
-        </Modal>
-      )}
-
-      {rotationOpen && (
-        <Modal title="Rotation list" onClose={() => setRotationOpen(false)}>
-          <RotationList auctionState={auctionState} />
         </Modal>
       )}
 
