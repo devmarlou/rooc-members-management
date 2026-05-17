@@ -906,6 +906,114 @@ function groupedAuctionBids(units = [], queue = []) {
   return rows;
 }
 
+function buildAuctionPages(auction, auctionItems) {
+  const applicableItems = auctionItems
+    .filter((item) => itemAppliesTo(item, auction.type))
+    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  const quantityByItemId = new Map((auction.inventory || []).map((row) => [row.item_id, row.quantity || 0]));
+  const unitByPageSlot = new Map((auction.units || []).map((unit) => [`${unit.page}:${unit.slot}`, unit]));
+  const slots = [];
+
+  for (const item of applicableItems) {
+    const quantity = quantityByItemId.get(item.id) || 0;
+    for (let index = 0; index < quantity; index += 1) {
+      const slotIndex = slots.length;
+      const page = Math.floor(slotIndex / 4) + 1;
+      const slot = (slotIndex % 4) + 1;
+      const unit = unitByPageSlot.get(`${page}:${slot}`);
+      slots.push({
+        page,
+        slot,
+        item,
+        unit,
+        member: unit?.member || null,
+        freeForAll: !item.gates_round_completion
+      });
+    }
+  }
+
+  const pageCount = Math.max(auction.pageCount || 0, Math.ceil(slots.length / 4));
+  const pages = [];
+  for (let page = 1; page <= pageCount; page += 1) {
+    pages.push({
+      page,
+      slots: [1, 2, 3, 4].map((slot) => (
+        slots.find((entry) => entry.page === page && entry.slot === slot) || { page, slot, item: null, unit: null, member: null, freeForAll: false }
+      ))
+    });
+  }
+
+  return pages;
+}
+
+function AuctionPageView({ auction, auctionItems, page, onPageChange }) {
+  const pages = buildAuctionPages(auction, auctionItems);
+  const pageCount = pages.length || 1;
+  const safePage = Math.min(Math.max(page || 1, 1), pageCount);
+  const currentPage = pages[safePage - 1] || { page: 1, slots: [] };
+
+  function setPage(nextPage) {
+    onPageChange(Math.min(Math.max(nextPage, 1), pageCount));
+  }
+
+  return (
+    <div className="auction-page-view">
+      <div className="auction-page-controls">
+        <button className="ghost-button mini" type="button" onClick={() => setPage(safePage - 1)} disabled={safePage <= 1}>Prev</button>
+        <strong>Page {safePage} / {pageCount}</strong>
+        <button className="ghost-button mini" type="button" onClick={() => setPage(safePage + 1)} disabled={safePage >= pageCount}>Next</button>
+      </div>
+      <div className="auction-page-card">
+        <header>
+          <span>{auction.name || auctionTypeLabel(auction.type)}</span>
+          <strong>Page {safePage}</strong>
+        </header>
+        <div className="auction-page-slots">
+          {currentPage.slots.map((slot) => (
+            <div className={`auction-page-slot ${slot.member ? "assigned" : slot.freeForAll ? "free" : "empty"}`} key={`${slot.page}-${slot.slot}`}>
+              <div className="auction-slot-number">Slot {slot.slot}</div>
+              <div className="auction-slot-item">
+                <span className={`auction-item-dot item-${slot.item?.item_key || "empty"}`} />
+                <strong>{slot.item?.short_name || "Empty"}</strong>
+                <em>{slot.item?.name || "No item"}</em>
+              </div>
+              {slot.member ? (
+                <div className="auction-slot-member">
+                  <ClassIcon name={slot.member.char_class} size={30} glow={false} />
+                  <span>
+                    <strong>{slot.member.char_name}</strong>
+                    <em>{slot.member.char_class}</em>
+                  </span>
+                </div>
+              ) : slot.freeForAll ? (
+                <div className="auction-slot-member free">
+                  <Trophy size={20} />
+                  <span>
+                    <strong>Free for all</strong>
+                    <em>No bid limit</em>
+                  </span>
+                </div>
+              ) : (
+                <div className="auction-slot-member empty">
+                  <span>
+                    <strong>No bidder</strong>
+                    <em>Unassigned slot</em>
+                  </span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="auction-page-controls bottom">
+        <button className="ghost-button mini" type="button" onClick={() => setPage(safePage - 1)} disabled={safePage <= 1}>Prev</button>
+        <span>{safePage} of {pageCount}</span>
+        <button className="ghost-button mini" type="button" onClick={() => setPage(safePage + 1)} disabled={safePage >= pageCount}>Next</button>
+      </div>
+    </div>
+  );
+}
+
 function AuctionStartForm({ type, auctionItems, onCancel, onStart, busy }) {
   const applicable = auctionItems.filter((item) => itemAppliesTo(item, type));
   const [name, setName] = useState(type === "league_prize" ? "League Prize" : "GL/WoE Auction");
@@ -1252,6 +1360,8 @@ function AuctionFoundation({
   busy
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [auctionViews, setAuctionViews] = useState({});
+  const [auctionPages, setAuctionPages] = useState({});
   const activeRound = auctionState?.activeRound;
   const activeAuctions = auctionState?.activeAuctions || (auctionState?.activeAuction ? [auctionState.activeAuction] : []);
   const hasOpenAuctions = activeAuctions.length > 0;
@@ -1319,6 +1429,8 @@ function AuctionFoundation({
           activeAuctions.map((auction) => {
             const bidRows = groupedAuctionBids(auction.units || [], auction.queue || []);
             const locked = auction.status === "locked";
+            const activeView = auctionViews[auction.id] || (readOnly ? "page" : "list");
+            const currentPage = auctionPages[auction.id] || 1;
             const cycleResetItems = [
               ...new Set(
                 bidRows.flatMap((row) => row.items
@@ -1341,6 +1453,24 @@ function AuctionFoundation({
                   <span><Gavel size={14} />{auction.pageCount || 0} pages</span>
                   <span><Trophy size={14} />{auction.units?.length || 0} allocations</span>
                 </div>
+                <div className="auction-view-toggle" aria-label={`${auction.name || auctionTypeLabel(auction.type)} view`}>
+                  <button
+                    type="button"
+                    className={activeView === "list" ? "active" : ""}
+                    onClick={() => setAuctionViews((current) => ({ ...current, [auction.id]: "list" }))}
+                    aria-pressed={activeView === "list"}
+                  >
+                    <List size={14} />List View
+                  </button>
+                  <button
+                    type="button"
+                    className={activeView === "page" ? "active" : ""}
+                    onClick={() => setAuctionViews((current) => ({ ...current, [auction.id]: "page" }))}
+                    aria-pressed={activeView === "page"}
+                  >
+                    <LayoutGrid size={14} />Page View
+                  </button>
+                </div>
                 {cycleResetItems.length > 0 && (
                   <div className="auction-cycle-note">
                     <RefreshCw size={15} />
@@ -1351,56 +1481,65 @@ function AuctionFoundation({
                     </span>
                   </div>
                 )}
-                <div className="allocation-table-wrap">
-                  {bidRows.length ? (
-                    <table className="allocation-table">
-                      <colgroup>
-                        <col className="allocation-col-member" />
-                        <col />
-                        {!readOnly && <col className="allocation-col-actions" />}
-                      </colgroup>
-                      <thead>
-                        <tr>
-                          <th>Member</th>
-                          <th>Bid instructions</th>
-                          {!readOnly && <th />}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {bidRows.map((row) => (
-                          <tr className={row.is_replacement ? "replacement-row" : row.is_cant_pay ? "cant-pay-row" : ""} key={`${auction.id}-${row.member_id}`}>
-                            <td>
-                              <strong>{row.member?.char_name || "Unknown"}</strong>
-                              {Number.isFinite(row.queuePosition) && row.queuePosition !== Number.MAX_SAFE_INTEGER && <span>Line {row.queuePosition}</span>}
-                              {row.is_replacement && <span className="replacement-label">bumped up, someone skipped today</span>}
-                              {row.cycle_reset && <span>cycle reset</span>}
-                            </td>
-                            <td>
-                              <div className="bid-stack">
-                                {row.items.map((item) => (
-                                  <div className="bid-line" key={`${item.item_id}-${item.positions}`}>
-                                    <strong>{item.item}</strong>
-                                    <code>{item.positions}</code>
-                                    <span>x{item.quantity}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </td>
-                            {!readOnly && (
-                              <td>
-                                <button className="ghost-button mini" type="button" onClick={() => onCantPay(row.member, auction)} disabled={busy || locked}>
-                                  <Ban size={13} />Can't pay
-                                </button>
-                              </td>
-                            )}
+                {activeView === "page" ? (
+                  <AuctionPageView
+                    auction={auction}
+                    auctionItems={auctionItems}
+                    page={currentPage}
+                    onPageChange={(page) => setAuctionPages((current) => ({ ...current, [auction.id]: page }))}
+                  />
+                ) : (
+                  <div className="allocation-table-wrap">
+                    {bidRows.length ? (
+                      <table className="allocation-table">
+                        <colgroup>
+                          <col className="allocation-col-member" />
+                          <col />
+                          {!readOnly && <col className="allocation-col-actions" />}
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th>Member</th>
+                            <th>Bid instructions</th>
+                            {!readOnly && <th />}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <div className="empty-panel compact">No allocations for this auction.</div>
-                  )}
-                </div>
+                        </thead>
+                        <tbody>
+                          {bidRows.map((row) => (
+                            <tr className={row.is_replacement ? "replacement-row" : row.is_cant_pay ? "cant-pay-row" : ""} key={`${auction.id}-${row.member_id}`}>
+                              <td>
+                                <strong>{row.member?.char_name || "Unknown"}</strong>
+                                {Number.isFinite(row.queuePosition) && row.queuePosition !== Number.MAX_SAFE_INTEGER && <span>Line {row.queuePosition}</span>}
+                                {row.is_replacement && <span className="replacement-label">bumped up, someone skipped today</span>}
+                                {row.cycle_reset && <span>cycle reset</span>}
+                              </td>
+                              <td>
+                                <div className="bid-stack">
+                                  {row.items.map((item) => (
+                                    <div className="bid-line" key={`${item.item_id}-${item.positions}`}>
+                                      <strong>{item.item}</strong>
+                                      <code>{item.positions}</code>
+                                      <span>x{item.quantity}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                              {!readOnly && (
+                                <td>
+                                  <button className="ghost-button mini" type="button" onClick={() => onCantPay(row.member, auction)} disabled={busy || locked}>
+                                    <Ban size={13} />Can't pay
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="empty-panel compact">No allocations for this auction.</div>
+                    )}
+                  </div>
+                )}
                 {!readOnly && (
                   <div className="active-actions">
                     <button className="ghost-button" type="button" onClick={() => onCopyAuctionList(auction, bidRows)} disabled={!bidRows.length}>

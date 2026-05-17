@@ -1255,70 +1255,212 @@ button.party-slot.empty:hover:not(:disabled) {
   letter-spacing: 0.1em;
 }
 
-.allocation-pages {
-  display: grid;
-  gap: 12px;
-  margin-top: 16px;
-}
-
-.allocation-page {
-  border: 1px solid rgba(63, 63, 70, 0.75);
+.auction-view-toggle {
+  display: inline-flex;
+  width: fit-content;
+  gap: 3px;
+  margin-top: 14px;
+  border: 1px solid rgba(63, 63, 70, 0.82);
   border-radius: 8px;
-  background: rgba(24, 24, 27, 0.45);
-  overflow: hidden;
+  background: rgba(9, 9, 11, 0.5);
+  padding: 3px;
 }
 
-.allocation-page h4 {
-  margin: 0;
-  border-bottom: 1px solid rgba(63, 63, 70, 0.65);
-  background: rgba(39, 39, 42, 0.35);
+.auction-view-toggle button {
+  min-height: 31px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.auction-view-toggle button.active {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--amber-2);
+}
+
+.auction-page-view {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.auction-page-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.auction-page-controls strong,
+.auction-page-controls span {
+  color: var(--muted);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.auction-page-card {
+  overflow: hidden;
+  border: 1px solid rgba(63, 63, 70, 0.82);
+  border-radius: 8px;
+  background: rgba(9, 9, 11, 0.36);
+}
+
+.auction-page-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid rgba(63, 63, 70, 0.68);
+  background: rgba(24, 24, 27, 0.72);
   padding: 9px 11px;
+}
+
+.auction-page-card header span,
+.auction-page-card header strong {
   color: var(--amber-2);
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.auction-page-slots {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.auction-page-slot {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-height: 168px;
+  border-right: 1px solid rgba(63, 63, 70, 0.62);
+  padding: 12px;
+}
+
+.auction-page-slot:last-child {
+  border-right: 0;
+}
+
+.auction-page-slot.free {
+  background: rgba(59, 130, 246, 0.06);
+}
+
+.auction-page-slot.empty {
+  background: rgba(39, 39, 42, 0.18);
+}
+
+.auction-slot-number {
+  color: var(--muted-2);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 900;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
-.allocation-row {
+.auction-slot-item,
+.auction-slot-member {
+  min-width: 0;
+}
+
+.auction-slot-item {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) minmax(70px, auto) auto;
+  grid-template-columns: 10px minmax(0, 1fr);
+  column-gap: 8px;
   align-items: center;
-  gap: 9px;
-  padding: 9px 11px;
-  border-top: 1px solid rgba(39, 39, 42, 0.75);
 }
 
-.allocation-row:first-of-type {
-  border-top: 0;
+.auction-slot-item em {
+  grid-column: 2;
 }
 
-.allocation-row > span {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  background: rgba(245, 158, 11, 0.1);
-  color: var(--amber-2);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 11px;
-  font-weight: 800;
+.auction-item-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #71717a;
+  box-shadow: 0 0 14px rgba(113, 113, 122, 0.45);
 }
 
-.allocation-row strong {
+.auction-item-dot.item-puppet_card {
+  background: #c084fc;
+  box-shadow: 0 0 14px rgba(192, 132, 252, 0.55);
+}
+
+.auction-item-dot.item-feather_ld {
+  background: #f5e6c8;
+  box-shadow: 0 0 14px rgba(245, 230, 200, 0.46);
+}
+
+.auction-item-dot.item-feather_ts {
+  background: #f87171;
+  box-shadow: 0 0 14px rgba(248, 113, 113, 0.5);
+}
+
+.auction-item-dot.item-puppet_fragment {
+  background: #60a5fa;
+  box-shadow: 0 0 14px rgba(96, 165, 250, 0.48);
+}
+
+.auction-slot-item strong,
+.auction-slot-member strong {
   overflow: hidden;
+  color: #f4f4f5;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--display-font);
-  font-weight: 400;
+  font-size: 14px;
+  font-weight: 900;
 }
 
-.allocation-row em {
-  color: var(--muted);
-  font-size: 12px;
+.auction-slot-item em,
+.auction-slot-member em {
+  display: block;
+  overflow: hidden;
+  margin-top: 3px;
+  color: var(--muted-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
   font-style: normal;
   font-weight: 800;
+}
+
+.auction-slot-member {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid rgba(63, 63, 70, 0.66);
+  border-radius: 7px;
+  background: rgba(24, 24, 27, 0.58);
+  padding: 8px;
+}
+
+.auction-slot-member span {
+  min-width: 0;
+}
+
+.auction-slot-member.free {
+  color: #bfdbfe;
+  border-color: rgba(96, 165, 250, 0.42);
+  background: rgba(30, 64, 175, 0.16);
+}
+
+.auction-slot-member.empty {
+  border-style: dashed;
+  color: var(--muted-2);
 }
 
 .ghost-button.mini {
@@ -2344,6 +2486,28 @@ button.party-slot.empty:hover:not(:disabled) {
 
   .active-auction-stats {
     margin-top: 12px;
+  }
+
+  .auction-view-toggle {
+    width: 100%;
+  }
+
+  .auction-view-toggle button {
+    flex: 1;
+  }
+
+  .auction-page-slots {
+    grid-template-columns: 1fr;
+  }
+
+  .auction-page-slot {
+    min-height: 0;
+    border-right: 0;
+    border-bottom: 1px solid rgba(63, 63, 70, 0.62);
+  }
+
+  .auction-page-slot:last-child {
+    border-bottom: 0;
   }
 
   .active-actions,
