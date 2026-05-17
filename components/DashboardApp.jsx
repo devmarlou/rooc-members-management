@@ -47,6 +47,11 @@ const PROGRESS_SUMMARY_ITEM_LABELS = {
   feather_ld: "Light and Dark",
   feather_ts: "Time and Space"
 };
+const ITEM_ICON_SRC = {
+  puppet_card: "/icons/puppet.png",
+  feather_ld: "/icons/light-dark.png",
+  feather_ts: "/icons/time-space.png"
+};
 
 function toPhDateTimeParts(value) {
   if (!value) return "";
@@ -961,6 +966,12 @@ function auctionInventorySummary(auction, auctionItems) {
     .sort((a, b) => (a.item.sort_order || 0) - (b.item.sort_order || 0));
 }
 
+function ItemIcon({ itemKey, label = "Item" }) {
+  const src = ITEM_ICON_SRC[itemKey];
+  if (!src) return <span className={`auction-item-dot item-${itemKey || "empty"}`} aria-hidden="true" />;
+  return <img className="item-icon" src={src} alt="" title={label} />;
+}
+
 function buildAuctionPages(auction, auctionItems) {
   const applicableItems = auctionItems
     .filter((item) => itemAppliesTo(item, auction.type))
@@ -1031,7 +1042,7 @@ function AuctionPageView({ auction, auctionItems, page, onPageChange, searchQuer
             <div className={`auction-page-slot ${slot.member ? "assigned" : slot.freeForAll ? "free" : "empty"}${highlighted ? " search-hit" : ""}`} key={`${slot.page}-${slot.slot}`}>
               <div className="auction-slot-number">Slot {slot.slot}</div>
               <div className="auction-slot-item">
-                <span className={`auction-item-dot item-${slot.item?.item_key || "empty"}`} />
+                <ItemIcon itemKey={slot.item?.item_key} label={slot.item?.name || slot.item?.short_name || "Item"} />
                 <strong>{slot.item?.short_name || "Empty"}</strong>
                 <em>{slot.item?.name || "No item"}</em>
               </div>
@@ -1293,9 +1304,12 @@ function MemberProgressTable({ auctionItems, auctionState }) {
       <div className="progress-summary-grid">
         {itemSummaries.map(({ item, capped, partial, empty, cooldown, currentTotal, heldTotal, completedCycles }) => (
           <div className="progress-summary-card" key={item.id}>
-            <strong>{PROGRESS_SUMMARY_ITEM_LABELS[item.item_key] || item.name || item.short_name}</strong>
-            <span>{heldTotal} held total</span>
-            <em>{completedCycles} cycles complete · {capped} capped · {partial} incomplete · {empty} none · {cooldown} cooldown · {currentTotal} current</em>
+            <ItemIcon itemKey={item.item_key} label={item.name || item.short_name} />
+            <div>
+              <strong>{PROGRESS_SUMMARY_ITEM_LABELS[item.item_key] || item.name || item.short_name}</strong>
+              <span>{heldTotal} held total</span>
+              <em>{completedCycles} cycles complete · {capped} capped · {partial} incomplete · {empty} none · {cooldown} cooldown · {currentTotal} current</em>
+            </div>
           </div>
         ))}
       </div>
@@ -1387,6 +1401,7 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                     <div className="progress-cycle-summary">
                       {limitedItems.map((item) => (
                         <span className={`progress-cycle-pill held-${item.item_key}`} key={item.id}>
+                          <ItemIcon itemKey={item.item_key} label={item.name || item.short_name} />
                           <em>Cycle {itemCycleCount(row, item)}</em>
                           <strong>{item.short_name} x{heldItemCount(row, item)}</strong>
                         </span>
@@ -1514,6 +1529,7 @@ function AuctionFoundation({
                 <div className="auction-prize-summary" aria-label="Auction prize inventory">
                   {inventorySummary.length ? inventorySummary.map(({ item, quantity }) => (
                     <span className={`auction-prize-pill prize-${item.item_key}`} key={item.id}>
+                      <ItemIcon itemKey={item.item_key} label={item.name || item.short_name} />
                       <strong>{item.short_name}</strong>
                       <em>x{quantity}</em>
                     </span>
@@ -1623,6 +1639,7 @@ function AuctionFoundation({
                                 <div className="bid-stack">
                                   {row.items.map((item) => (
                                     <div className="bid-line" key={`${item.item_id}-${item.positions}`}>
+                                      <ItemIcon itemKey={item.units?.[0]?.item_key} label={item.item} />
                                       <strong>{item.item}</strong>
                                       <code>{item.positions}</code>
                                       <span>x{item.quantity}</span>
