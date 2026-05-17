@@ -15,11 +15,15 @@ create table if not exists members (
   char_name text not null unique,
   char_class text not null,
   group_id uuid references groups(id) on delete set null,
-  joined_at date,
+  joined_at timestamptz,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table members
+alter column joined_at type timestamptz
+using joined_at::timestamptz;
 
 create index if not exists members_group_id_idx on members(group_id);
 create index if not exists members_char_class_idx on members(char_class);

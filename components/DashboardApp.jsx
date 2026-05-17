@@ -39,6 +39,53 @@ const emptyMember = {
   notes: ""
 };
 
+const AUCTION_JOIN_COOLDOWN_HOURS = 96;
+const AUCTION_JOIN_COOLDOWN_MS = AUCTION_JOIN_COOLDOWN_HOURS * 60 * 60 * 1000;
+const PH_TIME_ZONE = "Asia/Manila";
+
+function toDateTimeLocalValue(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000);
+  return local.toISOString().slice(0, 16);
+}
+
+function toIsoTimestamp(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function getAuctionCooldown(member, nowMs = Date.now()) {
+  if (!member?.joined_at) return null;
+  const joinedAtMs = new Date(member.joined_at).getTime();
+  if (Number.isNaN(joinedAtMs)) return null;
+  const endsAtMs = joinedAtMs + AUCTION_JOIN_COOLDOWN_MS;
+  const remainingMs = endsAtMs - nowMs;
+  if (remainingMs <= 0) return null;
+  return { endsAtMs, remainingMs };
+}
+
+function formatCooldownRemaining(ms) {
+  const totalHours = Math.max(1, Math.ceil(ms / (60 * 60 * 1000)));
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  if (days && hours) return `${days}d ${hours}h`;
+  if (days) return `${days}d`;
+  return `${hours}h`;
+}
+
+function formatPhDateTime(timestampMs) {
+  return new Intl.DateTimeFormat("en-PH", {
+    timeZone: PH_TIME_ZONE,
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(new Date(timestampMs));
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     ...options,
@@ -166,7 +213,7 @@ function MemberForm({ groups, initial, onCancel, onSave, busy }) {
     ...emptyMember,
     ...initial,
     group_id: initial?.group_id || "",
-    joined_at: initial?.joined_at || "",
+    joined_at: toDateTimeLocalValue(initial?.joined_at),
     notes: initial?.notes || ""
   }));
 
@@ -176,7 +223,7 @@ function MemberForm({ groups, initial, onCancel, onSave, busy }) {
 
   function submit(event) {
     event.preventDefault();
-    onSave({ ...form, group_id: form.group_id || null });
+    onSave({ ...form, group_id: form.group_id || null, joined_at: toIsoTimestamp(form.joined_at) });
   }
 
   return (
@@ -199,8 +246,9 @@ function MemberForm({ groups, initial, onCancel, onSave, busy }) {
         </select>
       </label>
       <label>
-        <span>Joined date</span>
-        <input type="date" value={form.joined_at || ""} onChange={(event) => update("joined_at", event.target.value)} />
+        <span>Joined date/time</span>
+        <input type="datetime-local" value={form.joined_at || ""} onChange={(event) => update("joined_at", event.target.value)} />
+        <p className="field-note">Used for the 96h auction cooldown. Enter PH local time.</p>
       </label>
       <label className="wide">
         <span>Notes</span>
@@ -365,6 +413,12 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
   const [query, setQuery] = useState("");
   const [viewMode, setViewMode] = useState("cards");
   const [collapsed, setCollapsed] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const filteredMembers = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -470,14 +524,17 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
                 <tr key={rowIndex}>
                   {columns.map((column) => {
                     const member = column.members[rowIndex];
+                    const cooldown = getAuctionCooldown(member, nowMs);
+                    const cooldownLabel = cooldown ? `Auction cooldown: ${formatCooldownRemaining(cooldown.remainingMs)} left, eligible ${formatPhDateTime(cooldown.endsAtMs)} PH` : "";
                     return (
-                      <td key={`${column.key}-${rowIndex}`} className={!member ? "empty" : ""}>
+                      <td key={`${column.key}-${rowIndex}`} className={[!member ? "empty" : "", cooldown ? "cooldown" : ""].filter(Boolean).join(" ")} title={cooldownLabel || undefined}>
                         {member ? (
                           <div className="roster-class-cell">
                             <ClassIcon name={member.char_class} size={20} />
-                            <div>
+                            <div className="roster-class-info">
                               <strong>{member.char_name}</strong>
                               <span>{groupsById[member.group_id]?.name || "Unassigned"}</span>
+                              {cooldown && <em>{formatCooldownRemaining(cooldown.remainingMs)} cooldown</em>}
                             </div>
                             {!readOnly && (
                               <div className="row-actions always">
@@ -506,20 +563,27 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
               </header>
               <div className="member-list">
                 {column.members.map((member) => (
-                  <div className="member-row" key={member.id}>
-                    <ClassIcon name={member.char_class} size={32} />
-                    <div className="member-main">
-                      <strong>{member.char_name}</strong>
-                      <span>{member.char_class}</span>
-                      <em>Party: {groupsById[member.group_id]?.name || "Unassigned"}</em>
-                    </div>
-                    {!readOnly && (
-                      <div className="row-actions">
-                        <button className="icon-button" onClick={() => onEdit(member)} aria-label={`Edit ${member.char_name}`}><Pencil size={15} /></button>
-                        <button className="icon-button danger" onClick={() => onDelete(member)} aria-label={`Delete ${member.char_name}`}><Trash2 size={15} /></button>
+                  (() => {
+                    const cooldown = getAuctionCooldown(member, nowMs);
+                    const cooldownLabel = cooldown ? `Auction cooldown: ${formatCooldownRemaining(cooldown.remainingMs)} left, eligible ${formatPhDateTime(cooldown.endsAtMs)} PH` : "";
+                    return (
+                      <div className={`member-row ${cooldown ? "cooldown" : ""}`} key={member.id} title={cooldownLabel || undefined}>
+                        <ClassIcon name={member.char_class} size={32} />
+                        <div className="member-main">
+                          <strong>{member.char_name}</strong>
+                          <span>{member.char_class}</span>
+                          <em>Party: {groupsById[member.group_id]?.name || "Unassigned"}</em>
+                          {cooldown && <b>{formatCooldownRemaining(cooldown.remainingMs)} auction cooldown</b>}
+                        </div>
+                        {!readOnly && (
+                          <div className="row-actions">
+                            <button className="icon-button" onClick={() => onEdit(member)} aria-label={`Edit ${member.char_name}`}><Pencil size={15} /></button>
+                            <button className="icon-button danger" onClick={() => onDelete(member)} aria-label={`Delete ${member.char_name}`}><Trash2 size={15} /></button>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
+                    );
+                  })()
                 ))}
               </div>
             </article>
