@@ -117,7 +117,7 @@ async function api(path, options = {}) {
 
 function ClassIcon({ name, size = 34, glow = true }) {
   const cls = classByName[name];
-  if (!cls) return <span className="class-icon-placeholder" style={{ width: size, height: size }} />;
+  if (!cls?.icon) return <span className="class-icon-placeholder" style={{ width: size, height: size }} />;
   const color = colorGroups[cls.group];
   return (
     <span className={glow ? "class-icon" : "class-icon no-glow"} style={{ width: size, height: size, "--class-color": color }}>

@@ -25,6 +25,20 @@ const CLASS_ALIASES = new Map([
   ["summoner", "Doram"]
 ]);
 
+const MEMBER_NAME_ALIASES = new Map([
+  ["frzttt", "weefrztttbr"],
+  ["boldstar", "boltstar"],
+  ["banoobsbr", "banoobsdr"]
+]);
+
+const MEMBER_CLASS_HINTS = new Map([
+  ["nakedgarfieldwiz", "High Wizard"],
+  ["nakedgarfieldpal", "Paladin"],
+  ["nakedgarfieldpally2", "Paladin"]
+]);
+
+const UNKNOWN_CLASS = "Unknown";
+
 function loadEnv(filePath) {
   if (!fs.existsSync(filePath)) return;
   const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/);
@@ -108,6 +122,14 @@ function normalizeClass(value) {
   return CLASS_ALIASES.get(raw.toLowerCase()) || raw;
 }
 
+function lookupClass(classLookup, memberName) {
+  const normalizedName = normalizeName(memberName);
+  return classLookup.get(normalizedName) ||
+    classLookup.get(MEMBER_NAME_ALIASES.get(normalizedName)) ||
+    MEMBER_CLASS_HINTS.get(normalizedName) ||
+    "";
+}
+
 function itemKeyFromHeader(value) {
   const header = normalizeHeader(value).replace(/[^a-z0-9&]/g, "");
   if (!header) return null;
@@ -158,6 +180,25 @@ function parseClassLookup(csvPath) {
     }
   }
   return lookup;
+}
+
+function parseRosterSource(csvPath) {
+  if (!csvPath) return [];
+  const rows = readCsvRows(csvPath);
+  if (!rows.length) return [];
+
+  const firstRow = rows[0].map(normalizeHeader);
+  const nameIndex = findColumn(firstRow, ["ign", "char_name", "character", "member", "name"]);
+  const sourceRows = nameIndex === -1 ? rows : rows.slice(1);
+  const seen = new Set();
+  return sourceRows.map((row) => {
+    const name = (nameIndex === -1 ? row[0] : row[nameIndex])?.trim();
+    if (!name) return null;
+    const normalizedName = normalizeName(name);
+    if (seen.has(normalizedName)) return null;
+    seen.add(normalizedName);
+    return name;
+  }).filter(Boolean);
 }
 
 function parseJoinedAtOverrides(args) {
@@ -213,7 +254,7 @@ function parseAuctionLogRows(csvRows, classLookup) {
 
     return {
       char_name: charName,
-      char_class: classLookup.get(dedupeKey) || "",
+      char_class: lookupClass(classLookup, charName),
       joined_at: null,
       position: parseCount(row[0]) || index + 1,
       received
@@ -254,7 +295,7 @@ function parseFlatRows(csvRows, classLookup) {
 
     return {
       char_name: charName,
-      char_class: (classIndex === -1 ? "" : normalizeClass(cols[classIndex])) || classLookup.get(dedupeKey) || "",
+      char_class: (classIndex === -1 ? "" : normalizeClass(cols[classIndex])) || lookupClass(classLookup, charName),
       joined_at: joinedIndex === -1 ? null : parseJoinedAt(cols[joinedIndex]),
       position: lineIndex === -1 ? index + 1 : parseCount(cols[lineIndex]) || index + 1,
       received
@@ -266,6 +307,21 @@ function parseRows(csvPath, classLookup) {
   const csvRows = readCsvRows(csvPath);
   if (!csvRows.length) throw new Error("CSV is empty.");
   return parseAuctionLogRows(csvRows, classLookup) || parseFlatRows(csvRows, classLookup);
+}
+
+function applyRosterSource(rows, rosterNames, classLookup) {
+  if (!rosterNames.length) return rows;
+  const byName = new Map(rows.map((row) => [normalizeName(row.char_name), row]));
+  return rosterNames.map((charName, index) => {
+    const existing = byName.get(normalizeName(charName));
+    return {
+      char_name: charName,
+      char_class: existing?.char_class || lookupClass(classLookup, charName),
+      joined_at: existing?.joined_at || null,
+      position: index + 1,
+      received: existing?.received || { puppet_card: 0, feather_ld: 0, feather_ts: 0 }
+    };
+  });
 }
 
 async function selectMaybeSingle(query) {
@@ -316,6 +372,7 @@ function usage() {
     "",
     "Options:",
     "  --replace-active   Required. Rebuilds the active lineup/progress from the CSV.",
+    "  --roster-source    Optional. Current member list/order; item progress is copied by matching names from the auction log.",
     "  --clear-auctions   Also clears existing auctions for the active lineup.",
     '  --joined-at        Optional. Set PH joined time for a member, e.g. --joined-at "Osnub=2026-05-14 23:00".',
     "  --dry-run          Parses and validates only; does not connect to Supabase."
@@ -328,6 +385,8 @@ const args = process.argv.slice(2);
 const csvPath = args.find((arg) => !arg.startsWith("--"));
 const classSourceIndex = args.findIndex((arg) => arg === "--class-source" || arg === "--classes" || arg === "--masterfile");
 const classSourcePath = classSourceIndex === -1 ? null : args[classSourceIndex + 1];
+const rosterSourceIndex = args.findIndex((arg) => arg === "--roster-source" || arg === "--roster");
+const rosterSourcePath = rosterSourceIndex === -1 ? null : args[rosterSourceIndex + 1];
 const replaceActive = args.includes("--replace-active");
 const clearAuctions = args.includes("--clear-auctions");
 const dryRun = args.includes("--dry-run");
@@ -338,14 +397,15 @@ if (!csvPath || !replaceActive) {
 }
 
 const classLookup = parseClassLookup(classSourcePath ? path.resolve(classSourcePath) : null);
-const rows = parseRows(path.resolve(csvPath), classLookup);
+let rows = parseRows(path.resolve(csvPath), classLookup);
+rows = applyRosterSource(rows, parseRosterSource(rosterSourcePath ? path.resolve(rosterSourcePath) : null), classLookup);
 if (!rows.length) throw new Error("No member rows found in CSV.");
 for (const row of rows) {
   row.joined_at = joinedAtOverrides.get(normalizeName(row.char_name)) || row.joined_at;
 }
 
 if (dryRun) {
-  const missingClasses = rows.filter((row) => !row.char_class).map((row) => row.char_name);
+  const unknownClasses = rows.filter((row) => !row.char_class).map((row) => row.char_name);
   const cooldownRows = rows.filter((row) => row.joined_at);
   console.log(`Parsed ${rows.length} lineup rows.`);
   console.log(`Class source matches: ${rows.filter((row) => row.char_class).length}`);
@@ -353,9 +413,9 @@ if (dryRun) {
     console.log("Joined-at cooldown rows:");
     for (const row of cooldownRows) console.log(`- ${row.char_name}: ${row.joined_at}`);
   }
-  if (missingClasses.length) {
-    console.log("Missing classes from class source:");
-    for (const name of missingClasses) console.log(`- ${name}`);
+  if (unknownClasses.length) {
+    console.log(`Unknown class fallback (${UNKNOWN_CLASS}):`);
+    for (const name of unknownClasses) console.log(`- ${name}`);
   }
   const totals = rows.reduce((acc, row) => {
     acc.puppet_card += row.received.puppet_card || 0;
@@ -384,24 +444,9 @@ const existingMembersResult = await supabase.from("members").select("id,char_nam
 if (existingMembersResult.error) throw existingMembersResult.error;
 const existingByName = new Map((existingMembersResult.data || []).map((member) => [normalizeName(member.char_name), member]));
 
-const missingClasses = rows
-  .filter((row) => !row.char_class && !existingByName.get(normalizeName(row.char_name))?.char_class)
-  .map((row) => row.char_name);
-if (missingClasses.length) {
-  throw new Error([
-    "Missing class for Auction Log members:",
-    ...missingClasses.map((name) => `- ${name}`),
-    "",
-    "Add/fix those names in the Masterfile class source, or create those members in the app first."
-  ].join("\n"));
-}
-
 const memberPayload = rows.map((row) => {
   const existing = existingByName.get(normalizeName(row.char_name));
-  const charClass = row.char_class || existing?.char_class;
-  if (!charClass) {
-    throw new Error(`Missing class for new member "${row.char_name}". Add a Job/Class column or import members first.`);
-  }
+  const charClass = row.char_class || existing?.char_class || UNKNOWN_CLASS;
   return {
     char_name: row.char_name,
     char_class: charClass,

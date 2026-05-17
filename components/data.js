@@ -12,7 +12,8 @@ export const classes = [
   { name: "Stalker", short: "Stk", group: "purple", icon: "/icons/stalker.png" },
   { name: "Whitesmith", short: "WS", group: "orange", icon: "/icons/whitesmith.png" },
   { name: "Biochemist", short: "BC", group: "orange", icon: "/icons/biochemist.png" },
-  { name: "Doram", short: "Dor", group: "pink", icon: "/icons/doram.png" }
+  { name: "Doram", short: "Dor", group: "pink", icon: "/icons/doram.png" },
+  { name: "Unknown", short: "Unknown", group: "gray", icon: "" }
 ];
 
 export const classOrder = classes.map((item) => item.name);
@@ -26,5 +27,6 @@ export const colorGroups = {
   yellow: "#eab308",
   purple: "#8b5cf6",
   orange: "#f97316",
-  pink: "#ec4899"
+  pink: "#ec4899",
+  gray: "#71717a"
 };
