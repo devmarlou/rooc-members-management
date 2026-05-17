@@ -1204,7 +1204,8 @@ function buildActiveBidStatus(auctionState, limitedItems) {
 function MemberProgressTable({ auctionItems, auctionState }) {
   const limitedItems = auctionItems.filter((item) => item.gates_round_completion);
   const rows = auctionState?.progress || [];
-  const priorityMemberId = rows.find((row) => !progressRowReady(row, limitedItems))?.member.id || null;
+  const nowMs = Date.now();
+  const priorityMemberId = rows.find((row) => !getAuctionCooldown(row.member, nowMs) && !progressRowReady(row, limitedItems))?.member.id || null;
   const activeBidStatus = buildActiveBidStatus(auctionState, limitedItems);
   const itemSummaries = limitedItems.map((item) => {
     let capped = 0;
@@ -1277,6 +1278,8 @@ function MemberProgressTable({ auctionItems, auctionState }) {
               const queueState = progressRowQueueState(row, limitedItems, priorityMemberId);
               const activeBidItems = activeBidStatus.biddingByMemberId.get(row.member.id);
               const skipped = activeBidStatus.skippedMemberIds.has(row.member.id);
+              const cooldown = getAuctionCooldown(row.member, nowMs);
+              const cooldownLabel = cooldown ? `Eligible ${formatPhDateTime(cooldown.endsAtMs)} PH` : "";
               const biddingIncomplete = activeBidItems
                 ? limitedItems.some((item) => {
                   const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
@@ -1288,11 +1291,12 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                 })
                 : false;
               return (
-                <tr key={row.member.id}>
+                <tr className={cooldown ? "cooldown-row" : ""} key={row.member.id}>
                   <td>{row.position}</td>
                   <td>
                     <strong>{row.member.char_name}</strong>
                     <span>{row.member.char_class}</span>
+                    {cooldown && <em>{cooldownLabel}</em>}
                   </td>
                   {limitedItems.map((item) => {
                     const received = row.received[item.item_key] || 0;
@@ -1315,7 +1319,12 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                   })}
                   <td>
                     <div className="progress-status-stack">
-                      {skipped ? (
+                      {cooldown ? (
+                        <>
+                          <em className="progress-status cooldown">cooldown {formatCooldownRemaining(cooldown.remainingMs)}</em>
+                          <em className="progress-status queue">{cooldownLabel}</em>
+                        </>
+                      ) : skipped ? (
                         <em className="progress-status skipped">skipped</em>
                       ) : activeBidItems ? (
                         <em className={`progress-status ${biddingIncomplete ? "bidding-partial" : "bidding"}`}>{biddingIncomplete ? "partial bidding" : "bidding"}</em>

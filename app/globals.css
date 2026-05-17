@@ -1572,6 +1572,10 @@ button.party-slot.empty:hover:not(:disabled) {
   border-bottom: 0;
 }
 
+.progress-table tr.cooldown-row td {
+  background: rgba(127, 29, 29, 0.14);
+}
+
 .allocation-table td:first-child,
 .allocation-table td:nth-child(2),
 .progress-table td:first-child {
@@ -1773,6 +1777,12 @@ button.party-slot.empty:hover:not(:disabled) {
   border-color: rgba(248, 113, 113, 0.52);
   background: rgba(127, 29, 29, 0.24);
   color: #fca5a5;
+}
+
+.progress-status.cooldown {
+  border-color: rgba(248, 113, 113, 0.58);
+  background: rgba(127, 29, 29, 0.32);
+  color: #fecaca;
 }
 
 .progress-status.queue {
