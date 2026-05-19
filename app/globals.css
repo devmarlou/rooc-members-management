@@ -1033,11 +1033,13 @@ button.party-slot.empty:hover:not(:disabled) {
 
 .auction-grid.two-up {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
+  align-items: stretch;
 }
 
 .active-auction-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
   border: 1px solid rgba(63, 63, 70, 0.75);
   border-radius: 10px;
   background: rgba(9, 9, 11, 0.34);
@@ -1304,7 +1306,10 @@ button.party-slot.empty:hover:not(:disabled) {
 
 .auction-shared-tools {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
   margin-top: 14px;
 }
 
@@ -1338,6 +1343,10 @@ button.party-slot.empty:hover:not(:disabled) {
   color: var(--amber-2);
 }
 
+.auction-view-toggle-shared {
+  flex: 0 0 auto;
+}
+
 .auction-search {
   display: inline-flex;
   align-items: center;
@@ -1354,6 +1363,7 @@ button.party-slot.empty:hover:not(:disabled) {
 .auction-search-shared {
   width: min(100%, 460px);
   min-height: 42px;
+  margin-left: auto;
   border-color: rgba(245, 158, 11, 0.36);
   background: rgba(24, 18, 10, 0.56);
 }
@@ -1406,7 +1416,17 @@ button.party-slot.empty:hover:not(:disabled) {
 .auction-page-view {
   display: grid;
   gap: 10px;
+}
+
+.auction-view-panel {
+  min-height: 458px;
   margin-top: 14px;
+  overflow: auto;
+}
+
+.auction-view-panel > .auction-page-view,
+.auction-view-panel > .allocation-table-wrap {
+  min-height: 100%;
 }
 
 .auction-item-tabs {
@@ -1641,10 +1661,13 @@ button.party-slot.empty:hover:not(:disabled) {
 .allocation-table-wrap,
 .progress-table-wrap {
   overflow: auto;
-  margin-top: 14px;
   border: 1px solid rgba(63, 63, 70, 0.75);
   border-radius: 8px;
   background: rgba(9, 9, 11, 0.32);
+}
+
+.progress-table-wrap {
+  margin-top: 14px;
 }
 
 .allocation-table,
@@ -2607,12 +2630,32 @@ button.party-slot.empty:hover:not(:disabled) {
     grid-template-columns: 1fr;
   }
 
+  .active-auction-card {
+    display: block;
+  }
+
+  .auction-view-panel {
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
+  }
+
   .auction-shared-tools {
-    justify-content: stretch;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .auction-view-toggle-shared {
+    width: 100%;
+  }
+
+  .auction-view-toggle-shared button {
+    flex: 1;
   }
 
   .auction-search-shared {
     width: 100%;
+    margin-left: 0;
   }
 }
 

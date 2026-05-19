@@ -1574,7 +1574,7 @@ function AuctionFoundation({
   busy
 }) {
   const [collapsed, setCollapsed] = useState(false);
-  const [auctionViews, setAuctionViews] = useState({});
+  const [auctionView, setAuctionView] = useState(readOnly ? "page" : "list");
   const [auctionPages, setAuctionPages] = useState({});
   const [auctionPageItems, setAuctionPageItems] = useState({});
   const [auctionSearch, setAuctionSearch] = useState("");
@@ -1675,6 +1675,24 @@ function AuctionFoundation({
 
       {activeAuctions.length ? (
         <div className="auction-shared-tools">
+          <div className="auction-view-toggle auction-view-toggle-shared" aria-label="Auction view">
+            <button
+              type="button"
+              className={auctionView === "list" ? "active" : ""}
+              onClick={() => setAuctionView("list")}
+              aria-pressed={auctionView === "list"}
+            >
+              <List size={14} />List View
+            </button>
+            <button
+              type="button"
+              className={auctionView === "page" ? "active" : ""}
+              onClick={() => setAuctionView("page")}
+              aria-pressed={auctionView === "page"}
+            >
+              <LayoutGrid size={14} />Page View
+            </button>
+          </div>
           <label className="auction-search auction-search-shared">
             <Search size={15} />
             <input
@@ -1701,7 +1719,7 @@ function AuctionFoundation({
             const bidRows = groupedAuctionBids(displayPositionedAuctionUnits(auction, auctionItems), auction.queue || []);
             const inventorySummary = auctionInventorySummary(auction, auctionItems);
             const locked = auction.status === "locked";
-            const activeView = auctionViews[auction.id] || (readOnly ? "page" : "list");
+            const activeView = auctionView;
             const pageItemOptions = auctionPageItemOptions(auction, auctionItems);
             const selectedPageItemId = pageItemOptions.some((item) => item.id === auctionPageItems[auction.id])
               ? auctionPageItems[auction.id]
@@ -1751,26 +1769,6 @@ function AuctionFoundation({
                     <span className="auction-prize-empty">No prizes entered</span>
                   )}
                 </div>
-                <div className="auction-tools">
-                  <div className="auction-view-toggle" aria-label={`${auction.name || auctionTypeLabel(auction.type)} view`}>
-                    <button
-                      type="button"
-                      className={activeView === "list" ? "active" : ""}
-                      onClick={() => setAuctionViews((current) => ({ ...current, [auction.id]: "list" }))}
-                      aria-pressed={activeView === "list"}
-                    >
-                      <List size={14} />List View
-                    </button>
-                    <button
-                      type="button"
-                      className={activeView === "page" ? "active" : ""}
-                      onClick={() => setAuctionViews((current) => ({ ...current, [auction.id]: "page" }))}
-                      aria-pressed={activeView === "page"}
-                    >
-                      <LayoutGrid size={14} />Page View
-                    </button>
-                  </div>
-                </div>
                 {searchLocation && (
                   <div className={searchMatch ? "auction-search-result" : "auction-search-result empty"}>
                     {searchMatch ? (
@@ -1790,63 +1788,65 @@ function AuctionFoundation({
                     </span>
                   </div>
                 )}
-                {activeView === "page" ? (
-                  <AuctionPageView
-                    auction={auction}
-                    auctionItems={auctionItems}
-                    page={currentPage}
-                    onPageChange={(page) => setAuctionPages((current) => ({ ...current, [pageStateKey]: page }))}
-                    selectedItemId={selectedPageItemId}
-                    onSelectedItemChange={(itemId) => {
-                      setAuctionPageItems((current) => ({ ...current, [auction.id]: itemId }));
-                      setAuctionPages((current) => ({ ...current, [`${auction.id}:${itemId}`]: current[`${auction.id}:${itemId}`] || 1 }));
-                    }}
-                    searchQuery={searchQuery}
-                  />
-                ) : (
-                  <div className="allocation-table-wrap">
-                    {filteredBidRows.length ? (
-                      <table className="allocation-table">
-                        <colgroup>
-                          <col className="allocation-col-member" />
-                          <col />
-                        </colgroup>
-                        <thead>
-                          <tr>
-                            <th>Member</th>
-                            <th>Bid instructions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {filteredBidRows.map((row) => (
-                            <tr className={row.is_replacement ? "replacement-row" : row.is_cant_pay ? "cant-pay-row" : ""} key={`${auction.id}-${row.member_id}`}>
-                              <td>
-                                <strong>{row.member?.char_name || "Unknown"}</strong>
-                                {Number.isFinite(row.queuePosition) && row.queuePosition !== Number.MAX_SAFE_INTEGER && <span>Line {row.queuePosition}</span>}
-                                {row.is_replacement && <span className="replacement-label">bumped up, someone skipped today</span>}
-                                {row.cycle_reset && <span>cycle reset</span>}
-                              </td>
-                              <td>
-                                <div className="bid-stack">
-                                  {row.items.map((item) => (
-                                    <div className="bid-line" key={`${item.item_id}-${item.positions}`}>
-                                      <ItemIcon itemKey={item.units?.[0]?.item_key} label={item.item} />
-                                      <strong>{item.item}</strong>
-                                      <code>{item.positions}</code>
-                                      <span>x{item.quantity}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </td>
+                <div className="auction-view-panel">
+                  {activeView === "page" ? (
+                    <AuctionPageView
+                      auction={auction}
+                      auctionItems={auctionItems}
+                      page={currentPage}
+                      onPageChange={(page) => setAuctionPages((current) => ({ ...current, [pageStateKey]: page }))}
+                      selectedItemId={selectedPageItemId}
+                      onSelectedItemChange={(itemId) => {
+                        setAuctionPageItems((current) => ({ ...current, [auction.id]: itemId }));
+                        setAuctionPages((current) => ({ ...current, [`${auction.id}:${itemId}`]: current[`${auction.id}:${itemId}`] || 1 }));
+                      }}
+                      searchQuery={searchQuery}
+                    />
+                  ) : (
+                    <div className="allocation-table-wrap">
+                      {filteredBidRows.length ? (
+                        <table className="allocation-table">
+                          <colgroup>
+                            <col className="allocation-col-member" />
+                            <col />
+                          </colgroup>
+                          <thead>
+                            <tr>
+                              <th>Member</th>
+                              <th>Bid instructions</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : (
-                      <div className="empty-panel compact">{searchQuery.trim() ? "No matching member has active bids in this auction." : "No allocations for this auction."}</div>
-                    )}
-                  </div>
-                )}
+                          </thead>
+                          <tbody>
+                            {filteredBidRows.map((row) => (
+                              <tr className={row.is_replacement ? "replacement-row" : row.is_cant_pay ? "cant-pay-row" : ""} key={`${auction.id}-${row.member_id}`}>
+                                <td>
+                                  <strong>{row.member?.char_name || "Unknown"}</strong>
+                                  {Number.isFinite(row.queuePosition) && row.queuePosition !== Number.MAX_SAFE_INTEGER && <span>Line {row.queuePosition}</span>}
+                                  {row.is_replacement && <span className="replacement-label">bumped up, someone skipped today</span>}
+                                  {row.cycle_reset && <span>cycle reset</span>}
+                                </td>
+                                <td>
+                                  <div className="bid-stack">
+                                    {row.items.map((item) => (
+                                      <div className="bid-line" key={`${item.item_id}-${item.positions}`}>
+                                        <ItemIcon itemKey={item.units?.[0]?.item_key} label={item.item} />
+                                        <strong>{item.item}</strong>
+                                        <code>{item.positions}</code>
+                                        <span>x{item.quantity}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div className="empty-panel compact">{searchQuery.trim() ? "No matching member has active bids in this auction." : "No allocations for this auction."}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
                 {!readOnly && (
                   <div className="active-actions">
                     <button className="ghost-button" type="button" onClick={() => onCopyAuctionList(auction, bidRows)} disabled={!bidRows.length}>
