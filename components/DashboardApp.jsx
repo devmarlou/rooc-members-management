@@ -924,6 +924,29 @@ function formatDiscordBidList(auction, bidRows) {
   return lines.join("\n").trim();
 }
 
+function uniqueBidderNames(auctions = [], auctionItems = []) {
+  const seen = new Set();
+  const names = [];
+  const orderedAuctions = [
+    ...auctions.filter((auction) => auction.type === "gl_woe"),
+    ...auctions.filter((auction) => auction.type !== "gl_woe")
+  ];
+
+  for (const auction of orderedAuctions) {
+    const bidRows = groupedAuctionBids(displayPositionedAuctionUnits(auction, auctionItems), auction.queue || []);
+    for (const row of bidRows) {
+      const name = row.member?.char_name?.trim();
+      if (!name) continue;
+      const key = row.member_id || name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      names.push(name);
+    }
+  }
+
+  return names;
+}
+
 function groupedAuctionBids(units = [], queue = []) {
   const memberMap = new Map();
   const queueByMemberId = new Map(queue.map((row) => [row.member_id, row]));
@@ -1570,6 +1593,7 @@ function AuctionFoundation({
   onCancelAuction,
   onDoneEvent,
   onCopyAuctionList,
+  onCopyBidderNames,
   readOnly = false,
   busy
 }) {
@@ -1591,6 +1615,7 @@ function AuctionFoundation({
       ? "League Prize is ready. It will use current progress plus locked GL/WoE reservations."
       : "Lock-in the GL/WoE auction first, then League Prize becomes available."
     : "Create and lock a GL/WoE auction first, then League Prize becomes available.";
+  const bidderNames = uniqueBidderNames(activeAuctions, auctionItems);
 
   function applyAuctionSearch(nextQuery) {
     setAuctionSearch(nextQuery);
@@ -1708,6 +1733,16 @@ function AuctionFoundation({
               <LayoutGrid size={14} />Page View
             </button>
           </div>
+          {!readOnly && (
+            <button
+              className="ghost-button auction-copy-bidders"
+              type="button"
+              onClick={() => onCopyBidderNames(bidderNames)}
+              disabled={!bidderNames.length}
+            >
+              <Copy size={15} />Copy bidders
+            </button>
+          )}
         </div>
       ) : null}
 
@@ -2386,6 +2421,15 @@ export default function DashboardApp({ publicView = false }) {
     }
   }
 
+  async function copyBidderNames(names) {
+    try {
+      await navigator.clipboard.writeText((names || []).join("\n"));
+      setToast(`${names.length} unique bidder${names.length === 1 ? "" : "s"} copied`);
+    } catch (err) {
+      setError("Could not copy the bidder list.");
+    }
+  }
+
   function requestResetLineup() {
     setConfirmAction({
       title: "Restore test baseline",
@@ -2448,6 +2492,7 @@ export default function DashboardApp({ publicView = false }) {
                   onCancelAuction={requestCancelAuction}
                   onDoneEvent={requestDoneEvent}
                   onCopyAuctionList={copyAuctionList}
+                  onCopyBidderNames={copyBidderNames}
                   readOnly
                 />
                 <PartiesSection
@@ -2499,6 +2544,7 @@ export default function DashboardApp({ publicView = false }) {
                   onCancelAuction={requestCancelAuction}
                   onDoneEvent={requestDoneEvent}
                   onCopyAuctionList={copyAuctionList}
+                  onCopyBidderNames={copyBidderNames}
                   readOnly={false}
                 />
               </>

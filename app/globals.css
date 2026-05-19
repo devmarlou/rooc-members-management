@@ -1353,6 +1353,11 @@ button.party-slot.empty:hover:not(:disabled) {
   margin-left: auto;
 }
 
+.auction-copy-bidders {
+  min-height: 42px;
+  flex: 0 0 auto;
+}
+
 .auction-search {
   display: inline-flex;
   align-items: center;
@@ -2657,6 +2662,10 @@ button.party-slot.empty:hover:not(:disabled) {
 
   .auction-view-toggle-shared button {
     flex: 1;
+  }
+
+  .auction-copy-bidders {
+    width: 100%;
   }
 
   .auction-search-shared {
