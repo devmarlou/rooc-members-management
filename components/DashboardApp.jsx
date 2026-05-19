@@ -19,7 +19,6 @@ import {
   Check,
   Loader2,
   AlertTriangle,
-  Ban,
   Copy,
   RefreshCw,
   ChevronDown,
@@ -58,6 +57,7 @@ const AUCTION_PAGE_ITEM_ORDER = {
   feather_ts: 3,
   puppet_fragment: 4
 };
+const SHARED_FEATHER_PAGE_KEYS = new Set(["feather_ld", "feather_ts"]);
 
 function toPhDateTimeParts(value) {
   if (!value) return "";
@@ -821,12 +821,62 @@ function itemAppliesTo(item, type) {
   return Array.isArray(item.applies_to_auction_types) && item.applies_to_auction_types.includes(type);
 }
 
+function auctionDisplayGroupKey(item) {
+  if (!item) return "unknown";
+  return SHARED_FEATHER_PAGE_KEYS.has(item.item_key) ? "feathers" : item.id;
+}
+
+function auctionDisplayItemOrder(item) {
+  if (item?.item_key === "feather_ld") return 1;
+  if (item?.item_key === "feather_ts") return 2;
+  return AUCTION_PAGE_ITEM_ORDER[item?.item_key] || item?.sort_order || 99;
+}
+
+function auctionUnitDisplayPage(unit) {
+  return unit.displayPage || unit.page;
+}
+
+function auctionUnitDisplaySlot(unit) {
+  return unit.displaySlot || unit.slot;
+}
+
+function displayPositionedAuctionUnits(auction, auctionItems) {
+  const itemById = new Map(auctionItems.map((item) => [item.id, item]));
+  const grouped = new Map();
+  for (const unit of auction.units || []) {
+    const item = itemById.get(unit.item_id) || { id: unit.item_id, item_key: unit.item_key, sort_order: 99 };
+    const groupKey = auctionDisplayGroupKey(item);
+    const entries = grouped.get(groupKey) || [];
+    entries.push({ unit, item });
+    grouped.set(groupKey, entries);
+  }
+
+  const displayByUnit = new Map();
+  for (const entries of grouped.values()) {
+    entries.sort((a, b) => (
+      auctionDisplayItemOrder(a.item) - auctionDisplayItemOrder(b.item)
+      || (a.unit.page || 0) - (b.unit.page || 0)
+      || (a.unit.slot || 0) - (b.unit.slot || 0)
+    ));
+    entries.forEach(({ unit }, index) => {
+      displayByUnit.set(unit, {
+        displayPage: Math.floor(index / 4) + 1,
+        displaySlot: (index % 4) + 1
+      });
+    });
+  }
+
+  return (auction.units || []).map((unit) => ({ ...unit, ...(displayByUnit.get(unit) || {}) }));
+}
+
 function compactSlots(units) {
   if (!units.length) return "";
   const byPage = new Map();
   for (const unit of units) {
-    if (!byPage.has(unit.page)) byPage.set(unit.page, []);
-    byPage.get(unit.page).push(unit.slot);
+    const page = auctionUnitDisplayPage(unit);
+    const slot = auctionUnitDisplaySlot(unit);
+    if (!byPage.has(page)) byPage.set(page, []);
+    byPage.get(page).push(slot);
   }
 
   return [...byPage.entries()]
@@ -882,14 +932,16 @@ function groupedAuctionBids(units = [], queue = []) {
   for (const unit of units) {
     const queueRow = queueByMemberId.get(unit.member_id);
     if (!memberMap.has(unit.member_id)) {
+      const unitPage = auctionUnitDisplayPage(unit);
+      const unitSlot = auctionUnitDisplaySlot(unit);
       memberMap.set(unit.member_id, {
         member: unit.member,
         member_id: unit.member_id,
         queuePosition: queueRow?.position || Number.MAX_SAFE_INTEGER,
         items: new Map(),
         quantity: 0,
-        firstPage: unit.page,
-        firstSlot: unit.slot,
+        firstPage: unitPage,
+        firstSlot: unitSlot,
         cycle_reset: false,
         is_replacement: false,
         is_cant_pay: queueRow?.status === "cant_pay"
@@ -914,9 +966,11 @@ function groupedAuctionBids(units = [], queue = []) {
     itemRow.cycle_reset = itemRow.cycle_reset || Boolean(unit.cycle_reset);
     memberRow.quantity += 1;
     memberRow.cycle_reset = memberRow.cycle_reset || Boolean(unit.cycle_reset);
-    if (unit.page < memberRow.firstPage || (unit.page === memberRow.firstPage && unit.slot < memberRow.firstSlot)) {
-      memberRow.firstPage = unit.page;
-      memberRow.firstSlot = unit.slot;
+    const unitPage = auctionUnitDisplayPage(unit);
+    const unitSlot = auctionUnitDisplaySlot(unit);
+    if (unitPage < memberRow.firstPage || (unitPage === memberRow.firstPage && unitSlot < memberRow.firstSlot)) {
+      memberRow.firstPage = unitPage;
+      memberRow.firstSlot = unitSlot;
     }
   }
 
@@ -927,8 +981,8 @@ function groupedAuctionBids(units = [], queue = []) {
         .map((item) => ({
           ...item,
           positions: compactSlots(item.units),
-          firstPage: Math.min(...item.units.map((unit) => unit.page)),
-          firstSlot: Math.min(...item.units.map((unit) => unit.slot))
+          firstPage: Math.min(...item.units.map((unit) => auctionUnitDisplayPage(unit))),
+          firstSlot: Math.min(...item.units.map((unit) => auctionUnitDisplaySlot(unit)))
         }))
         .sort((a, b) => a.firstPage - b.firstPage || a.firstSlot - b.firstSlot)
     }))
@@ -989,23 +1043,19 @@ function auctionPageItemOptions(auction, auctionItems) {
     ));
 }
 
-function auctionPageDisplayOffset(auction, auctionItems, selectedItemId) {
-  const selectedItem = auctionItems.find((item) => item.id === selectedItemId);
-  if (selectedItem?.item_key !== "feather_ts") return 0;
-
-  const quantityByItemId = new Map((auction.inventory || []).map((row) => [row.item_id, row.quantity || 0]));
-  const lightDarkItem = auctionItems.find((item) => item.item_key === "feather_ld" && itemAppliesTo(item, auction.type));
-  if (!lightDarkItem) return 0;
-
-  return Math.ceil((quantityByItemId.get(lightDarkItem.id) || 0) / 4);
-}
-
 function buildAuctionPages(auction, auctionItems, selectedItemId = null) {
+  const selectedItem = auctionItems.find((item) => item.id === selectedItemId) || null;
   const applicableItems = auctionItems
     .filter((item) => itemAppliesTo(item, auction.type))
-    .filter((item) => !selectedItemId || item.id === selectedItemId)
+    .filter((item) => {
+      if (!selectedItemId) return true;
+      if (SHARED_FEATHER_PAGE_KEYS.has(selectedItem?.item_key)) {
+        return SHARED_FEATHER_PAGE_KEYS.has(item.item_key);
+      }
+      return item.id === selectedItemId;
+    })
     .sort((a, b) => (
-      (AUCTION_PAGE_ITEM_ORDER[a.item_key] || 99) - (AUCTION_PAGE_ITEM_ORDER[b.item_key] || 99)
+      auctionDisplayItemOrder(a) - auctionDisplayItemOrder(b)
       || (a.sort_order || 0) - (b.sort_order || 0)
     ));
   const quantityByItemId = new Map((auction.inventory || []).map((row) => [row.item_id, row.quantity || 0]));
@@ -1019,35 +1069,40 @@ function buildAuctionPages(auction, auctionItems, selectedItemId = null) {
     itemUnits.sort((a, b) => (a.page || 0) - (b.page || 0) || (a.slot || 0) - (b.slot || 0));
   }
   const slots = [];
+  let displayIndex = 0;
 
   for (const item of applicableItems) {
     const quantity = quantityByItemId.get(item.id) || 0;
     const itemUnits = unitsByItemId.get(item.id) || [];
     for (let index = 0; index < quantity; index += 1) {
-      const slotIndex = slots.length;
-      const page = Math.floor(slotIndex / 4) + 1;
-      const slot = (slotIndex % 4) + 1;
+      const page = Math.floor(displayIndex / 4) + 1;
+      const slot = (displayIndex % 4) + 1;
       const unit = itemUnits[index];
-      slots.push({
-        page,
-        slot,
-        item,
-        unit,
-        member: unit?.member || null,
-        freeForAll: !item.gates_round_completion
-      });
+      if (!selectedItemId || item.id === selectedItemId) {
+        slots.push({
+          page,
+          displayPage: page,
+          slot,
+          item,
+          unit,
+          member: unit?.member || null,
+          freeForAll: !item.gates_round_completion
+        });
+      }
+      displayIndex += 1;
     }
   }
 
-  const pageCount = Math.max(1, Math.ceil(slots.length / 4));
+  const minDisplayPage = slots.length ? Math.min(...slots.map((slot) => slot.displayPage)) : 1;
+  const maxDisplayPage = slots.length ? Math.max(...slots.map((slot) => slot.displayPage)) : 1;
   const pages = [];
-  for (let page = 1; page <= pageCount; page += 1) {
-    const displayPage = page + auctionPageDisplayOffset(auction, auctionItems, selectedItemId);
+  for (let displayPage = minDisplayPage; displayPage <= maxDisplayPage; displayPage += 1) {
+    const page = displayPage - minDisplayPage + 1;
     pages.push({
       page,
       displayPage,
       slots: [1, 2, 3, 4].map((slot) => (
-        slots.find((entry) => entry.page === page && entry.slot === slot) || { page, displayPage, slot, item: null, unit: null, member: null, freeForAll: false }
+        slots.find((entry) => entry.displayPage === displayPage && entry.slot === slot) || { page, displayPage, slot, item: null, unit: null, member: null, freeForAll: false }
       )).map((entry) => ({ ...entry, displayPage }))
     });
   }
@@ -1511,7 +1566,6 @@ function AuctionFoundation({
   onOpenLimits,
   onResetLineup,
   onLockAuction,
-  onCantPay,
   onDoneAuction,
   onCancelAuction,
   onDoneEvent,
@@ -1523,7 +1577,7 @@ function AuctionFoundation({
   const [auctionViews, setAuctionViews] = useState({});
   const [auctionPages, setAuctionPages] = useState({});
   const [auctionPageItems, setAuctionPageItems] = useState({});
-  const [auctionSearches, setAuctionSearches] = useState({});
+  const [auctionSearch, setAuctionSearch] = useState("");
   const activeRound = auctionState?.activeRound;
   const activeAuctions = auctionState?.activeAuctions || (auctionState?.activeAuction ? [auctionState.activeAuction] : []);
   const hasOpenAuctions = activeAuctions.length > 0;
@@ -1537,6 +1591,51 @@ function AuctionFoundation({
       ? "League Prize is ready. It will use current progress plus locked GL/WoE reservations."
       : "Lock-in the GL/WoE auction first, then League Prize becomes available."
     : "Create and lock a GL/WoE auction first, then League Prize becomes available.";
+
+  function applyAuctionSearch(nextQuery) {
+    setAuctionSearch(nextQuery);
+    const trimmedQuery = nextQuery.trim();
+    if (!trimmedQuery) return;
+
+    const nextPages = {};
+    const nextPageItems = {};
+    for (const auction of activeAuctions) {
+      const bidRows = groupedAuctionBids(displayPositionedAuctionUnits(auction, auctionItems), auction.queue || []);
+      const match = bidRows.find((row) => auctionSearchMatches(row, trimmedQuery));
+      if (!match) continue;
+
+      const itemOptions = auctionPageItemOptions(auction, auctionItems);
+      const currentItemId = itemOptions.some((item) => item.id === auctionPageItems[auction.id])
+        ? auctionPageItems[auction.id]
+        : itemOptions[0]?.id || null;
+      let targetItemId = currentItemId;
+      let targetPage = auctionItemPageForMember(auction, auctionItems, targetItemId, match.member_id);
+
+      if (!targetPage) {
+        const matchingItem = itemOptions
+          .map((item) => ({ item, page: auctionItemPageForMember(auction, auctionItems, item.id, match.member_id) }))
+          .find(({ page }) => page);
+        if (matchingItem) {
+          targetItemId = matchingItem.item.id;
+          targetPage = matchingItem.page;
+        }
+      }
+
+      if (targetItemId && targetPage) {
+        nextPages[`${auction.id}:${targetItemId}`] = targetPage;
+        if (targetItemId !== currentItemId) {
+          nextPageItems[auction.id] = targetItemId;
+        }
+      }
+    }
+
+    if (Object.keys(nextPageItems).length) {
+      setAuctionPageItems((current) => ({ ...current, ...nextPageItems }));
+    }
+    if (Object.keys(nextPages).length) {
+      setAuctionPages((current) => ({ ...current, ...nextPages }));
+    }
+  }
 
   return (
     <section className="content-section auction-section">
@@ -1574,10 +1673,32 @@ function AuctionFoundation({
         </div>
       </div>
 
-      <div className="auction-grid">
+      {activeAuctions.length ? (
+        <div className="auction-shared-tools">
+          <label className="auction-search auction-search-shared">
+            <Search size={15} />
+            <input
+              value={auctionSearch}
+              onChange={(event) => applyAuctionSearch(event.target.value)}
+              placeholder="Search member across active auctions"
+            />
+            {auctionSearch && (
+              <button
+                type="button"
+                onClick={() => applyAuctionSearch("")}
+                aria-label="Clear member search"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </label>
+        </div>
+      ) : null}
+
+      <div className={`auction-grid${activeAuctions.length > 1 ? " two-up" : ""}`}>
         {activeAuctions.length ? (
           activeAuctions.map((auction) => {
-            const bidRows = groupedAuctionBids(auction.units || [], auction.queue || []);
+            const bidRows = groupedAuctionBids(displayPositionedAuctionUnits(auction, auctionItems), auction.queue || []);
             const inventorySummary = auctionInventorySummary(auction, auctionItems);
             const locked = auction.status === "locked";
             const activeView = auctionViews[auction.id] || (readOnly ? "page" : "list");
@@ -1587,7 +1708,7 @@ function AuctionFoundation({
               : pageItemOptions[0]?.id || null;
             const pageStateKey = `${auction.id}:${selectedPageItemId || "all"}`;
             const currentPage = auctionPages[pageStateKey] || 1;
-            const searchQuery = auctionSearches[auction.id] || "";
+            const searchQuery = auctionSearch;
             const filteredBidRows = searchQuery.trim()
               ? bidRows.filter((row) => auctionSearchMatches(row, searchQuery))
               : bidRows;
@@ -1612,7 +1733,7 @@ function AuctionFoundation({
                   <em>{locked ? `${auctionTypeLabel(auction.type)} locked` : auctionTypeLabel(auction.type)}</em>
                 </div>
                 {!readOnly && (
-                  <p>{locked ? "This GL/WoE list is locked. League Prize can now use these reserved bids while skipping can't-pay members." : "Review the generated page table, mark any member who cannot pay, then finalize the auction."}</p>
+                  <p>{locked ? "This GL/WoE list is locked. League Prize can now use these reserved bids." : "Review the generated page table, then finalize the auction."}</p>
                 )}
                 <div className="active-auction-stats">
                   <span><Clock3 size={14} />{locked ? "Locked" : "Active"}</span>
@@ -1649,35 +1770,6 @@ function AuctionFoundation({
                       <LayoutGrid size={14} />Page View
                     </button>
                   </div>
-                  <label className="auction-search">
-                    <Search size={14} />
-                    <input
-                      value={searchQuery}
-                      onChange={(event) => {
-                        const nextQuery = event.target.value;
-                        const nextMatch = nextQuery.trim()
-                          ? bidRows.find((row) => auctionSearchMatches(row, nextQuery))
-                          : null;
-                        setAuctionSearches((current) => ({ ...current, [auction.id]: nextQuery }));
-                        if (nextMatch) {
-                          const itemPage = auctionItemPageForMember(auction, auctionItems, selectedPageItemId, nextMatch.member_id);
-                          if (itemPage) {
-                            setAuctionPages((current) => ({ ...current, [pageStateKey]: itemPage }));
-                          }
-                        }
-                      }}
-                      placeholder="Find member"
-                    />
-                    {searchQuery && (
-                      <button
-                        type="button"
-                        onClick={() => setAuctionSearches((current) => ({ ...current, [auction.id]: "" }))}
-                        aria-label="Clear member search"
-                      >
-                        <X size={13} />
-                      </button>
-                    )}
-                  </label>
                 </div>
                 {searchLocation && (
                   <div className={searchMatch ? "auction-search-result" : "auction-search-result empty"}>
@@ -1718,13 +1810,11 @@ function AuctionFoundation({
                         <colgroup>
                           <col className="allocation-col-member" />
                           <col />
-                          {!readOnly && <col className="allocation-col-actions" />}
                         </colgroup>
                         <thead>
                           <tr>
                             <th>Member</th>
                             <th>Bid instructions</th>
-                            {!readOnly && <th />}
                           </tr>
                         </thead>
                         <tbody>
@@ -1748,13 +1838,6 @@ function AuctionFoundation({
                                   ))}
                                 </div>
                               </td>
-                              {!readOnly && (
-                                <td>
-                                  <button className="ghost-button mini" type="button" onClick={() => onCantPay(row.member, auction)} disabled={busy || locked}>
-                                    <Ban size={13} />Can't pay
-                                  </button>
-                                </td>
-                              )}
                             </tr>
                           ))}
                         </tbody>
@@ -2332,14 +2415,16 @@ export default function DashboardApp({ publicView = false }) {
       <NoiseLayer />
       <Header username={session.username} onLogout={logout} publicView={publicView} publicGlAuction={publicGlAuction} />
       <main className="dashboard">
-        <Stats
-          members={members}
-          memberLimit={effectiveMemberLimit}
-          activeClass={classFilter}
-          onClassFilter={setClassFilter}
-          onEditLimit={() => !publicView && setLimitModalOpen(true)}
-          readOnly={publicView}
-        />
+        {!publicView && (
+          <Stats
+            members={members}
+            memberLimit={effectiveMemberLimit}
+            activeClass={classFilter}
+            onClassFilter={setClassFilter}
+            onEditLimit={() => setLimitModalOpen(true)}
+            readOnly={false}
+          />
+        )}
         {error && (
           <div className="alert-panel">
             <AlertTriangle size={17} />
@@ -2351,44 +2436,75 @@ export default function DashboardApp({ publicView = false }) {
           <div className="loading-panel"><Loader2 className="spin" size={24} />Loading guild data</div>
         ) : (
           <>
-            <MembersSection
-              members={members}
-              groupsById={groupsById}
-              classFilter={classFilter}
-              onClassFilter={setClassFilter}
-              canAddMember={members.length < effectiveMemberLimit}
-              memberLimit={effectiveMemberLimit}
-              onAdd={() => setMemberModal({})}
-              onEdit={setMemberModal}
-              onDelete={deleteMember}
-              readOnly={publicView}
-            />
-            <PartiesSection
-              members={members}
-              groups={groups}
-              onCreateGroup={() => setGroupModal({})}
-              onRenameGroup={setGroupModal}
-              onDeleteGroup={deleteGroup}
-              onPickEmptySlot={setPartyPickerGroup}
-              onRequestUnassign={requestUnassign}
-              onEditMember={setMemberModal}
-              readOnly={publicView}
-            />
-            <AuctionFoundation
-              auctionItems={auctionItems}
-              auctionState={auctionState}
-              busy={saving}
-              onOpenStartAuction={setAuctionStartType}
-              onOpenLimits={() => setAuctionLimitsOpen(true)}
-              onResetLineup={requestResetLineup}
-              onLockAuction={requestLockAuction}
-              onCantPay={requestCantPay}
-              onDoneAuction={requestDoneAuction}
-              onCancelAuction={requestCancelAuction}
-              onDoneEvent={requestDoneEvent}
-              onCopyAuctionList={copyAuctionList}
-              readOnly={publicView}
-            />
+            {publicView ? (
+              <>
+                <AuctionFoundation
+                  auctionItems={auctionItems}
+                  auctionState={auctionState}
+                  busy={saving}
+                  onOpenStartAuction={setAuctionStartType}
+                  onOpenLimits={() => setAuctionLimitsOpen(true)}
+                  onResetLineup={requestResetLineup}
+                  onLockAuction={requestLockAuction}
+                  onDoneAuction={requestDoneAuction}
+                  onCancelAuction={requestCancelAuction}
+                  onDoneEvent={requestDoneEvent}
+                  onCopyAuctionList={copyAuctionList}
+                  readOnly
+                />
+                <PartiesSection
+                  members={members}
+                  groups={groups}
+                  onCreateGroup={() => setGroupModal({})}
+                  onRenameGroup={setGroupModal}
+                  onDeleteGroup={deleteGroup}
+                  onPickEmptySlot={setPartyPickerGroup}
+                  onRequestUnassign={requestUnassign}
+                  onEditMember={setMemberModal}
+                  readOnly
+                />
+              </>
+            ) : (
+              <>
+                <MembersSection
+                  members={members}
+                  groupsById={groupsById}
+                  classFilter={classFilter}
+                  onClassFilter={setClassFilter}
+                  canAddMember={members.length < effectiveMemberLimit}
+                  memberLimit={effectiveMemberLimit}
+                  onAdd={() => setMemberModal({})}
+                  onEdit={setMemberModal}
+                  onDelete={deleteMember}
+                  readOnly={false}
+                />
+                <PartiesSection
+                  members={members}
+                  groups={groups}
+                  onCreateGroup={() => setGroupModal({})}
+                  onRenameGroup={setGroupModal}
+                  onDeleteGroup={deleteGroup}
+                  onPickEmptySlot={setPartyPickerGroup}
+                  onRequestUnassign={requestUnassign}
+                  onEditMember={setMemberModal}
+                  readOnly={false}
+                />
+                <AuctionFoundation
+                  auctionItems={auctionItems}
+                  auctionState={auctionState}
+                  busy={saving}
+                  onOpenStartAuction={setAuctionStartType}
+                  onOpenLimits={() => setAuctionLimitsOpen(true)}
+                  onResetLineup={requestResetLineup}
+                  onLockAuction={requestLockAuction}
+                  onDoneAuction={requestDoneAuction}
+                  onCancelAuction={requestCancelAuction}
+                  onDoneEvent={requestDoneEvent}
+                  onCopyAuctionList={copyAuctionList}
+                  readOnly={false}
+                />
+              </>
+            )}
           </>
         )}
       </main>

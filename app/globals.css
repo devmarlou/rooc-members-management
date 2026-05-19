@@ -1031,6 +1031,11 @@ button.party-slot.empty:hover:not(:disabled) {
   margin-top: 14px;
 }
 
+.auction-grid.two-up {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
 .active-auction-card {
   position: relative;
   border: 1px solid rgba(63, 63, 70, 0.75);
@@ -1297,6 +1302,12 @@ button.party-slot.empty:hover:not(:disabled) {
   margin-top: 14px;
 }
 
+.auction-shared-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
 .auction-view-toggle {
   display: inline-flex;
   width: fit-content;
@@ -1338,6 +1349,13 @@ button.party-slot.empty:hover:not(:disabled) {
   background: rgba(9, 9, 11, 0.5);
   color: var(--muted-2);
   padding: 0 9px;
+}
+
+.auction-search-shared {
+  width: min(100%, 460px);
+  min-height: 42px;
+  border-color: rgba(245, 158, 11, 0.36);
+  background: rgba(24, 18, 10, 0.56);
 }
 
 .auction-search input {
@@ -1516,8 +1534,8 @@ button.party-slot.empty:hover:not(:disabled) {
 
 .auction-slot-item {
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr);
-  column-gap: 8px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  column-gap: 10px;
   align-items: center;
 }
 
@@ -1637,7 +1655,7 @@ button.party-slot.empty:hover:not(:disabled) {
 }
 
 .allocation-table {
-  min-width: 680px;
+  min-width: 560px;
 }
 
 .allocation-table col.allocation-col-member {
@@ -1997,25 +2015,41 @@ button.party-slot.empty:hover:not(:disabled) {
 
 .bid-line {
   display: grid;
-  grid-template-columns: 18px 58px minmax(0, 1fr) 28px;
-  align-items: baseline;
-  gap: 8px;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 3px 8px;
 }
 
 .bid-line .item-icon {
-  align-self: center;
+  grid-row: 1 / span 2;
+  align-self: start;
   width: 16px;
   height: 16px;
+  margin-top: 1px;
 }
 
 .bid-line strong {
+  grid-column: 2;
   max-width: none;
   color: #e4e4e7;
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 11px;
 }
 
+.bid-line code {
+  grid-column: 2 / 4;
+  min-width: 0;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .bid-line span {
+  grid-column: 3;
+  grid-row: 1;
+  display: inline-flex;
+  justify-content: flex-end;
+  min-width: 30px;
   margin-top: 0;
   color: var(--muted-2);
   font-family: "JetBrains Mono", ui-monospace, monospace;
@@ -2568,6 +2602,20 @@ button.party-slot.empty:hover:not(:disabled) {
   }
 }
 
+@media (max-width: 1180px) {
+  .auction-grid.two-up {
+    grid-template-columns: 1fr;
+  }
+
+  .auction-shared-tools {
+    justify-content: stretch;
+  }
+
+  .auction-search-shared {
+    width: 100%;
+  }
+}
+
 @media (max-width: 760px) {
   .dashboard {
     padding: 14px;
@@ -2792,7 +2840,7 @@ button.party-slot.empty:hover:not(:disabled) {
   }
 
   .bid-line {
-    grid-template-columns: 16px 52px minmax(0, 1fr) auto;
+    grid-template-columns: 16px minmax(0, 1fr) auto;
     gap: 6px;
   }
 
