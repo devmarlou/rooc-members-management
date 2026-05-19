@@ -1350,6 +1350,7 @@ button.party-slot.empty:hover:not(:disabled) {
 
 .auction-view-toggle-shared {
   flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .auction-search {
@@ -1368,7 +1369,6 @@ button.party-slot.empty:hover:not(:disabled) {
 .auction-search-shared {
   width: min(100%, 460px);
   min-height: 42px;
-  margin-left: auto;
   border-color: rgba(245, 158, 11, 0.36);
   background: rgba(24, 18, 10, 0.56);
 }
@@ -2652,6 +2652,7 @@ button.party-slot.empty:hover:not(:disabled) {
 
   .auction-view-toggle-shared {
     width: 100%;
+    margin-left: 0;
   }
 
   .auction-view-toggle-shared button {

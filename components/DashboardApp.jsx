@@ -1574,7 +1574,7 @@ function AuctionFoundation({
   busy
 }) {
   const [collapsed, setCollapsed] = useState(false);
-  const [auctionView, setAuctionView] = useState(readOnly ? "page" : "list");
+  const [auctionView, setAuctionView] = useState("list");
   const [auctionPages, setAuctionPages] = useState({});
   const [auctionPageItems, setAuctionPageItems] = useState({});
   const [auctionSearch, setAuctionSearch] = useState("");
@@ -1656,25 +1656,40 @@ function AuctionFoundation({
         </div>
       ) : (
         <>
-      <div className="round-card">
-        <div className="round-main">
-          <div>
-            <h3>Auction Settings</h3>
-            <p>{activeRound ? "shared limits and test baseline controls" : "create members first, then restore or adjust auction settings"}</p>
+      {!readOnly && (
+        <div className="round-card">
+          <div className="round-main">
+            <div>
+              <h3>Auction Settings</h3>
+              <p>{activeRound ? "shared limits and test baseline controls" : "create members first, then restore or adjust auction settings"}</p>
+            </div>
+          </div>
+          <div className="round-actions">
+            <button className="ghost-button" type="button" onClick={onOpenLimits} disabled={!activeRound || hasOpenAuctions}><Settings size={15} />Adjust limits</button>
+            <button className="danger-button soft" type="button" onClick={onResetLineup} disabled={!activeRound || busy}><Shuffle size={15} />Test reset</button>
           </div>
         </div>
-        <div className="round-actions">
-          {!readOnly && (
-            <>
-              <button className="ghost-button" type="button" onClick={onOpenLimits} disabled={!activeRound || hasOpenAuctions}><Settings size={15} />Adjust limits</button>
-              <button className="danger-button soft" type="button" onClick={onResetLineup} disabled={!activeRound || busy}><Shuffle size={15} />Test reset</button>
-            </>
-          )}
-        </div>
-      </div>
+      )}
 
       {activeAuctions.length ? (
         <div className="auction-shared-tools">
+          <label className="auction-search auction-search-shared">
+            <Search size={15} />
+            <input
+              value={auctionSearch}
+              onChange={(event) => applyAuctionSearch(event.target.value)}
+              placeholder="Search member across active auctions"
+            />
+            {auctionSearch && (
+              <button
+                type="button"
+                onClick={() => applyAuctionSearch("")}
+                aria-label="Clear member search"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </label>
           <div className="auction-view-toggle auction-view-toggle-shared" aria-label="Auction view">
             <button
               type="button"
@@ -1693,23 +1708,6 @@ function AuctionFoundation({
               <LayoutGrid size={14} />Page View
             </button>
           </div>
-          <label className="auction-search auction-search-shared">
-            <Search size={15} />
-            <input
-              value={auctionSearch}
-              onChange={(event) => applyAuctionSearch(event.target.value)}
-              placeholder="Search member across active auctions"
-            />
-            {auctionSearch && (
-              <button
-                type="button"
-                onClick={() => applyAuctionSearch("")}
-                aria-label="Clear member search"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </label>
         </div>
       ) : null}
 
