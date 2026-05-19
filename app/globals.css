@@ -1391,6 +1391,39 @@ button.party-slot.empty:hover:not(:disabled) {
   margin-top: 14px;
 }
 
+.auction-item-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.auction-item-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  border: 1px solid rgba(63, 63, 70, 0.72);
+  border-radius: 7px;
+  background: rgba(24, 24, 27, 0.58);
+  color: var(--muted);
+  padding: 0 10px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.auction-item-tabs button.active {
+  border-color: rgba(245, 158, 11, 0.64);
+  background: rgba(245, 158, 11, 0.13);
+  color: var(--amber-2);
+}
+
+.auction-item-tabs .item-icon {
+  width: 18px;
+  height: 18px;
+}
+
 .auction-page-controls {
   display: flex;
   align-items: center;

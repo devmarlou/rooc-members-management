@@ -14,7 +14,6 @@ const BASELINE_LINEUP = [
   "XWeeHuRye",
   "WeeMigBR",
   "Tofukidd",
-  "KLMRS",
   "Oxie",
   "StepBro",
   "Gradux",
@@ -32,7 +31,6 @@ const BASELINE_LINEUP = [
   "Shammyre",
   "Sh1nboo",
   "Nyaruko",
-  "JaleD",
   "Ynori",
   "Messt",
   "Doidoi",
@@ -80,13 +78,67 @@ const BASELINE_LINEUP = [
   "NakedGarfield0",
   "NakedGarfield1",
   "NakedGarfiel2",
-  "WeeHuBR2",
   "Osnub",
-  "Alcyone"
+  "Alcyone",
+  "PritongPusit",
+  "Supreme",
+  "BELL"
 ];
-const FULL_ITEMS = new Set(BASELINE_LINEUP.slice(0, 41));
-const PUPPET_TS = new Set([...BASELINE_LINEUP.slice(41, 50), "Helxine", "WeeYomiBR"]);
-const PUPPET_ONLY = new Set(BASELINE_LINEUP.slice(50, 55));
+const FULL_ITEMS = new Set([
+  "Rome",
+  "SweetAngel",
+  "WeeChrlygBR",
+  "WeePriestBR",
+  "WeeHuBeshy",
+  "WeeSonixBR",
+  "XWeeHuRye",
+  "WeeMigBR",
+  "Tofukidd",
+  "Oxie",
+  "StepBro",
+  "Gradux",
+  "Ryjj",
+  "A1110",
+  "WeeFrztttBR",
+  "kimi",
+  "Java",
+  "Darthas",
+  "TaichouBee",
+  "Kreyja",
+  "SADISTA",
+  "Puts",
+  "Senyoraaa",
+  "Shammyre",
+  "Sh1nboo",
+  "Nyaruko",
+  "Ynori",
+  "Messt",
+  "Doidoi",
+  "BOLTSTAR",
+  "Hibernate",
+  "RSPKT",
+  "AndromedA",
+  "Autumn",
+  "BanoobsDR",
+  "Calixx",
+  "Ordz",
+  "ASTRiD",
+  "YanagnapAD"
+]);
+const PUPPET_TS = new Set([
+  "Tobichan",
+  "SNOW",
+  "DEVOURED",
+  "Mamark",
+  "Sanguine",
+  "Akyra",
+  "Akiii",
+  "Miyuyua",
+  "Jyliana",
+  "Helxine",
+  "WeeYomiBR"
+]);
+const PUPPET_ONLY = new Set(["MT999", "Lalaa", "Herius", "AfyGPDS", "WeeJOSHBR"]);
 
 function loadEnv(filePath) {
   if (!fs.existsSync(filePath)) return;

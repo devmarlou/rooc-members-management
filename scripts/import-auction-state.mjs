@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 
+const HELD_TOTALS_KEY = "__held_totals";
+const AUCTION_JOIN_COOLDOWN_MS = 96 * 60 * 60 * 1000;
 const ITEM_COLUMNS = [
   {
     key: "puppet_card",
@@ -384,6 +386,45 @@ function isComplete(received, items, caps) {
     .every((item) => (received[item.item_key] || 0) >= (caps.get(item.id) ?? item.default_per_round_cap ?? 0));
 }
 
+function isMemberInAuctionCooldown(member, nowMs = Date.now()) {
+  if (!member?.joined_at) return false;
+  const joinedAtMs = new Date(member.joined_at).getTime();
+  if (Number.isNaN(joinedAtMs)) return false;
+  return joinedAtMs + AUCTION_JOIN_COOLDOWN_MS > nowMs;
+}
+
+function completedItemCycles(rows, membersByName, item, caps) {
+  const cap = caps.get(item.id) ?? item.default_per_round_cap ?? 0;
+  if (cap <= 0) return 0;
+  const eligibleRows = rows.filter((row) => {
+    const member = membersByName.get(normalizeName(row.char_name));
+    return member && !isMemberInAuctionCooldown(member);
+  });
+  if (!eligibleRows.length) return 0;
+  return Math.min(...eligibleRows.map((row) => Math.floor((row.received[item.item_key] || 0) / cap)));
+}
+
+function currentCycleReceived(row, items, caps, completedCyclesByItemKey) {
+  const heldTotals = { ...row.received };
+  const received = {
+    ...row.received,
+    [HELD_TOTALS_KEY]: heldTotals
+  };
+
+  for (const item of items) {
+    if (!item.gates_round_completion) continue;
+    const cap = caps.get(item.id) ?? item.default_per_round_cap ?? 0;
+    if (cap <= 0) {
+      received[item.item_key] = 0;
+      continue;
+    }
+    const completedCycles = completedCyclesByItemKey.get(item.item_key) || 0;
+    received[item.item_key] = Math.min(Math.max((heldTotals[item.item_key] || 0) - completedCycles * cap, 0), cap);
+  }
+
+  return received;
+}
+
 function usage() {
   return [
     "Usage:",
@@ -470,7 +511,7 @@ const supabase = createClient(supabaseUrl, serviceRoleKey, {
   }
 });
 
-const existingMembersResult = await supabase.from("members").select("id,char_name,char_class");
+const existingMembersResult = await supabase.from("members").select("id,char_name,char_class,joined_at");
 if (existingMembersResult.error) throw existingMembersResult.error;
 const existingByName = new Map((existingMembersResult.data || []).map((member) => [normalizeName(member.char_name), member]));
 
@@ -487,7 +528,7 @@ const memberPayload = rows.map((row) => {
 const upsertMembersResult = await supabase
   .from("members")
   .upsert(memberPayload, { onConflict: "char_name" })
-  .select("id,char_name,char_class");
+  .select("id,char_name,char_class,joined_at");
 if (upsertMembersResult.error) throw upsertMembersResult.error;
 
 const membersByName = new Map((upsertMembersResult.data || []).map((member) => [normalizeName(member.char_name), member]));
@@ -511,6 +552,11 @@ if (itemsResult.error) throw itemsResult.error;
 if (capsResult.error) throw capsResult.error;
 
 const caps = new Map((capsResult.data || []).map((row) => [row.item_id, row.cap]));
+const completedCyclesByItemKey = new Map(
+  (itemsResult.data || [])
+    .filter((item) => item.gates_round_completion)
+    .map((item) => [item.item_key, completedItemCycles(rows, membersByName, item, caps)])
+);
 const rotationRows = [];
 const progressRows = [];
 
@@ -522,12 +568,13 @@ rows.forEach((row, index) => {
     member_id: member.id,
     position: index + 1
   });
+  const received = currentCycleReceived(row, itemsResult.data || [], caps, completedCyclesByItemKey);
   progressRows.push({
     round_id: activeRound.id,
     member_id: member.id,
-    received: row.received,
-    is_complete: isComplete(row.received, itemsResult.data || [], caps),
-    completed_at: isComplete(row.received, itemsResult.data || [], caps) ? new Date().toISOString() : null
+    received,
+    is_complete: isComplete(received, itemsResult.data || [], caps),
+    completed_at: isComplete(received, itemsResult.data || [], caps) ? new Date().toISOString() : null
   });
 });
 
@@ -537,4 +584,5 @@ const progressResult = await supabase.from("member_round_progress").insert(progr
 if (progressResult.error) throw progressResult.error;
 
 console.log(`Imported ${rows.length} lineup rows into active round ${activeRound.round_number}.`);
+console.log(`Completed cycles from held totals: ${[...completedCyclesByItemKey.entries()].map(([key, cycles]) => `${key}=${cycles}`).join(", ")}`);
 console.log(clearAuctions ? "Cleared existing auctions for this round." : "Existing auctions were kept.");

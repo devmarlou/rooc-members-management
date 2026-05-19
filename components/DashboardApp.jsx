@@ -52,6 +52,12 @@ const ITEM_ICON_SRC = {
   feather_ld: "/icons/light-dark.png",
   feather_ts: "/icons/time-space.png"
 };
+const AUCTION_PAGE_ITEM_ORDER = {
+  puppet_card: 1,
+  feather_ld: 2,
+  feather_ts: 3,
+  puppet_fragment: 4
+};
 
 function toPhDateTimeParts(value) {
   if (!value) return "";
@@ -972,21 +978,56 @@ function ItemIcon({ itemKey, label = "Item" }) {
   return <img className="item-icon" src={src} alt="" title={label} />;
 }
 
-function buildAuctionPages(auction, auctionItems) {
+function auctionPageItemOptions(auction, auctionItems) {
+  const quantityByItemId = new Map((auction.inventory || []).map((row) => [row.item_id, row.quantity || 0]));
+  return auctionItems
+    .filter((item) => itemAppliesTo(item, auction.type))
+    .filter((item) => (quantityByItemId.get(item.id) || 0) > 0)
+    .sort((a, b) => (
+      (AUCTION_PAGE_ITEM_ORDER[a.item_key] || 99) - (AUCTION_PAGE_ITEM_ORDER[b.item_key] || 99)
+      || (a.sort_order || 0) - (b.sort_order || 0)
+    ));
+}
+
+function auctionPageDisplayOffset(auction, auctionItems, selectedItemId) {
+  const selectedItem = auctionItems.find((item) => item.id === selectedItemId);
+  if (selectedItem?.item_key !== "feather_ts") return 0;
+
+  const quantityByItemId = new Map((auction.inventory || []).map((row) => [row.item_id, row.quantity || 0]));
+  const lightDarkItem = auctionItems.find((item) => item.item_key === "feather_ld" && itemAppliesTo(item, auction.type));
+  if (!lightDarkItem) return 0;
+
+  return Math.ceil((quantityByItemId.get(lightDarkItem.id) || 0) / 4);
+}
+
+function buildAuctionPages(auction, auctionItems, selectedItemId = null) {
   const applicableItems = auctionItems
     .filter((item) => itemAppliesTo(item, auction.type))
-    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    .filter((item) => !selectedItemId || item.id === selectedItemId)
+    .sort((a, b) => (
+      (AUCTION_PAGE_ITEM_ORDER[a.item_key] || 99) - (AUCTION_PAGE_ITEM_ORDER[b.item_key] || 99)
+      || (a.sort_order || 0) - (b.sort_order || 0)
+    ));
   const quantityByItemId = new Map((auction.inventory || []).map((row) => [row.item_id, row.quantity || 0]));
-  const unitByPageSlot = new Map((auction.units || []).map((unit) => [`${unit.page}:${unit.slot}`, unit]));
+  const unitsByItemId = new Map();
+  for (const unit of auction.units || []) {
+    const itemUnits = unitsByItemId.get(unit.item_id) || [];
+    itemUnits.push(unit);
+    unitsByItemId.set(unit.item_id, itemUnits);
+  }
+  for (const itemUnits of unitsByItemId.values()) {
+    itemUnits.sort((a, b) => (a.page || 0) - (b.page || 0) || (a.slot || 0) - (b.slot || 0));
+  }
   const slots = [];
 
   for (const item of applicableItems) {
     const quantity = quantityByItemId.get(item.id) || 0;
+    const itemUnits = unitsByItemId.get(item.id) || [];
     for (let index = 0; index < quantity; index += 1) {
       const slotIndex = slots.length;
       const page = Math.floor(slotIndex / 4) + 1;
       const slot = (slotIndex % 4) + 1;
-      const unit = unitByPageSlot.get(`${page}:${slot}`);
+      const unit = itemUnits[index];
       slots.push({
         page,
         slot,
@@ -998,22 +1039,39 @@ function buildAuctionPages(auction, auctionItems) {
     }
   }
 
-  const pageCount = Math.max(auction.pageCount || 0, Math.ceil(slots.length / 4));
+  const pageCount = Math.max(1, Math.ceil(slots.length / 4));
   const pages = [];
   for (let page = 1; page <= pageCount; page += 1) {
+    const displayPage = page + auctionPageDisplayOffset(auction, auctionItems, selectedItemId);
     pages.push({
       page,
+      displayPage,
       slots: [1, 2, 3, 4].map((slot) => (
-        slots.find((entry) => entry.page === page && entry.slot === slot) || { page, slot, item: null, unit: null, member: null, freeForAll: false }
-      ))
+        slots.find((entry) => entry.page === page && entry.slot === slot) || { page, displayPage, slot, item: null, unit: null, member: null, freeForAll: false }
+      )).map((entry) => ({ ...entry, displayPage }))
     });
   }
 
   return pages;
 }
 
-function AuctionPageView({ auction, auctionItems, page, onPageChange, searchQuery = "" }) {
-  const pages = buildAuctionPages(auction, auctionItems);
+function auctionItemPageForMember(auction, auctionItems, itemId, memberId) {
+  if (!itemId || !memberId) return null;
+  const pages = buildAuctionPages(auction, auctionItems, itemId);
+  for (const page of pages) {
+    const slot = page.slots.find((entry) => entry.member?.id === memberId || entry.member_id === memberId || entry.unit?.member_id === memberId);
+    if (slot) return page.page;
+  }
+  return null;
+}
+
+function AuctionPageView({ auction, auctionItems, page, onPageChange, selectedItemId, onSelectedItemChange, searchQuery = "" }) {
+  const itemOptions = auctionPageItemOptions(auction, auctionItems);
+  const safeSelectedItemId = itemOptions.some((item) => item.id === selectedItemId)
+    ? selectedItemId
+    : itemOptions[0]?.id || null;
+  const selectedItem = itemOptions.find((item) => item.id === safeSelectedItemId) || null;
+  const pages = buildAuctionPages(auction, auctionItems, safeSelectedItemId);
   const pageCount = pages.length || 1;
   const safePage = Math.min(Math.max(page || 1, 1), pageCount);
   const currentPage = pages[safePage - 1] || { page: 1, slots: [] };
@@ -1025,15 +1083,28 @@ function AuctionPageView({ auction, auctionItems, page, onPageChange, searchQuer
 
   return (
     <div className="auction-page-view">
+      <div className="auction-item-tabs" aria-label="Auction item page filter">
+        {itemOptions.map((item) => (
+          <button
+            type="button"
+            className={item.id === safeSelectedItemId ? "active" : ""}
+            onClick={() => onSelectedItemChange(item.id)}
+            key={item.id}
+          >
+            <ItemIcon itemKey={item.item_key} label={item.name || item.short_name} />
+            <span>{item.short_name}</span>
+          </button>
+        ))}
+      </div>
       <div className="auction-page-controls">
         <button className="ghost-button mini" type="button" onClick={() => setPage(safePage - 1)} disabled={safePage <= 1}>Prev</button>
-        <strong>Page {safePage} / {pageCount}</strong>
+        <strong>{selectedItem?.short_name || "Item"} Page {currentPage.displayPage || safePage}</strong>
         <button className="ghost-button mini" type="button" onClick={() => setPage(safePage + 1)} disabled={safePage >= pageCount}>Next</button>
       </div>
       <div className="auction-page-card">
         <header>
-          <span>{auction.name || auctionTypeLabel(auction.type)}</span>
-          <strong>Page {safePage}</strong>
+          <span>{selectedItem?.name || auction.name || auctionTypeLabel(auction.type)}</span>
+          <strong>Page {currentPage.displayPage || safePage}</strong>
         </header>
         <div className="auction-page-slots">
           {currentPage.slots.map((slot) => {
@@ -1077,7 +1148,7 @@ function AuctionPageView({ auction, auctionItems, page, onPageChange, searchQuer
       </div>
       <div className="auction-page-controls bottom">
         <button className="ghost-button mini" type="button" onClick={() => setPage(safePage - 1)} disabled={safePage <= 1}>Prev</button>
-        <span>{safePage} of {pageCount}</span>
+        <span>{selectedItem?.short_name || "Item"} page {currentPage.displayPage || safePage}</span>
         <button className="ghost-button mini" type="button" onClick={() => setPage(safePage + 1)} disabled={safePage >= pageCount}>Next</button>
       </div>
     </div>
@@ -1241,15 +1312,32 @@ function buildActiveBidStatus(auctionState, limitedItems) {
       const item = itemById.get(unit.item_id);
       if (!item || !unit.member_id) continue;
       const memberItems = biddingByMemberId.get(unit.member_id) || new Map();
-      const current = memberItems.get(item.item_key) || { item, quantity: 0, cycleReset: false };
+      const current = memberItems.get(item.item_key) || { item, quantity: 0, regularQuantity: 0, resetQuantity: 0, cycleReset: false };
       current.quantity += 1;
-      current.cycleReset = current.cycleReset || Boolean(unit.cycle_reset);
+      if (unit.cycle_reset) {
+        current.resetQuantity += 1;
+        current.cycleReset = true;
+      } else {
+        current.regularQuantity += 1;
+      }
       memberItems.set(item.item_key, current);
       biddingByMemberId.set(unit.member_id, memberItems);
     }
   }
 
   return { biddingByMemberId, skippedMemberIds };
+}
+
+function activeItemPreview(activeItem, received, cap) {
+  if (!activeItem) return null;
+  const usesResetCycle = activeItem.resetQuantity > 0 || activeItem.cycleReset;
+  const quantity = usesResetCycle ? activeItem.resetQuantity || activeItem.quantity : activeItem.regularQuantity || activeItem.quantity;
+  const base = usesResetCycle ? 0 : received;
+  return {
+    quantity,
+    next: cap > 0 ? Math.min(base + quantity, cap) : base + quantity,
+    usesResetCycle
+  };
 }
 
 function MemberProgressTable({ auctionItems, auctionState }) {
@@ -1345,9 +1433,8 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                   const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
                   if (cap <= 0) return false;
                   const activeItem = activeBidItems.get(item.item_key);
-                  const quantity = activeItem?.quantity || 0;
-                  const base = activeItem?.cycleReset ? 0 : row.received[item.item_key] || 0;
-                  return cap > 0 && base + quantity < cap;
+                  const preview = activeItemPreview(activeItem, row.received[item.item_key] || 0, cap);
+                  return cap > 0 && preview && preview.next < cap;
                 })
                 : false;
               return (
@@ -1362,16 +1449,15 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                     const received = row.received[item.item_key] || 0;
                     const cap = row.caps[item.item_key] ?? item.default_per_round_cap ?? 0;
                     const activeItem = activeBidItems?.get(item.item_key);
-                    const bidBase = activeItem?.cycleReset ? 0 : received;
-                    const bidNext = activeItem ? bidBase + activeItem.quantity : 0;
+                    const bidPreview = activeItemPreview(activeItem, received, cap);
                     const displayReceived = progressCellValue(received, cap);
                     return (
                       <td key={item.id}>
                         <div className="progress-item-stack">
                           <span className={`progress-count ${progressCellState(received, cap)}`}>{displayReceived}/{cap}</span>
-                          {activeItem && (
+                          {bidPreview && (
                             <span className={`progress-bid-text bid-${item.item_key}`}>
-                              +{activeItem.quantity} → {bidNext}/{cap}
+                              +{bidPreview.quantity} → {bidPreview.next}/{cap}
                             </span>
                           )}
                         </div>
@@ -1436,6 +1522,7 @@ function AuctionFoundation({
   const [collapsed, setCollapsed] = useState(false);
   const [auctionViews, setAuctionViews] = useState({});
   const [auctionPages, setAuctionPages] = useState({});
+  const [auctionPageItems, setAuctionPageItems] = useState({});
   const [auctionSearches, setAuctionSearches] = useState({});
   const activeRound = auctionState?.activeRound;
   const activeAuctions = auctionState?.activeAuctions || (auctionState?.activeAuction ? [auctionState.activeAuction] : []);
@@ -1494,7 +1581,12 @@ function AuctionFoundation({
             const inventorySummary = auctionInventorySummary(auction, auctionItems);
             const locked = auction.status === "locked";
             const activeView = auctionViews[auction.id] || (readOnly ? "page" : "list");
-            const currentPage = auctionPages[auction.id] || 1;
+            const pageItemOptions = auctionPageItemOptions(auction, auctionItems);
+            const selectedPageItemId = pageItemOptions.some((item) => item.id === auctionPageItems[auction.id])
+              ? auctionPageItems[auction.id]
+              : pageItemOptions[0]?.id || null;
+            const pageStateKey = `${auction.id}:${selectedPageItemId || "all"}`;
+            const currentPage = auctionPages[pageStateKey] || 1;
             const searchQuery = auctionSearches[auction.id] || "";
             const filteredBidRows = searchQuery.trim()
               ? bidRows.filter((row) => auctionSearchMatches(row, searchQuery))
@@ -1567,8 +1659,11 @@ function AuctionFoundation({
                           ? bidRows.find((row) => auctionSearchMatches(row, nextQuery))
                           : null;
                         setAuctionSearches((current) => ({ ...current, [auction.id]: nextQuery }));
-                        if (nextMatch?.firstPage) {
-                          setAuctionPages((current) => ({ ...current, [auction.id]: nextMatch.firstPage }));
+                        if (nextMatch) {
+                          const itemPage = auctionItemPageForMember(auction, auctionItems, selectedPageItemId, nextMatch.member_id);
+                          if (itemPage) {
+                            setAuctionPages((current) => ({ ...current, [pageStateKey]: itemPage }));
+                          }
                         }
                       }}
                       placeholder="Find member"
@@ -1608,7 +1703,12 @@ function AuctionFoundation({
                     auction={auction}
                     auctionItems={auctionItems}
                     page={currentPage}
-                    onPageChange={(page) => setAuctionPages((current) => ({ ...current, [auction.id]: page }))}
+                    onPageChange={(page) => setAuctionPages((current) => ({ ...current, [pageStateKey]: page }))}
+                    selectedItemId={selectedPageItemId}
+                    onSelectedItemChange={(itemId) => {
+                      setAuctionPageItems((current) => ({ ...current, [auction.id]: itemId }));
+                      setAuctionPages((current) => ({ ...current, [`${auction.id}:${itemId}`]: current[`${auction.id}:${itemId}`] || 1 }));
+                    }}
                     searchQuery={searchQuery}
                   />
                 ) : (
