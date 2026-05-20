@@ -1235,15 +1235,21 @@ function AuctionPageView({ auction, auctionItems, page, onPageChange, selectedIt
 
 function AuctionStartForm({ type, auctionItems, onCancel, onStart, busy }) {
   const applicable = auctionItems.filter((item) => itemAppliesTo(item, type));
+  const cappedItems = applicable.filter((item) => item.gates_round_completion);
   const [name, setName] = useState(type === "league_prize" ? "League Prize" : "GL/WoE Auction");
   const [inventory, setInventory] = useState(() => Object.fromEntries(applicable.map((item) => [item.item_key, "0"])));
+  const [useInGameCaps, setUseInGameCaps] = useState(false);
+  const [inGameCaps, setInGameCaps] = useState(() => Object.fromEntries(cappedItems.map((item) => [item.item_key, ""])));
 
   function submit(event) {
     event.preventDefault();
     onStart({
       type,
       name,
-      inventory: Object.fromEntries(applicable.map((item) => [item.item_key, Number.parseInt(inventory[item.item_key] || "0", 10) || 0]))
+      inventory: Object.fromEntries(applicable.map((item) => [item.item_key, Number.parseInt(inventory[item.item_key] || "0", 10) || 0])),
+      inGameCaps: useInGameCaps
+        ? Object.fromEntries(cappedItems.map((item) => [item.item_key, Number.parseInt(inGameCaps[item.item_key] || "0", 10) || 0]))
+        : {}
     });
   }
 
@@ -1266,6 +1272,30 @@ function AuctionStartForm({ type, auctionItems, onCancel, onStart, busy }) {
           </label>
         ))}
       </div>
+      <label className="checkbox-row">
+        <input
+          type="checkbox"
+          checked={useInGameCaps}
+          onChange={(event) => setUseInGameCaps(event.target.checked)}
+        />
+        <span>Use in-game per-member limits for this auction</span>
+      </label>
+      {useInGameCaps && (
+        <div className="auction-form-items compact">
+          {cappedItems.map((item) => (
+            <label key={item.id}>
+              <span>{item.short_name} in-game limit</span>
+              <input
+                type="number"
+                min="0"
+                placeholder={`Internal ${item.default_per_round_cap || 0}`}
+                value={inGameCaps[item.item_key] ?? ""}
+                onChange={(event) => setInGameCaps((current) => ({ ...current, [item.item_key]: event.target.value }))}
+              />
+            </label>
+          ))}
+        </div>
+      )}
       <p className="field-note">{type === "gl_woe" ? "Lock this GL/WoE list if you want to run optional League Prize after reviewing can't-pay members." : "League Prize is optional. Add only the items available from the event."}</p>
       <div className="form-actions">
         <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>

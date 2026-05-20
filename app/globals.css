@@ -2194,6 +2194,29 @@ button.party-slot.empty:hover:not(:disabled) {
   gap: 12px;
 }
 
+.auction-form-items.compact {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(63, 63, 70, 0.72);
+  border-radius: 8px;
+  background: rgba(9, 9, 11, 0.32);
+  padding: 10px 12px;
+  color: #d4d4d8;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.checkbox-row input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--amber);
+}
+
 .rotation-list {
   display: grid;
   gap: 8px;
