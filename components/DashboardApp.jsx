@@ -1233,7 +1233,7 @@ function AuctionPageView({ auction, auctionItems, page, onPageChange, selectedIt
   );
 }
 
-function AuctionStartForm({ type, auctionItems, onCancel, onStart, busy }) {
+function AuctionStartForm({ type, auctionItems, internalCaps = {}, onCancel, onStart, busy }) {
   const applicable = auctionItems.filter((item) => itemAppliesTo(item, type));
   const cappedItems = applicable.filter((item) => item.gates_round_completion);
   const [name, setName] = useState(type === "league_prize" ? "League Prize" : "GL/WoE Auction");
@@ -1288,7 +1288,7 @@ function AuctionStartForm({ type, auctionItems, onCancel, onStart, busy }) {
               <input
                 type="number"
                 min="0"
-                placeholder={`Internal ${item.default_per_round_cap || 0}`}
+                placeholder={`Internal ${internalCaps[item.item_key] ?? item.default_per_round_cap ?? 0}`}
                 value={inGameCaps[item.item_key] ?? ""}
                 onChange={(event) => setInGameCaps((current) => ({ ...current, [item.item_key]: event.target.value }))}
               />
@@ -2637,6 +2637,7 @@ export default function DashboardApp({ publicView = false }) {
           <AuctionStartForm
             type={auctionStartType}
             auctionItems={auctionItems}
+            internalCaps={auctionState?.itemCaps || {}}
             busy={saving}
             onCancel={() => setAuctionStartType(null)}
             onStart={startAuction}
