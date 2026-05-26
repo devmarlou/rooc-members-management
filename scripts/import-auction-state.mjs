@@ -55,7 +55,15 @@ const MEMBER_CLASS_HINTS = new Map([
   ["nakedgarfiel2", "High Priest"],
   ["nakedgarfieldwiz", "Biochemist"],
   ["nakedgarfieldpal", "Paladin"],
-  ["nakedgarfieldpally2", "High Priest"]
+  ["nakedgarfieldpally2", "High Priest"],
+  ["godzillu", "High Priest"],
+  ["janking", "Bard"],
+  ["keshmeister", "High Wizard"],
+  ["zykennn", "Assassin Cross"],
+  ["nakedmoon", "High Priest"],
+  ["nakedgian", "Champion"],
+  ["itlognibatman", "Sniper"],
+  ["imbalance", "Assassin Cross"]
 ]);
 
 const UNKNOWN_CLASS = "Unknown";
