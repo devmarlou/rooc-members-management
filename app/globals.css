@@ -1059,14 +1059,14 @@ button.party-slot.empty:hover:not(:disabled) {
 }
 
 .active-auction-card.auction-league_prize {
-  border-color: rgba(52, 211, 153, 0.72);
+  border-color: rgba(16, 185, 129, 0.68);
   background:
-    linear-gradient(135deg, rgba(6, 78, 59, 0.64), rgba(10, 44, 34, 0.8) 44%, rgba(9, 9, 11, 0.72) 100%),
-    rgba(10, 44, 34, 0.9);
+    linear-gradient(135deg, rgba(4, 47, 36, 0.78), rgba(8, 30, 24, 0.9) 44%, rgba(9, 9, 11, 0.78) 100%),
+    rgba(8, 30, 24, 0.94);
   box-shadow:
-    inset 4px 0 0 rgba(52, 211, 153, 0.82),
+    inset 4px 0 0 rgba(16, 185, 129, 0.76),
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 0 0 1px rgba(52, 211, 153, 0.08);
+    0 0 0 1px rgba(16, 185, 129, 0.08);
 }
 
 .active-auction-card.locked {
