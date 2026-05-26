@@ -58,10 +58,10 @@ create table if not exists auction_items (
 insert into auction_items
   (item_key, name, short_name, sort_order, default_per_round_cap, applies_to_auction_types, gates_round_completion)
 values
-  ('puppet_card', 'Puppet Card', 'Puppet', 1, 2, array['gl_woe', 'league_prize'], true),
+  ('puppet_card', 'Puppet Card', 'Puppet', 1, 1, array['gl_woe', 'league_prize'], true),
   ('puppet_fragment', 'Illusion Fragment', 'Fragment', 2, 0, array['league_prize'], false),
-  ('feather_ld', 'Light & Dark', 'L&D', 3, 10, array['gl_woe', 'league_prize'], true),
-  ('feather_ts', 'Time & Space', 'T&S', 4, 10, array['gl_woe', 'league_prize'], true)
+  ('feather_ld', 'Light & Dark', 'L&D', 3, 8, array['gl_woe', 'league_prize'], true),
+  ('feather_ts', 'Time & Space', 'T&S', 4, 8, array['gl_woe', 'league_prize'], true)
 on conflict (item_key) do update set
   name = excluded.name,
   short_name = excluded.short_name,
