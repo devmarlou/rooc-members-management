@@ -51,6 +51,7 @@ const ITEM_ICON_SRC = {
   feather_ld: "/icons/light-dark.png",
   feather_ts: "/icons/time-space.png"
 };
+const MAIN_FIELD_PARTY_LIMIT = 8;
 const AUCTION_PAGE_ITEM_ORDER = {
   puppet_card: 1,
   feather_ld: 2,
@@ -653,6 +654,28 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
     if (!readOnly) return groups;
     return groups.filter((group) => (membersByGroup[group.id] || []).length > 0);
   }, [groups, membersByGroup, readOnly]);
+  const fieldGroups = useMemo(() => {
+    const mainField = visibleGroups.slice(0, MAIN_FIELD_PARTY_LIMIT);
+    const subField = visibleGroups.slice(MAIN_FIELD_PARTY_LIMIT);
+    return [
+      {
+        key: "main",
+        title: "Main Field",
+        meta: `${mainField.length}/${MAIN_FIELD_PARTY_LIMIT} parties`,
+        groups: mainField
+      },
+      {
+        key: "sub",
+        title: "Sub Field",
+        meta: `${subField.length} remaining ${subField.length === 1 ? "party" : "parties"}`,
+        groups: subField
+      }
+    ];
+  }, [visibleGroups]);
+  const canCreateInField = (field) => !readOnly && (
+    (field.key === "main" && visibleGroups.length < MAIN_FIELD_PARTY_LIMIT)
+    || (field.key === "sub" && visibleGroups.length >= MAIN_FIELD_PARTY_LIMIT)
+  );
 
   return (
     <section className="content-section">
@@ -671,62 +694,79 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
         <div className="collapsed-summary">{visibleGroups.length} visible groups · {members.filter((member) => member.group_id).length} assigned members</div>
       ) : (
         <>
-      <div className="party-grid">
-        {visibleGroups.map((group) => {
-          const roster = membersByGroup[group.id] || [];
-          return (
-            <article className="party-card" key={group.id}>
-              <header>
-                <div>
-                  <h3>{group.name}</h3>
-                  <span>{roster.length}/5 members</span>
-                </div>
-                {!readOnly && (
-                  <div className="row-actions always">
-                    <button className="icon-button" onClick={() => onRenameGroup(group)} aria-label={`Rename ${group.name}`}><Pencil size={15} /></button>
-                    <button className="icon-button danger" onClick={() => onDeleteGroup(group)} aria-label={`Delete ${group.name}`}><Trash2 size={15} /></button>
-                  </div>
-                )}
-              </header>
+      <div className="party-field-stack">
+        {fieldGroups.map((field) => (
+          <section className="party-field-section" key={field.key}>
+            <div className="party-field-header">
+              <div>
+                <p className="eyebrow">{field.key === "main" ? "primary allocation" : "overflow allocation"}</p>
+                <h3>{field.title}</h3>
+              </div>
+              <span>{field.meta}</span>
+            </div>
+            {field.groups.length || canCreateInField(field) ? (
+              <div className="party-grid">
+                {field.groups.map((group) => {
+                  const roster = membersByGroup[group.id] || [];
+                  return (
+                    <article className="party-card" key={group.id}>
+                      <header>
+                        <div>
+                          <h3>{group.name}</h3>
+                          <span>{roster.length}/5 members</span>
+                        </div>
+                        {!readOnly && (
+                          <div className="row-actions always">
+                            <button className="icon-button" onClick={() => onRenameGroup(group)} aria-label={`Rename ${group.name}`}><Pencil size={15} /></button>
+                            <button className="icon-button danger" onClick={() => onDeleteGroup(group)} aria-label={`Delete ${group.name}`}><Trash2 size={15} /></button>
+                          </div>
+                        )}
+                      </header>
 
-              <div className="party-slots">
-                {[0, 1, 2, 3, 4].map((slot) => {
-                  const member = roster[slot];
-                  return member ? (
-                    <div className="party-slot filled" key={member.id}>
-                      <ClassIcon name={member.char_class} size={30} />
-                      <button className="slot-name" onClick={() => !readOnly && onEditMember(member)} disabled={readOnly}>{member.char_name}</button>
-                      {!readOnly && (
-                        <button className="icon-button danger" onClick={() => onRequestUnassign(member, group)} aria-label={`Remove ${member.char_name}`}>
-                          <UserMinus size={14} />
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <button
-                      className="party-slot empty"
-                      key={slot}
-                      onClick={() => !readOnly && onPickEmptySlot(group)}
-                      disabled={readOnly || !unassigned.length}
-                      title={unassigned.length ? `Add member to ${group.name}` : "No unassigned members"}
-                    >
-                      {unassigned.length ? "Empty slot" : "No unassigned"}
-                    </button>
+                      <div className="party-slots">
+                        {[0, 1, 2, 3, 4].map((slot) => {
+                          const member = roster[slot];
+                          return member ? (
+                            <div className="party-slot filled" key={member.id}>
+                              <ClassIcon name={member.char_class} size={30} />
+                              <button className="slot-name" onClick={() => !readOnly && onEditMember(member)} disabled={readOnly}>{member.char_name}</button>
+                              {!readOnly && (
+                                <button className="icon-button danger" onClick={() => onRequestUnassign(member, group)} aria-label={`Remove ${member.char_name}`}>
+                                  <UserMinus size={14} />
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <button
+                              className="party-slot empty"
+                              key={slot}
+                              onClick={() => !readOnly && onPickEmptySlot(group)}
+                              disabled={readOnly || !unassigned.length}
+                              title={unassigned.length ? `Add member to ${group.name}` : "No unassigned members"}
+                            >
+                              {unassigned.length ? "Empty slot" : "No unassigned"}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </article>
                   );
                 })}
+                {canCreateInField(field) && (
+                  <button className="new-party-card" onClick={onCreateGroup}>
+                    <Plus size={20} />
+                    <span>New group</span>
+                    <em>5 open slots</em>
+                  </button>
+                )}
               </div>
-            </article>
-          );
-        })}
-        {!readOnly && (
-          <button className="new-party-card" onClick={onCreateGroup}>
-            <Plus size={20} />
-            <span>New group</span>
-            <em>5 open slots</em>
-          </button>
-        )}
+            ) : (
+              <div className="empty-panel compact">{field.key === "main" ? "No main field parties assigned yet." : "No sub field parties yet."}</div>
+            )}
+          </section>
+        ))}
       </div>
-      {!visibleGroups.length && <div className="empty-panel">No party groups assigned yet.</div>}
+      {readOnly && !visibleGroups.length && <div className="empty-panel">No party groups assigned yet.</div>}
         </>
       )}
     </section>
