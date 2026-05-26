@@ -1048,17 +1048,6 @@ button.party-slot.empty:hover:not(:disabled) {
 }
 
 .active-auction-card.auction-gl_woe {
-  border-color: rgba(245, 158, 11, 0.76);
-  background:
-    linear-gradient(135deg, rgba(92, 55, 8, 0.68), rgba(24, 18, 10, 0.8) 42%, rgba(9, 9, 11, 0.7) 100%),
-    rgba(24, 18, 10, 0.9);
-  box-shadow:
-    inset 4px 0 0 rgba(245, 158, 11, 0.82),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 0 0 1px rgba(245, 158, 11, 0.08);
-}
-
-.active-auction-card.auction-league_prize {
   border-color: rgba(56, 189, 248, 0.7);
   background:
     linear-gradient(135deg, rgba(8, 47, 73, 0.68), rgba(13, 30, 48, 0.8) 44%, rgba(9, 9, 11, 0.72) 100%),
@@ -1067,6 +1056,17 @@ button.party-slot.empty:hover:not(:disabled) {
     inset 4px 0 0 rgba(56, 189, 248, 0.82),
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 0 0 1px rgba(56, 189, 248, 0.08);
+}
+
+.active-auction-card.auction-league_prize {
+  border-color: rgba(52, 211, 153, 0.72);
+  background:
+    linear-gradient(135deg, rgba(6, 78, 59, 0.64), rgba(10, 44, 34, 0.8) 44%, rgba(9, 9, 11, 0.72) 100%),
+    rgba(10, 44, 34, 0.9);
+  box-shadow:
+    inset 4px 0 0 rgba(52, 211, 153, 0.82),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 0 0 1px rgba(52, 211, 153, 0.08);
 }
 
 .active-auction-card.locked {
