@@ -2481,6 +2481,99 @@ button.party-slot.empty:hover:not(:disabled) {
   color: #fca5a5;
 }
 
+.finalize-preview {
+  display: grid;
+  gap: 14px;
+}
+
+.finalize-preview-heading,
+.finalize-warning,
+.finalize-summary-card {
+  border: 1px solid rgba(63, 63, 70, 0.75);
+  border-radius: 8px;
+  background: rgba(9, 9, 11, 0.3);
+  padding: 12px;
+}
+
+.finalize-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.finalize-preview-heading h3 {
+  margin: 2px 0 0;
+  font-size: 18px;
+}
+
+.finalize-preview-heading span {
+  color: var(--amber-2);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.finalize-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-color: rgba(245, 158, 11, 0.32);
+  background: rgba(245, 158, 11, 0.08);
+  color: #fde68a;
+}
+
+.finalize-warning div,
+.finalize-summary-card {
+  display: grid;
+  gap: 6px;
+}
+
+.finalize-warning strong {
+  color: #fafafa;
+}
+
+.finalize-warning span,
+.finalize-summary-card span,
+.finalize-summary-card em {
+  color: var(--muted-2);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.45;
+}
+
+.finalize-cycle-row {
+  display: grid;
+  gap: 6px;
+}
+
+.finalize-summary-card .finalize-member-range {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #fde68a;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.finalize-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.finalize-summary-card strong {
+  color: var(--amber-2);
+  font-family: var(--display-font);
+  font-weight: 500;
+}
+
 .field-note {
   margin: -4px 0 0;
   color: var(--muted-2);
@@ -2960,6 +3053,10 @@ button.party-slot.empty:hover:not(:disabled) {
 
   .allocation-table .ghost-button {
     width: 100%;
+  }
+
+  .finalize-summary-grid {
+    grid-template-columns: 1fr;
   }
 
   .bid-stack {

@@ -11,7 +11,6 @@ import {
   UserMinus,
   Swords,
   Settings,
-  Shuffle,
   Gavel,
   Trophy,
   Clock3,
@@ -1387,6 +1386,66 @@ function AuctionLimitsForm({ auctionItems, auctionState, onCancel, onSave, busy 
   );
 }
 
+function FinalizePreviewModal({ preview, busy, onCancel, onConfirm }) {
+  const warnings = preview?.warnings || [];
+  const itemSummaries = preview?.itemSummaries || [];
+  const memberRange = (bucket) => {
+    const first = bucket.firstMember;
+    const last = bucket.lastMember;
+    if (!first && !last) return "";
+    const formatMember = (member) => member ? `#${member.line} ${member.name}` : "";
+    if (!last || first?.member_id === last?.member_id) return `from ${formatMember(first)}`;
+    return `from ${formatMember(first)} to ${formatMember(last)}`;
+  };
+
+  return (
+    <Modal title="Finalize preview" onClose={onCancel} size="default">
+      <div className="finalize-preview">
+        <div className="finalize-preview-heading">
+          <div>
+            <p className="eyebrow">transaction preview</p>
+            <h3>{preview?.auction?.name || "Auction"}</h3>
+          </div>
+          <span>{preview?.totals?.allocations || 0} allocations</span>
+        </div>
+
+        {warnings.length > 0 && (
+          <div className="finalize-warning">
+            <AlertTriangle size={16} />
+            <div>
+              <strong>Review cycle rollover</strong>
+              {warnings.map((warning) => <span key={warning}>{warning}</span>)}
+            </div>
+          </div>
+        )}
+
+        <div className="finalize-summary-grid">
+          {itemSummaries.map((summary) => (
+            <div className="finalize-summary-card" key={summary.item_key}>
+              <strong>{summary.short_name}</strong>
+              <span>{summary.quantity} items · {summary.memberCount} members</span>
+              {summary.cycleBuckets.map((bucket) => (
+                <em className="finalize-cycle-row" key={`${summary.item_key}-${bucket.item_cycle}`}>
+                  <span>{bucket.item_cycle > 0 ? `Cycle ${bucket.item_cycle}` : "Current cycle"}: {bucket.quantity} items{bucket.memberCount ? ` · ${bucket.memberCount} members` : ""}</span>
+                  {bucket.memberCount ? <span className="finalize-member-range">{memberRange(bucket)}</span> : null}
+                </em>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        <div className="form-actions">
+          <button type="button" className="ghost-button" onClick={onCancel} disabled={busy}>Cancel</button>
+          <button type="button" className="primary-button" onClick={onConfirm} disabled={busy}>
+            {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
+            Finalize with transaction
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function progressCellState(received, cap) {
   if (cap <= 0) return "capped";
   if (received > cap) return "ahead";
@@ -1657,7 +1716,6 @@ function AuctionFoundation({
   auctionState,
   onOpenStartAuction,
   onOpenLimits,
-  onResetLineup,
   onLockAuction,
   onDoneAuction,
   onCancelAuction,
@@ -1756,12 +1814,11 @@ function AuctionFoundation({
           <div className="round-main">
             <div>
               <h3>Auction Settings</h3>
-              <p>{activeRound ? "shared limits and test baseline controls" : "create members first, then restore or adjust auction settings"}</p>
+              <p>{activeRound ? "shared limits for the current auction lineup" : "create members first, then adjust auction settings"}</p>
             </div>
           </div>
           <div className="round-actions">
             <button className="ghost-button" type="button" onClick={onOpenLimits} disabled={!activeRound || hasOpenAuctions}><Settings size={15} />Adjust limits</button>
-            <button className="danger-button soft" type="button" onClick={onResetLineup} disabled={!activeRound || busy}><Shuffle size={15} />Test reset</button>
           </div>
         </div>
       )}
@@ -1960,9 +2017,6 @@ function AuctionFoundation({
                         <Shield size={15} />Lock-in list
                       </button>
                     )}
-                    <button className="danger-button soft" type="button" onClick={() => onCancelAuction(auction)} disabled={busy}>
-                      <X size={15} />Cancel test
-                    </button>
                     {!pairedEventActive && (
                       <button className="primary-button" type="button" onClick={() => onDoneAuction(auction)} disabled={busy}>
                         {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
@@ -2003,6 +2057,11 @@ function AuctionFoundation({
                 Done event
               </button>
             )}
+            {hasOpenAuctions && (
+              <button className="danger-button soft" type="button" onClick={() => onCancelAuction([glAuction, leagueAuction].filter(Boolean))} disabled={busy}>
+                <X size={15} />Cancel auction
+              </button>
+            )}
           </div>
           <p className={canStartLeague ? "auction-flow-note ready" : "auction-flow-note"}>{leagueHint}</p>
         </>
@@ -2031,6 +2090,7 @@ export default function DashboardApp({ publicView = false }) {
   const [auctionLimitsOpen, setAuctionLimitsOpen] = useState(false);
   const [partyPickerGroup, setPartyPickerGroup] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
+  const [finalizePreview, setFinalizePreview] = useState(null);
   const [saving, setSaving] = useState(false);
   const [classFilter, setClassFilter] = useState("");
   const [memberLimit, setMemberLimit] = useState(null);
@@ -2422,43 +2482,72 @@ export default function DashboardApp({ publicView = false }) {
     });
   }
 
-  function requestDoneAuction(auction) {
+  async function requestDoneAuction(auction) {
     const activeAuction = auction || auctionState?.activeAuction;
-    setConfirmAction({
-      title: "Finish auction",
-      body: `Finalize ${activeAuction?.name || "this auction"}? This will update member progress and cannot be undone.`,
-      confirmLabel: "Finalize auction",
-      tone: "default",
-      run: async () => {
-        const data = await api("/api/auctions/active/done", {
-          method: "POST",
-          body: JSON.stringify({ auctionId: activeAuction?.id })
-        });
-        setAuctionState(data.auctionState);
-        setToast("Auction finalized");
-      }
-    });
+    if (!activeAuction) return;
+    setSaving(true);
+    try {
+      const data = await api("/api/auctions/active/finalize-preview", {
+        method: "POST",
+        body: JSON.stringify({ auctionId: activeAuction.id })
+      });
+      setFinalizePreview({ auctionIds: [activeAuction.id], preview: data.preview });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function requestCancelAuction(auction) {
-    if (!auction) return;
+  async function finalizePreviewedAuction() {
+    const auctionIds = finalizePreview?.auctionIds || [];
+    if (!auctionIds.length) return;
+    const isEventFinalize = auctionIds.length > 1;
+    setSaving(true);
+    try {
+      const data = await api(isEventFinalize ? "/api/auctions/active/done-event" : "/api/auctions/active/done", {
+        method: "POST",
+        body: JSON.stringify(isEventFinalize ? { auctionIds } : { auctionId: auctionIds[0] })
+      });
+      setAuctionState(data.auctionState);
+      setFinalizePreview(null);
+      setToast(isEventFinalize ? "Event auctions finalized" : "Auction finalized");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function requestCancelAuction(auctions) {
+    const auctionList = Array.isArray(auctions) ? auctions.filter(Boolean) : [auctions].filter(Boolean);
+    if (!auctionList.length) return;
+    const orderedAuctions = [
+      ...auctionList.filter((auction) => auction.type !== "gl_woe"),
+      ...auctionList.filter((auction) => auction.type === "gl_woe")
+    ];
+    const hasLeaguePrize = orderedAuctions.some((auction) => auction.type === "league_prize");
+    const title = hasLeaguePrize ? "Cancel event auctions" : "Cancel auction";
+    const body = hasLeaguePrize
+      ? "Cancel the open League Prize and GL/WoE auction lists? Finished history and member progress will not be changed."
+      : `Cancel ${orderedAuctions[0]?.name || "this auction"}? Finished history and member progress will not be changed.`;
     setConfirmAction({
-      title: "Cancel test auction",
-      body: `Cancel ${auction.name || "this auction"}? This removes only the active test auction list. Finished history and member progress will not be changed.`,
-      confirmLabel: "Cancel auction",
+      title,
+      body,
+      confirmLabel: hasLeaguePrize ? "Cancel event" : "Cancel auction",
       tone: "danger",
       run: async () => {
         const data = await api("/api/auctions/active/cancel", {
           method: "POST",
-          body: JSON.stringify({ auctionId: auction.id })
+          body: JSON.stringify({ auctionIds: orderedAuctions.map((auction) => auction.id) })
         });
         setAuctionState(data.auctionState);
-        setToast("Test auction cancelled");
+        setToast(hasLeaguePrize ? "Event auctions cancelled" : "Auction cancelled");
       }
     });
   }
 
-  function requestDoneEvent(auctions) {
+  async function requestDoneEvent(auctions) {
     const eventAuctions = (auctions || []).filter(Boolean);
     if (!eventAuctions.length) return;
     const orderedAuctions = [
@@ -2466,20 +2555,19 @@ export default function DashboardApp({ publicView = false }) {
       ...eventAuctions.filter((auction) => auction.type !== "gl_woe")
     ];
 
-    setConfirmAction({
-      title: "Finish event auctions",
-      body: "Finalize GL/WoE and League Prize together? GL/WoE progress will be applied first, then League Prize. This cannot be undone.",
-      confirmLabel: "Finalize event",
-      tone: "default",
-      run: async () => {
-        const data = await api("/api/auctions/active/done-event", {
-          method: "POST",
-          body: JSON.stringify({ auctionIds: orderedAuctions.map((auction) => auction.id) })
-        });
-        setAuctionState(data.auctionState);
-        setToast("Event auctions finalized");
-      }
-    });
+    setSaving(true);
+    try {
+      const auctionIds = orderedAuctions.map((auction) => auction.id);
+      const data = await api("/api/auctions/active/finalize-preview", {
+        method: "POST",
+        body: JSON.stringify({ auctionIds })
+      });
+      setFinalizePreview({ auctionIds, preview: data.preview });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function copyAuctionList(auction, bidRows) {
@@ -2498,20 +2586,6 @@ export default function DashboardApp({ publicView = false }) {
     } catch (err) {
       setError("Could not copy the bidder list.");
     }
-  }
-
-  function requestResetLineup() {
-    setConfirmAction({
-      title: "Restore test baseline",
-      body: "Clear auction simulation history and restore the real 78-member queue with the corrected Cycle 1/2 item progress? Current bids and test auctions for this lineup will be removed.",
-      confirmLabel: "Restore baseline",
-      tone: "danger",
-      run: async () => {
-        const data = await api("/api/auctions/lineup/reset", { method: "POST" });
-        setAuctionState(data.auctionState);
-        setToast("Test baseline restored");
-      }
-    });
   }
 
   if (session.loading) {
@@ -2556,7 +2630,6 @@ export default function DashboardApp({ publicView = false }) {
                   busy={saving}
                   onOpenStartAuction={setAuctionStartType}
                   onOpenLimits={() => setAuctionLimitsOpen(true)}
-                  onResetLineup={requestResetLineup}
                   onLockAuction={requestLockAuction}
                   onDoneAuction={requestDoneAuction}
                   onCancelAuction={requestCancelAuction}
@@ -2608,7 +2681,6 @@ export default function DashboardApp({ publicView = false }) {
                   busy={saving}
                   onOpenStartAuction={setAuctionStartType}
                   onOpenLimits={() => setAuctionLimitsOpen(true)}
-                  onResetLineup={requestResetLineup}
                   onLockAuction={requestLockAuction}
                   onDoneAuction={requestDoneAuction}
                   onCancelAuction={requestCancelAuction}
@@ -2695,6 +2767,15 @@ export default function DashboardApp({ publicView = false }) {
             onSave={saveAuctionLimits}
           />
         </Modal>
+      )}
+
+      {finalizePreview && (
+        <FinalizePreviewModal
+          preview={finalizePreview.preview}
+          busy={saving}
+          onCancel={() => setFinalizePreview(null)}
+          onConfirm={finalizePreviewedAuction}
+        />
       )}
 
       {confirmAction && (

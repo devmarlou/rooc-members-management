@@ -406,6 +406,16 @@ States: **active** / **done**. No drafts, no pauses.
 ### Can't Pay action (live)
 Same as before: removes that one member, recomputes allocation from that position down, next-in-line slots up.
 
+### Future improvement: Bought out / not received action
+If an in-game item assigned to a listed member is bought out by someone else, admin should be able to mark that specific allocation as **Bought out / not received**. This must be tracked per item and per allocation slot, not only per member, because a member can receive some assigned items while missing another item in the same auction.
+
+Expected behavior:
+- The affected allocation is treated as unfulfilled and does not advance that member's held total or current item cycle.
+- The member remains owed that exact item cycle for that item type.
+- A later correction auction prioritizes the owed member according to normal rotation/carry-over rules.
+- Other items assigned to the same member remain fulfilled if they were actually received.
+- Auction history preserves the original assignment plus the not-received reason for auditability.
+
 ### Running auctions sequentially
 - Only ONE auction can be `active` at a time (enforced at the application layer).
 - Admin must mark GL/WoE `done` before starting League Prize.
