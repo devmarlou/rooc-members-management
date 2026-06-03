@@ -21,18 +21,30 @@ function rows(snapshot, table) {
   return snapshot.tables?.[table]?.rows || [];
 }
 
+function chunks(values, size = 100) {
+  const output = [];
+  for (let index = 0; index < values.length; index += size) {
+    output.push(values.slice(index, index + size));
+  }
+  return output;
+}
+
 async function deleteMissingById(supabase, table, existingRows, snapshotRows) {
   const keepIds = new Set(snapshotRows.map((row) => row.id));
   const deleteIds = existingRows.map((row) => row.id).filter((id) => !keepIds.has(id));
   if (!deleteIds.length) return;
-  const { error } = await supabase.from(table).delete().in("id", deleteIds);
-  if (error) throw error;
+  for (const batch of chunks(deleteIds)) {
+    const { error } = await supabase.from(table).delete().in("id", batch);
+    if (error) throw error;
+  }
 }
 
 async function upsertRows(supabase, table, tableRows) {
   if (!tableRows.length) return;
-  const { error } = await supabase.from(table).upsert(tableRows, { onConflict: "id" });
-  if (error) throw error;
+  for (const batch of chunks(tableRows, 100)) {
+    const { error } = await supabase.from(table).upsert(batch, { onConflict: "id" });
+    if (error) throw error;
+  }
 }
 
 async function main() {
