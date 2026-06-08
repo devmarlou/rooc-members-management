@@ -57,7 +57,13 @@ const MAIN_FIELD_PARTY_LIMIT = 8;
 const PARTY_MEMBER_ORDER_ALIASES = {
   rodd: "r0dd",
   frzttt: "weefrztttbr",
-  zykennn: "zykenn"
+  zykennn: "zykenn",
+  nakedgarfieldpally2: "nakedgarfieldbard",
+  nakedgarfieldpal: "nakedgarfieldpaladin",
+  taichoubee: "taichobee",
+  alcyone: "alycone",
+  boltstar: "boldstar",
+  astrid: "astrid"
 };
 const PARTY_MEMBER_ORDER = Object.fromEntries(
   Object.entries({
@@ -68,7 +74,15 @@ const PARTY_MEMBER_ORDER = Object.fromEntries(
     "Charlie 1": ["AfyGPDS", "WeeYomiBR", "NakedGarfieldWiz", "WeeJOSHBR", "Yamato"],
     "Charlie 2": ["Godzillu", "JanKing", "jomski", "KrisJulio", "Zykenn"],
     "FLEX 1": ["fredplays", "Mamark", "Vogue", "Autumn", "itlognibatman"],
-    "FLEX 2": ["Nasmi", "A1110", "WeeFrztttBR", "Java", "kimi"]
+    "FLEX 2": ["Nasmi", "A1110", "WeeFrztttBR", "Java", "kimi"],
+    "Sub Alpha 1": ["Senyoraaa", "Shammyre", "Sh1nBoo", "Shan", "Tobichan"],
+    "Sub Alpha 2": ["Ynori", "TaichoBee", "Ordz", "Imbalance", "Kreyja"],
+    "Sub Bravo 1": ["NakedMoon", "NakedGarfieldBard", "NakedGarfieldPaladin", "NakedGian", "Supreme"],
+    "Sub Bravo 2": ["WeePriestBR", "WeeHuBeshy", "WeeJunBR", "WeeMigBR", "WeeSonixBR"],
+    "Sub Charlie 1": ["AndromedA", "Kushinero", "Akii", "Alycone", "SNOW"],
+    "Sub Charlie 2": ["WeeHuRye", "Bell", "Doidoi", "Hibernate", "Boldstar"],
+    "Sub Delta 1": ["Astrid", "Sanguine", "Calixx", "Herius", "Puts"],
+    "Sub Delta 2": ["Keshmeister", "Messt", "Akyra"]
   }).map(([groupName, names]) => [
     groupName,
     new Map(names.map((name, index) => [normalizePartyMemberName(name), index]))
@@ -757,6 +771,10 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
               <div className="party-grid">
                 {field.groups.map((group) => {
                   const roster = membersByGroup[group.id] || [];
+                  const hasSavedSlots = roster.some((member) => Number.isInteger(member.party_slot));
+                  const rosterSlots = hasSavedSlots
+                    ? [1, 2, 3, 4, 5].map((slot) => roster.find((member) => member.party_slot === slot) || null)
+                    : [0, 1, 2, 3, 4].map((slot) => roster[slot] || null);
                   return (
                     <article className="party-card" key={group.id}>
                       <header>
@@ -774,7 +792,7 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
 
                       <div className="party-slots">
                         {[0, 1, 2, 3, 4].map((slot) => {
-                          const member = roster[slot];
+                          const member = rosterSlots[slot];
                           return member ? (
                             <div className="party-slot filled" key={member.id}>
                               <ClassIcon name={member.char_class} size={30} />
@@ -785,7 +803,7 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
                                     <button className="icon-button" onClick={() => moveMember(group, roster, member, -1)} disabled={busy || slot === 0} aria-label={`Move ${member.char_name} up`} title="Move up">
                                       <ArrowUp size={13} />
                                     </button>
-                                    <button className="icon-button" onClick={() => moveMember(group, roster, member, 1)} disabled={busy || slot === roster.length - 1} aria-label={`Move ${member.char_name} down`} title="Move down">
+                                    <button className="icon-button" onClick={() => moveMember(group, roster, member, 1)} disabled={busy || slot === 4 || slot >= roster.length - 1} aria-label={`Move ${member.char_name} down`} title="Move down">
                                       <ArrowDown size={13} />
                                     </button>
                                   </div>

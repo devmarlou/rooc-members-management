@@ -284,7 +284,15 @@ values
   ('Charlie 1', 50),
   ('Charlie 2', 60),
   ('FLEX 1', 70),
-  ('FLEX 2', 80)
+  ('FLEX 2', 80),
+  ('Sub Alpha 1', 90),
+  ('Sub Alpha 2', 100),
+  ('Sub Bravo 1', 110),
+  ('Sub Bravo 2', 120),
+  ('Sub Charlie 1', 130),
+  ('Sub Charlie 2', 140),
+  ('Sub Delta 1', 150),
+  ('Sub Delta 2', 160)
 on conflict (name) do update set
   sort_order = excluded.sort_order;
 

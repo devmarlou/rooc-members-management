@@ -10,14 +10,42 @@ const partyOrder = [
   "Charlie 1",
   "Charlie 2",
   "FLEX 1",
-  "FLEX 2"
+  "FLEX 2",
+  "Sub Alpha 1",
+  "Sub Alpha 2",
+  "Sub Bravo 1",
+  "Sub Bravo 2",
+  "Sub Charlie 1",
+  "Sub Charlie 2",
+  "Sub Delta 1",
+  "Sub Delta 2"
 ];
 
 const partyByKey = new Map(partyOrder.map((name) => [name.toLowerCase(), name]));
+const subFieldParties = [
+  { partyName: "Sub Alpha 1", members: ["Senyoraaa", "Shammyre", "Sh1nBoo", "Shan", "Tobichan"] },
+  { partyName: "Sub Alpha 2", members: ["Ynori", "TaichoBee", "Ordz", "Imbalance", "Kreyja"] },
+  { partyName: "Sub Bravo 1", members: ["NakedMoon", "NakedGarfieldBard", "NakedGarfieldPaladin", "NakedGian", "Supreme"] },
+  { partyName: "Sub Bravo 2", members: ["WeePriestBR", "WeeHuBeshy", "WeeJunBR", "WeeMigBR", "WeeSonixBR"] },
+  { partyName: "Sub Charlie 1", members: ["AndromedA", "Kushinero", "Akii", "Alycone", "SNOW"] },
+  { partyName: "Sub Charlie 2", members: ["WeeHuRye", "Bell", "Doidoi", "Hibernate", "Boldstar"] },
+  { partyName: "Sub Delta 1", members: ["Astrid", "Sanguine", "Calixx", "Herius", "Puts"] },
+  { partyName: "Sub Delta 2", members: [null, null, "Keshmeister", "Messt", "Akyra"] }
+];
 const memberAliases = new Map([
   ["r0dd", "rodd"],
   ["weefrztttbr", "frzttt"],
-  ["zykenn", "zykennn"]
+  ["zykenn", "zykennn"],
+  ["taichobee", "taichoubee"],
+  ["nakedgarfieldbard", "nakedgarfieldpally2"],
+  ["nakedgarfieldpaladin", "nakedgarfieldpal"],
+  ["alycone", "alcyone"],
+  ["boldstar", "boltstar"],
+  ["astrid", "astrid"]
+]);
+const memberRenames = new Map([
+  ["nakedgarfieldbard", "NakedGarfieldBard"],
+  ["nakedgarfieldpaladin", "NakedGarfieldPaladin"]
 ]);
 const memberDefaults = new Map([
   ["miyuyua", { char_class: "High Priest" }],
@@ -59,7 +87,45 @@ const memberDefaults = new Map([
   ["a1110", { char_class: "Bard" }],
   ["weefrztttbr", { char_class: "Professor" }],
   ["java", { char_class: "Doram" }],
-  ["kimi", { char_class: "Assassin Cross" }]
+  ["kimi", { char_class: "Assassin Cross" }],
+  ["senyoraaa", { char_class: "High Priest" }],
+  ["shammyre", { char_class: "Bard" }],
+  ["sh1nboo", { char_class: "Paladin" }],
+  ["shan", { char_class: "Assassin Cross" }],
+  ["tobichan", { char_class: "Professor" }],
+  ["ynori", { char_class: "High Priest" }],
+  ["taichobee", { char_class: "Bard" }],
+  ["ordz", { char_class: "Paladin" }],
+  ["imbalance", { char_class: "Assassin Cross" }],
+  ["kreyja", { char_class: "Paladin" }],
+  ["nakedmoon", { char_class: "High Priest" }],
+  ["nakedgarfieldbard", { char_class: "Bard" }],
+  ["nakedgarfieldpaladin", { char_class: "Paladin" }],
+  ["nakedgian", { char_class: "Doram" }],
+  ["supreme", { char_class: "Whitesmith" }],
+  ["weepriestbr", { char_class: "High Priest" }],
+  ["weehubeshy", { char_class: "Bard" }],
+  ["weejunbr", { char_class: "Assassin Cross" }],
+  ["weemigbr", { char_class: "Paladin" }],
+  ["weesonixbr", { char_class: "Sniper" }],
+  ["andromeda", { char_class: "High Priest" }],
+  ["kushinero", { char_class: "Bard" }],
+  ["akii", { char_class: "Paladin" }],
+  ["alycone", { char_class: "Sniper" }],
+  ["snow", { char_class: "Assassin Cross" }],
+  ["weehurye", { char_class: "High Priest" }],
+  ["bell", { char_class: "Bard" }],
+  ["doidoi", { char_class: "Biochemist" }],
+  ["hibernate", { char_class: "Assassin Cross" }],
+  ["boldstar", { char_class: "Professor" }],
+  ["astrid", { char_class: "High Priest" }],
+  ["sanguine", { char_class: "Whitesmith" }],
+  ["calixx", { char_class: "High Wizard" }],
+  ["herius", { char_class: "Paladin" }],
+  ["puts", { char_class: "High Wizard" }],
+  ["keshmeister", { char_class: "High Wizard" }],
+  ["messt", { char_class: "Sniper" }],
+  ["akyra", { char_class: "Paladin" }]
 ]);
 
 function loadEnv(filePath) {
@@ -108,6 +174,11 @@ function normalizeName(name) {
   return String(name || "").trim().toLowerCase();
 }
 
+function isMissingPartySlotError(error) {
+  const message = String(error?.message || "");
+  return error?.code === "42703" || message.includes("party_slot");
+}
+
 function parsePartyGroups(csvPath) {
   const text = fs.readFileSync(csvPath, "utf8").replace(/^\uFEFF/, "");
   const rows = text
@@ -141,6 +212,14 @@ function parsePartyGroups(csvPath) {
   });
 }
 
+function getSubFieldAssignments() {
+  return subFieldParties.flatMap((party) => (
+    party.members
+      .map((charName, index) => charName ? { charName, partyName: party.partyName, party_slot: index + 1 } : null)
+      .filter(Boolean)
+  ));
+}
+
 loadEnv(path.resolve(process.cwd(), ".env.local"));
 
 const csvPath = process.argv[2];
@@ -162,9 +241,9 @@ const supabase = createClient(supabaseUrl, serviceRoleKey, {
   }
 });
 
-const assignments = parsePartyGroups(csvPath);
-if (assignments.length !== 40) {
-  throw new Error(`Expected 40 party assignments, found ${assignments.length}.`);
+const assignments = [...parsePartyGroups(csvPath), ...getSubFieldAssignments()];
+if (assignments.length !== 78) {
+  throw new Error(`Expected 78 party assignments, found ${assignments.length}.`);
 }
 
 const { data: groups, error: groupError } = await supabase
@@ -178,9 +257,19 @@ const { data: groups, error: groupError } = await supabase
 if (groupError) throw groupError;
 
 const groupsByName = new Map((groups || []).map((group) => [group.name, group]));
-const { data: members, error: memberError } = await supabase
+let hasPartySlot = true;
+let { data: members, error: memberError } = await supabase
   .from("members")
   .select("id,char_name,group_id,party_slot");
+
+if (isMissingPartySlotError(memberError)) {
+  hasPartySlot = false;
+  const fallbackResult = await supabase
+    .from("members")
+    .select("id,char_name,group_id");
+  members = fallbackResult.data?.map((member) => ({ ...member, party_slot: null }));
+  memberError = fallbackResult.error;
+}
 
 if (memberError) throw memberError;
 
@@ -200,17 +289,24 @@ for (const assignment of assignments) {
   }
   if (normalizeName(member.char_name) !== normalizedName) aliasMatches++;
   if (memberDefaults.has(normalizedName)) {
-    memberDefaultUpdates.push({ id: member.id, ...memberDefaults.get(normalizedName) });
+    memberDefaultUpdates.push({
+      id: member.id,
+      ...memberDefaults.get(normalizedName),
+      ...(memberRenames.has(normalizedName) ? { char_name: memberRenames.get(normalizedName) } : {})
+    });
   }
-  if (member.group_id !== group.id || member.party_slot !== assignment.party_slot) {
+  if (member.group_id !== group.id || (hasPartySlot && member.party_slot !== assignment.party_slot)) {
     updates.push({ id: member.id, group_id: group.id, party_slot: assignment.party_slot, char_name: member.char_name, partyName: assignment.partyName });
   }
 }
 
 for (const update of updates) {
+  const updateBody = hasPartySlot
+    ? { group_id: update.group_id, party_slot: update.party_slot }
+    : { group_id: update.group_id };
   const { error } = await supabase
     .from("members")
-    .update({ group_id: update.group_id, party_slot: update.party_slot })
+    .update(updateBody)
     .eq("id", update.id);
   if (error) throw error;
 }
@@ -230,18 +326,23 @@ if (missing.length && createMissing) {
   for (const assignment of missing) {
     const group = groupsByName.get(assignment.partyName);
     const defaults = memberDefaults.get(normalizeName(assignment.charName)) || { char_class: "Unknown" };
+    const insertBody = {
+      char_name: assignment.charName,
+      ...defaults,
+      group_id: group.id
+    };
+    if (hasPartySlot) insertBody.party_slot = assignment.party_slot;
+
+    const selectColumns = hasPartySlot
+      ? "id,char_name,char_class,group_id,party_slot"
+      : "id,char_name,char_class,group_id";
     const { data, error } = await supabase
       .from("members")
-      .insert({
-        char_name: assignment.charName,
-        ...defaults,
-        group_id: group.id,
-        party_slot: assignment.party_slot
-      })
-      .select("id,char_name,char_class,group_id,party_slot")
+      .insert(insertBody)
+      .select(selectColumns)
       .single();
     if (error) throw error;
-    createdMembers.push(data);
+    createdMembers.push({ ...data, party_slot: data.party_slot ?? null });
   }
 
   const { data: activeRound, error: roundError } = await supabase
@@ -285,6 +386,7 @@ if (missing.length && createMissing) {
 
 console.log(`Parsed ${assignments.length} party assignments.`);
 console.log(`Upserted ${partyOrder.length} party groups.`);
+if (!hasPartySlot) console.log("party_slot column is missing, so only group assignments and classes were saved.");
 console.log(`Assigned ${updates.length} members to party groups.`);
 if (aliasMatches) console.log(`Matched ${aliasMatches} members through known roster aliases.`);
 if (memberDefaultUpdates.length) console.log(`Updated ${memberDefaultUpdates.length} members with party CSV defaults.`);
