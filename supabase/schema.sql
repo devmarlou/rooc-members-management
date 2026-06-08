@@ -273,10 +273,15 @@ end $$;
 insert into groups (name, sort_order)
 values
   ('Alpha 1', 10),
-  ('Bravo 1', 20),
-  ('Charlie 1', 30),
-  ('Delta 1', 40)
-on conflict (name) do nothing;
+  ('Alpha 2', 20),
+  ('Bravo 1', 30),
+  ('Bravo 2', 40),
+  ('Charlie 1', 50),
+  ('Charlie 2', 60),
+  ('FLEX 1', 70),
+  ('FLEX 2', 80)
+on conflict (name) do update set
+  sort_order = excluded.sort_order;
 
 -- Security: the browser never talks to these tables directly.
 -- The Next.js API uses the server-only Supabase service role key, which bypasses RLS.

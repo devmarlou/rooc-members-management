@@ -51,6 +51,26 @@ const ITEM_ICON_SRC = {
   feather_ts: "/icons/time-space.png"
 };
 const MAIN_FIELD_PARTY_LIMIT = 8;
+const PARTY_MEMBER_ORDER_ALIASES = {
+  rodd: "r0dd",
+  frzttt: "weefrztttbr",
+  zykennn: "zykenn"
+};
+const PARTY_MEMBER_ORDER = Object.fromEntries(
+  Object.entries({
+    "Alpha 1": ["Miyuyua", "Jyliana", "Osnub", "Lalaa", "MT999"],
+    "Alpha 2": ["WeeDevaBR", "WeeYagsBR", "WeeHuBR", "Helxine", "WeeSunxBR"],
+    "Bravo 1": ["Darthas", "WeeGetziiBR", "WeeChrlygBR", "R0dd", "DocxBR"],
+    "Bravo 2": ["Ryjj", "RSPKT", "BanoobsDR", "BanoobsBR", "Virgo"],
+    "Charlie 1": ["AfyGPDS", "WeeYomiBR", "NakedGarfieldWiz", "WeeJOSHBR", "Yamato"],
+    "Charlie 2": ["Godzillu", "JanKing", "jomski", "KrisJulio", "Zykenn"],
+    "FLEX 1": ["fredplays", "Mamark", "Vogue", "Autumn", "itlognibatman"],
+    "FLEX 2": ["Nasmi", "A1110", "WeeFrztttBR", "Java", "kimi"]
+  }).map(([groupName, names]) => [
+    groupName,
+    new Map(names.map((name, index) => [normalizePartyMemberName(name), index]))
+  ])
+);
 const AUCTION_PAGE_ITEM_ORDER = {
   puppet_card: 1,
   feather_ld: 2,
@@ -58,6 +78,11 @@ const AUCTION_PAGE_ITEM_ORDER = {
   puppet_fragment: 4
 };
 const SHARED_FEATHER_PAGE_KEYS = new Set(["feather_ld", "feather_ts"]);
+
+function normalizePartyMemberName(name) {
+  const normalized = String(name || "").trim().toLowerCase();
+  return PARTY_MEMBER_ORDER_ALIASES[normalized] || normalized;
+}
 
 function toPhDateTimeParts(value) {
   if (!value) return "";
@@ -645,6 +670,15 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
     for (const group of groups) map[group.id] = [];
     for (const member of members) {
       if (member.group_id && map[member.group_id]) map[member.group_id].push(member);
+    }
+    for (const group of groups) {
+      const order = PARTY_MEMBER_ORDER[group.name];
+      map[group.id].sort((a, b) => {
+        if (!order) return a.char_name.localeCompare(b.char_name);
+        const aPosition = order.get(normalizePartyMemberName(a.char_name));
+        const bPosition = order.get(normalizePartyMemberName(b.char_name));
+        return (aPosition ?? 99) - (bPosition ?? 99) || a.char_name.localeCompare(b.char_name);
+      });
     }
     return map;
   }, [groups, members]);
