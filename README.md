@@ -48,6 +48,14 @@ Import the original member masterfile:
 npm run import:members -- "/path/to/Encore Masterfile - Sheet1.csv"
 ```
 
+Import the party groups and slot order from the main-field CSV:
+
+```bash
+npm run import:party-groups -- "/path/to/main-field.csv" --create-missing
+```
+
+Before using manual party slot reordering, run [supabase/migrations/20260609_add_member_party_slot.sql](./supabase/migrations/20260609_add_member_party_slot.sql) in the Supabase SQL Editor.
+
 Import the current auction cycle from the ROOC Auction Log. The Auction Log is the source of truth for who is in the active lineup and in what order; the Masterfile only supplies missing class names.
 
 Dry-run first:

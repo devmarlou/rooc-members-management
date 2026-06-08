@@ -22,6 +22,8 @@ import {
   RefreshCw,
   ChevronDown,
   ChevronUp,
+  ArrowUp,
+  ArrowDown,
   LayoutGrid,
   List
 } from "lucide-react";
@@ -32,6 +34,7 @@ const emptyMember = {
   char_name: "",
   char_class: "Lord Knight",
   group_id: "",
+  party_slot: null,
   joined_at: "",
   notes: ""
 };
@@ -663,7 +666,7 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
   );
 }
 
-function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDeleteGroup, onPickEmptySlot, onRequestUnassign, onEditMember, readOnly = false }) {
+function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDeleteGroup, onPickEmptySlot, onRequestUnassign, onEditMember, onReorderGroupMembers, busy = false, readOnly = false }) {
   const [collapsed, setCollapsed] = useState(false);
   const membersByGroup = useMemo(() => {
     const map = {};
@@ -673,7 +676,11 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
     }
     for (const group of groups) {
       const order = PARTY_MEMBER_ORDER[group.name];
+      const hasSavedSlots = map[group.id].some((member) => Number.isInteger(member.party_slot));
       map[group.id].sort((a, b) => {
+        if (hasSavedSlots) {
+          return (a.party_slot ?? 99) - (b.party_slot ?? 99) || a.char_name.localeCompare(b.char_name);
+        }
         if (!order) return a.char_name.localeCompare(b.char_name);
         const aPosition = order.get(normalizePartyMemberName(a.char_name));
         const bPosition = order.get(normalizePartyMemberName(b.char_name));
@@ -709,6 +716,15 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
     (field.key === "main" && visibleGroups.length < MAIN_FIELD_PARTY_LIMIT)
     || (field.key === "sub" && visibleGroups.length >= MAIN_FIELD_PARTY_LIMIT)
   );
+  const moveMember = (group, roster, member, direction) => {
+    if (readOnly || busy) return;
+    const currentIndex = roster.findIndex((item) => item.id === member.id);
+    const nextIndex = currentIndex + direction;
+    if (currentIndex === -1 || nextIndex < 0 || nextIndex >= roster.length) return;
+    const nextRoster = [...roster];
+    [nextRoster[currentIndex], nextRoster[nextIndex]] = [nextRoster[nextIndex], nextRoster[currentIndex]];
+    onReorderGroupMembers(group, nextRoster.map((item) => item.id));
+  };
 
   return (
     <section className="content-section">
@@ -764,9 +780,19 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
                               <ClassIcon name={member.char_class} size={30} />
                               <button className="slot-name" onClick={() => !readOnly && onEditMember(member)} disabled={readOnly}>{member.char_name}</button>
                               {!readOnly && (
-                                <button className="icon-button danger" onClick={() => onRequestUnassign(member, group)} aria-label={`Remove ${member.char_name}`}>
-                                  <UserMinus size={14} />
-                                </button>
+                                <>
+                                  <div className="slot-order-actions">
+                                    <button className="icon-button" onClick={() => moveMember(group, roster, member, -1)} disabled={busy || slot === 0} aria-label={`Move ${member.char_name} up`} title="Move up">
+                                      <ArrowUp size={13} />
+                                    </button>
+                                    <button className="icon-button" onClick={() => moveMember(group, roster, member, 1)} disabled={busy || slot === roster.length - 1} aria-label={`Move ${member.char_name} down`} title="Move down">
+                                      <ArrowDown size={13} />
+                                    </button>
+                                  </div>
+                                  <button className="icon-button danger" onClick={() => onRequestUnassign(member, group)} disabled={busy} aria-label={`Remove ${member.char_name}`}>
+                                    <UserMinus size={14} />
+                                  </button>
+                                </>
                               )}
                             </div>
                           ) : (
@@ -2324,9 +2350,21 @@ export default function DashboardApp({ publicView = false }) {
     });
   }
 
+  function getOpenPartySlots(groupId, excludedMemberIds = []) {
+    const excluded = new Set(excludedMemberIds);
+    const used = new Set(
+      members
+        .filter((item) => item.group_id === groupId && !excluded.has(item.id))
+        .map((item) => item.party_slot)
+        .filter((slot) => Number.isInteger(slot) && slot >= 1 && slot <= 5)
+    );
+    return [1, 2, 3, 4, 5].filter((slot) => !used.has(slot));
+  }
+
   async function assignMember(memberId, groupId) {
     const member = members.find((item) => item.id === memberId);
     if (!member) return;
+    const openSlots = groupId ? getOpenPartySlots(groupId, [memberId]) : [];
     if (groupId) {
       const groupCount = members.filter((item) => item.group_id === groupId && item.id !== memberId).length;
       if (groupCount >= 5) {
@@ -2338,7 +2376,7 @@ export default function DashboardApp({ publicView = false }) {
     try {
       const data = await api(`/api/members/${memberId}`, {
         method: "PATCH",
-        body: JSON.stringify({ ...member, group_id: groupId || null })
+        body: JSON.stringify({ ...member, group_id: groupId || null, party_slot: groupId ? openSlots[0] || null : null })
       });
       setMembers((current) => current.map((item) => item.id === data.member.id ? data.member : item));
       setToast(groupId ? "Member assigned" : "Member removed from group");
@@ -2359,18 +2397,37 @@ export default function DashboardApp({ publicView = false }) {
 
     setSaving(true);
     try {
-      const updates = await Promise.all(memberIds.map(async (memberId) => {
+      const availableSlots = getOpenPartySlots(groupId, memberIds);
+      const updates = await Promise.all(memberIds.map(async (memberId, index) => {
         const member = members.find((item) => item.id === memberId);
         if (!member) return null;
         const data = await api(`/api/members/${memberId}`, {
           method: "PATCH",
-          body: JSON.stringify({ ...member, group_id: groupId })
+          body: JSON.stringify({ ...member, group_id: groupId, party_slot: availableSlots[index] || null })
         });
         return data.member;
       }));
       const updatedMembers = updates.filter(Boolean);
       setMembers((current) => current.map((item) => updatedMembers.find((member) => member.id === item.id) || item));
       setToast(`${updatedMembers.length} member${updatedMembers.length === 1 ? "" : "s"} assigned`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function reorderGroupMembers(group, orderedMemberIds) {
+    if (!group?.id || !orderedMemberIds.length) return;
+    setSaving(true);
+    try {
+      const data = await api(`/api/groups/${group.id}/members/order`, {
+        method: "PATCH",
+        body: JSON.stringify({ orderedMemberIds })
+      });
+      const updatedById = new Map((data.members || []).map((member) => [member.id, member]));
+      setMembers((current) => current.map((member) => updatedById.get(member.id) || member));
+      setToast(`${group.name} order saved`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -2407,7 +2464,7 @@ export default function DashboardApp({ publicView = false }) {
       run: async () => {
         await api(`/api/groups/${group.id}`, { method: "DELETE" });
         setGroups((current) => current.filter((item) => item.id !== group.id));
-        setMembers((current) => current.map((member) => member.group_id === group.id ? { ...member, group_id: null } : member));
+        setMembers((current) => current.map((member) => member.group_id === group.id ? { ...member, group_id: null, party_slot: null } : member));
         setToast("Group deleted");
       }
     });
@@ -2681,6 +2738,8 @@ export default function DashboardApp({ publicView = false }) {
                   onPickEmptySlot={setPartyPickerGroup}
                   onRequestUnassign={requestUnassign}
                   onEditMember={setMemberModal}
+                  onReorderGroupMembers={reorderGroupMembers}
+                  busy={saving}
                   readOnly
                 />
               </>
@@ -2707,6 +2766,8 @@ export default function DashboardApp({ publicView = false }) {
                   onPickEmptySlot={setPartyPickerGroup}
                   onRequestUnassign={requestUnassign}
                   onEditMember={setMemberModal}
+                  onReorderGroupMembers={reorderGroupMembers}
+                  busy={saving}
                   readOnly={false}
                 />
                 <AuctionFoundation

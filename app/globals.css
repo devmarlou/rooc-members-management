@@ -260,6 +260,17 @@ label span {
   color: #fafafa;
 }
 
+.icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
+.icon-button:disabled:hover {
+  border-color: transparent;
+  background: transparent;
+  color: #a1a1aa;
+}
+
 .icon-button.danger:hover {
   border-color: rgba(239, 68, 68, 0.35);
   background: rgba(239, 68, 68, 0.1);
@@ -905,6 +916,17 @@ label span {
   border: 0;
   background: transparent;
   text-align: left;
+}
+
+.slot-order-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.slot-order-actions .icon-button {
+  width: 26px;
+  min-height: 26px;
 }
 
 .member-main span,

@@ -2,11 +2,36 @@ import { NextResponse } from "next/server";
 import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
+const MEMBER_SELECT = "id,char_name,char_class,group_id,party_slot,joined_at,notes,created_at,updated_at";
+const MEMBER_SELECT_FALLBACK = "id,char_name,char_class,group_id,joined_at,notes,created_at,updated_at";
+
+function isMissingPartySlotError(error) {
+  const message = String(error?.message || "");
+  return error?.code === "42703" || message.includes("party_slot");
+}
+
+function cleanPartySlot(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const slot = Number(value);
+  return Number.isInteger(slot) && slot >= 1 && slot <= 5 ? slot : null;
+}
+
+function withoutPartySlot(body) {
+  const { party_slot, ...rest } = body;
+  return rest;
+}
+
+function withFallbackSlot(member) {
+  return member ? { ...member, party_slot: null } : member;
+}
+
 function cleanMemberPayload(payload) {
+  const group_id = payload.group_id || null;
   return {
     char_name: String(payload.char_name || "").trim(),
     char_class: String(payload.char_class || "").trim(),
-    group_id: payload.group_id || null,
+    group_id,
+    party_slot: group_id ? cleanPartySlot(payload.party_slot) : null,
     joined_at: payload.joined_at || null,
     notes: payload.notes ? String(payload.notes).trim() : null
   };
@@ -22,11 +47,21 @@ export async function POST(request) {
     }
 
     const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("members")
       .insert(body)
-      .select("id,char_name,char_class,group_id,joined_at,notes,created_at,updated_at")
+      .select(MEMBER_SELECT)
       .single();
+
+    if (isMissingPartySlotError(error)) {
+      const fallbackResult = await supabase
+        .from("members")
+        .insert(withoutPartySlot(body))
+        .select(MEMBER_SELECT_FALLBACK)
+        .single();
+      data = withFallbackSlot(fallbackResult.data);
+      error = fallbackResult.error;
+    }
 
     if (error) throw error;
 

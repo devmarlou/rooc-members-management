@@ -122,12 +122,12 @@ function parsePartyGroups(csvPath) {
     if (!parties.some(Boolean)) continue;
 
     const memberRows = rows.slice(rowIndex + 2, rowIndex + 7);
-    for (const memberRow of memberRows) {
+    for (const [slotIndex, memberRow] of memberRows.entries()) {
       parties.forEach((partyName, columnIndex) => {
         if (!partyName) return;
         const charName = memberRow[columnIndex]?.trim();
         if (!charName) return;
-        assignments.push({ charName, partyName });
+        assignments.push({ charName, partyName, party_slot: slotIndex + 1 });
       });
     }
   }
@@ -180,7 +180,7 @@ if (groupError) throw groupError;
 const groupsByName = new Map((groups || []).map((group) => [group.name, group]));
 const { data: members, error: memberError } = await supabase
   .from("members")
-  .select("id,char_name,group_id");
+  .select("id,char_name,group_id,party_slot");
 
 if (memberError) throw memberError;
 
@@ -202,15 +202,15 @@ for (const assignment of assignments) {
   if (memberDefaults.has(normalizedName)) {
     memberDefaultUpdates.push({ id: member.id, ...memberDefaults.get(normalizedName) });
   }
-  if (member.group_id !== group.id) {
-    updates.push({ id: member.id, group_id: group.id, char_name: member.char_name, partyName: assignment.partyName });
+  if (member.group_id !== group.id || member.party_slot !== assignment.party_slot) {
+    updates.push({ id: member.id, group_id: group.id, party_slot: assignment.party_slot, char_name: member.char_name, partyName: assignment.partyName });
   }
 }
 
 for (const update of updates) {
   const { error } = await supabase
     .from("members")
-    .update({ group_id: update.group_id })
+    .update({ group_id: update.group_id, party_slot: update.party_slot })
     .eq("id", update.id);
   if (error) throw error;
 }
@@ -235,9 +235,10 @@ if (missing.length && createMissing) {
       .insert({
         char_name: assignment.charName,
         ...defaults,
-        group_id: group.id
+        group_id: group.id,
+        party_slot: assignment.party_slot
       })
-      .select("id,char_name,char_class,group_id")
+      .select("id,char_name,char_class,group_id,party_slot")
       .single();
     if (error) throw error;
     createdMembers.push(data);
