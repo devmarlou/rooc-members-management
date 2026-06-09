@@ -94,7 +94,7 @@ Once the project is ready:
 1. In Supabase dashboard, go to **Project Settings (gear icon)** → **API**
 2. You'll see three values — **copy these somewhere safe**:
    - `Project URL` → starts with `https://xxxxx.supabase.co` → this is your `NEXT_PUBLIC_SUPABASE_URL`
-   - `anon public` key → long string starting with `eyJ...` → this is your `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `anon public` or publishable key → long string starting with `eyJ...` → this is your `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
    - `service_role` key → also `eyJ...` → this is your `SUPABASE_SERVICE_ROLE_KEY` (server-side only, **never expose** in frontend code)
 
 ### C. Create the database tables
@@ -250,7 +250,7 @@ ALTER TABLE auction_allocations DISABLE ROW LEVEL SECURITY;
 ```
 
 > **Security note:** Without RLS, anyone with the anon key could theoretically read/write data via the Supabase REST API. We rely on:
-> 1. The shared admin password (gates app access)
+> 1. Manual app users in Supabase (gates app access)
 > 2. The service_role key for sensitive operations (server-side only)
 > 3. Not publicly advertising the URL
 >
@@ -311,15 +311,15 @@ Create a file `.env.local` in the project root:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...your-anon-key...
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=eyJ...your-publishable-or-anon-key...
+SUPABASE_URL=https://YOUR-PROJECT.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=eyJ...your-service-role-key...
-ADMIN_PASSWORD=pick-a-strong-shared-password
-AUTH_SECRET=run-`openssl rand -base64 32`-to-generate-this
+SESSION_SECRET=run-`openssl rand -base64 32`-to-generate-this
 ```
 
 > **Important:** `.env.local` is already in `.gitignore` by default in Next.js — your secrets won't be pushed to GitHub.
 
-To generate `AUTH_SECRET`, run in terminal:
+To generate `SESSION_SECRET`, run in terminal:
 ```bash
 openssl rand -base64 32
 ```
@@ -399,10 +399,10 @@ In the same Vercel import screen, expand **Environment Variables** and add the s
 | Key | Value |
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Your anon key |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Your publishable/anon key |
+| `SUPABASE_URL` | Your Supabase URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Your service role key |
-| `ADMIN_PASSWORD` | Your chosen admin password |
-| `AUTH_SECRET` | Your generated secret |
+| `SESSION_SECRET` | Your generated secret |
 
 Click **Deploy**. First deploy takes ~2 minutes.
 
@@ -484,9 +484,9 @@ Store backups in Google Drive, Dropbox, or just locally.
 | **`npm install` errors** | Make sure Node.js is v20+. Run `node --version` |
 | **Vercel build fails** | Check the build logs. Most common: missing env var. Add it in Project Settings → Environment Variables, then redeploy |
 | **Supabase connection error** | Double-check `NEXT_PUBLIC_SUPABASE_URL` and `_KEY` in both `.env.local` AND Vercel. They must match Supabase project |
-| **"Auth secret missing"** | Run `openssl rand -base64 32`, add to env vars |
+| **"Auth secret missing"** | Run `openssl rand -base64 32`, add it as `SESSION_SECRET` |
 | **Database project paused** | Visit Supabase dashboard, wait ~1 min for resume |
-| **Forgot admin password** | Update `ADMIN_PASSWORD` in Vercel env vars → trigger redeploy (Vercel dashboard → Deployments → ⋯ → Redeploy) |
+| **Forgot user password** | In Supabase SQL Editor, update that row's `password_hash` with `extensions.crypt('new-default-password', extensions.gen_salt('bf'))` and set `must_reset_password = true` |
 | **Need to inspect data** | Supabase dashboard → Table Editor (built-in) or connect TablePlus using DB credentials |
 
 ---
@@ -557,7 +557,7 @@ Building out the actual UI/features (using the design briefs + Claude Design) is
 3. Wire up Supabase calls in server actions (use `auction-logic-spec.md` for the algorithm)
 4. Test locally with `npm run dev`
 5. Push to GitHub → auto-deploys to Vercel
-6. Add the other 4 admins (just share the URL + admin password)
+6. Add the other admins manually in `app_users` with role `admin`
 
 ---
 

@@ -25,7 +25,9 @@ import {
   ArrowUp,
   ArrowDown,
   LayoutGrid,
-  List
+  List,
+  History,
+  KeyRound
 } from "lucide-react";
 import { classByName, classes, classOrder, colorGroups } from "@/components/data";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
@@ -237,6 +239,71 @@ function LoginScreen({ onLogin }) {
   );
 }
 
+function ResetPasswordScreen({ username, onReset }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const passwordMismatch = newPassword && confirmPassword && newPassword !== confirmPassword;
+
+  async function submit(event) {
+    event.preventDefault();
+    setError("");
+    if (newPassword.length < 8) {
+      setError("New password must be at least 8 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError("New passwords do not match.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await api("/api/auth/reset-password", {
+        method: "POST",
+        body: JSON.stringify({ currentPassword, newPassword })
+      });
+      onReset();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="login-page">
+      <section className="login-card">
+        <div className="brand-mark"><KeyRound size={28} /></div>
+        <p className="eyebrow">first login</p>
+        <h1>RESET</h1>
+        <p className="field-note reset-note">Signed in as {username}. Change the default password before opening the dashboard.</p>
+        <form onSubmit={submit} className="login-form">
+          <label>
+            <span>Current password</span>
+            <input value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} type="password" autoFocus />
+          </label>
+          <label>
+            <span>New password</span>
+            <input value={newPassword} onChange={(event) => setNewPassword(event.target.value)} type="password" />
+          </label>
+          <label>
+            <span>Confirm password</span>
+            <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} type="password" />
+          </label>
+          {(error || passwordMismatch) && <p className="form-error">{error || "New passwords do not match."}</p>}
+          <button className="primary-button full" disabled={busy || passwordMismatch}>
+            {busy ? <Loader2 className="spin" size={16} /> : <Check size={16} />}
+            Save password
+          </button>
+        </form>
+      </section>
+    </main>
+  );
+}
+
 function Modal({ title, children, footer, onClose, size = "default" }) {
   useEffect(() => {
     const onKey = (event) => {
@@ -249,7 +316,7 @@ function Modal({ title, children, footer, onClose, size = "default" }) {
   return (
     <div className="modal-layer" role="dialog" aria-modal="true">
       <button className="modal-backdrop" onClick={onClose} aria-label="Close dialog" />
-      <section className={size === "sm" ? "modal-card modal-sm" : "modal-card"}>
+      <section className={`modal-card${size === "sm" ? " modal-sm" : ""}${size === "lg" ? " modal-lg" : ""}`}>
         <header className="modal-header">
           <h2>{title}</h2>
           <button className="icon-button" onClick={onClose} aria-label="Close"><X size={16} /></button>
@@ -257,6 +324,60 @@ function Modal({ title, children, footer, onClose, size = "default" }) {
         <div className="modal-body">{children}</div>
         {footer && <footer className="modal-footer">{footer}</footer>}
       </section>
+    </div>
+  );
+}
+
+function formatAuditDate(value) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("en-PH", {
+    timeZone: PH_TIME_ZONE,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(new Date(value));
+}
+
+function prettifyAction(action) {
+  return String(action || "")
+    .replaceAll(".", " ")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function AuditLogsTable({ logs }) {
+  if (!logs.length) {
+    return <div className="empty-panel compact">No updates have been logged yet.</div>;
+  }
+
+  return (
+    <div className="audit-table-wrap">
+      <table className="audit-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Who</th>
+            <th>Role</th>
+            <th>Action</th>
+            <th>What changed</th>
+            <th>Target</th>
+          </tr>
+        </thead>
+        <tbody>
+          {logs.map((log) => (
+            <tr key={log.id}>
+              <td><time>{formatAuditDate(log.created_at)}</time></td>
+              <td>{log.actor_username}</td>
+              <td>{log.actor_role === "super_admin" ? "super admin" : "admin"}</td>
+              <td>{prettifyAction(log.action)}</td>
+              <td>{log.summary || "-"}</td>
+              <td>{log.target_type ? `${log.target_type}${log.target_id ? ` · ${String(log.target_id).slice(0, 8)}` : ""}` : "-"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -397,7 +518,8 @@ function RosterLimitForm({ current, minimum, onCancel, onSave }) {
   );
 }
 
-function Header({ username, onLogout, publicView = false, publicGlAuction = null }) {
+function Header({ username, role, onLogout, auditLogView = false, publicView = false, publicGlAuction = null }) {
+  const roleLabel = role === "super_admin" ? "super admin" : "admin";
   return (
     <header className="topbar">
       <div className="topbar-inner">
@@ -416,8 +538,14 @@ function Header({ username, onLogout, publicView = false, publicGlAuction = null
         <div className="admin-row">
           <div className="signed-in">
             <span>{publicView ? "view mode" : "signed in as"}</span>
-            <strong>{publicView ? "public" : `${username || "admin"} · admin`}</strong>
+            <strong>{publicView ? "public" : `${username || "admin"} · ${roleLabel}`}</strong>
           </div>
+          {!publicView && role === "super_admin" && !auditLogView && (
+            <a className="ghost-button" href="/audit-logs"><History size={15} />Logs</a>
+          )}
+          {!publicView && auditLogView && (
+            <a className="ghost-button" href="/"><LayoutGrid size={15} />Dashboard</a>
+          )}
           {!publicView && <button className="ghost-button" onClick={onLogout}><LogOut size={15} />Log out</button>}
         </div>
       </div>
@@ -2152,8 +2280,8 @@ function AuctionFoundation({
   );
 }
 
-export default function DashboardApp({ publicView = false }) {
-  const [session, setSession] = useState({ loading: true, authenticated: false, username: "" });
+export default function DashboardApp({ publicView = false, auditLogView = false }) {
+  const [session, setSession] = useState({ loading: true, authenticated: false, username: "", role: "", mustResetPassword: false });
   const [members, setMembers] = useState([]);
   const [groups, setGroups] = useState([]);
   const [auctionItems, setAuctionItems] = useState([]);
@@ -2169,6 +2297,8 @@ export default function DashboardApp({ publicView = false }) {
   const [partyPickerGroup, setPartyPickerGroup] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
   const [finalizePreview, setFinalizePreview] = useState(null);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditLogsLoading, setAuditLogsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [classFilter, setClassFilter] = useState("");
   const [memberLimit, setMemberLimit] = useState(null);
@@ -2226,18 +2356,30 @@ export default function DashboardApp({ publicView = false }) {
 
   async function checkSession() {
     if (publicView) {
-      setSession({ loading: false, authenticated: true, username: "public" });
+      setSession({ loading: false, authenticated: true, username: "public", role: "", mustResetPassword: false });
       loadData();
       return;
     }
     const data = await api("/api/auth/session");
-    setSession({ loading: false, authenticated: data.authenticated, username: data.username || "" });
-    if (data.authenticated) loadData();
+    setSession({
+      loading: false,
+      authenticated: data.authenticated,
+      username: data.username || "",
+      role: data.role || "",
+      mustResetPassword: Boolean(data.mustResetPassword)
+    });
+    if (data.authenticated && !data.mustResetPassword) {
+      if (auditLogView) {
+        if (data.role === "super_admin") loadAuditLogs();
+      } else {
+        loadData();
+      }
+    }
   }
 
   useEffect(() => {
     checkSession().catch((err) => {
-      setSession({ loading: false, authenticated: false, username: "" });
+      setSession({ loading: false, authenticated: false, username: "", role: "", mustResetPassword: false });
       setError(err.message);
     });
   }, [loadData, publicView]);
@@ -2319,11 +2461,23 @@ export default function DashboardApp({ publicView = false }) {
 
   async function logout() {
     await api("/api/auth/logout", { method: "POST" });
-    setSession({ loading: false, authenticated: false, username: "" });
+    setSession({ loading: false, authenticated: false, username: "", role: "", mustResetPassword: false });
     setMembers([]);
     setGroups([]);
     setAuctionItems([]);
     setAuctionState(null);
+  }
+
+  async function loadAuditLogs() {
+    setAuditLogsLoading(true);
+    try {
+      const data = await api("/api/audit-logs");
+      setAuditLogs(data.logs || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAuditLogsLoading(false);
+    }
   }
 
   async function saveMember(payload) {
@@ -2705,11 +2859,59 @@ export default function DashboardApp({ publicView = false }) {
     return <LoginScreen onLogin={checkSession} />;
   }
 
+  if (!publicView && session.mustResetPassword) {
+    return <ResetPasswordScreen username={session.username} onReset={checkSession} />;
+  }
+
   return (
     <>
       <NoiseLayer />
-      <Header username={session.username} onLogout={logout} publicView={publicView} publicGlAuction={publicGlAuction} />
+      <Header
+        username={session.username}
+        role={session.role}
+        onLogout={logout}
+        auditLogView={auditLogView}
+        publicView={publicView}
+        publicGlAuction={publicGlAuction}
+      />
       <main className="dashboard">
+        {auditLogView ? (
+          <>
+            {session.role !== "super_admin" ? (
+              <div className="alert-panel">
+                <AlertTriangle size={17} />
+                <span>Only super admins can view update logs.</span>
+              </div>
+            ) : (
+              <section className="audit-page">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">super admin</p>
+                    <h2>Update logs</h2>
+                    <p>Recent dashboard changes, who made them, and what was updated.</p>
+                  </div>
+                  <button className="ghost-button" onClick={loadAuditLogs} disabled={auditLogsLoading}>
+                    {auditLogsLoading ? <Loader2 className="spin" size={15} /> : <RefreshCw size={15} />}
+                    Refresh
+                  </button>
+                </div>
+                {error && (
+                  <div className="alert-panel">
+                    <AlertTriangle size={17} />
+                    <span>{error}</span>
+                    <button onClick={() => setError("")}>Dismiss</button>
+                  </div>
+                )}
+                {auditLogsLoading ? (
+                  <div className="loading-panel"><Loader2 className="spin" size={20} />Loading logs</div>
+                ) : (
+                  <AuditLogsTable logs={auditLogs} />
+                )}
+              </section>
+            )}
+          </>
+        ) : (
+          <>
         {!publicView && (
           <Stats
             members={members}
@@ -2804,6 +3006,8 @@ export default function DashboardApp({ publicView = false }) {
                 />
               </>
             )}
+          </>
+        )}
           </>
         )}
       </main>

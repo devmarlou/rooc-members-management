@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
+import { writeAuditLog } from "@/lib/auditLog";
 import { markCantPay } from "@/lib/auctionEngine";
 import { emitDashboardEvent } from "@/lib/dashboardEvents";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
@@ -13,6 +14,13 @@ export async function POST(request) {
     const auctionState = await markCantPay(supabase, body.memberId, body.auctionId);
     const auction = (auctionState.activeAuctions || []).find((entry) => entry.id === body.auctionId) || auctionState.activeAuction;
     await emitDashboardEvent(supabase, `${auction?.type || "auction"}_auction_cant_pay`);
+    await writeAuditLog(supabase, request, {
+      action: "auction.member_cant_pay",
+      targetType: "member",
+      targetId: body.memberId || null,
+      summary: "Marked auction member as cannot pay",
+      metadata: { body, auctionId: auction?.id || body.auctionId || null, auctionType: auction?.type || null }
+    });
     return NextResponse.json({ auctionState });
   } catch (error) {
     return handleApiError(error);

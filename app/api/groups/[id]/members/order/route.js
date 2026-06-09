@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
+import { writeAuditLog } from "@/lib/auditLog";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 const MEMBER_SELECT = "id,char_name,char_class,group_id,party_slot,joined_at,notes,created_at,updated_at";
@@ -70,6 +71,17 @@ export async function PATCH(request, { params }) {
       .order("char_name", { ascending: true });
 
     if (updatedError) throw updatedError;
+    await writeAuditLog(supabase, request, {
+      action: "group.members_reordered",
+      targetType: "group",
+      targetId: groupId,
+      summary: "Reordered party members",
+      metadata: {
+        orderedMemberIds,
+        before: members || [],
+        after: updatedMembers || []
+      }
+    });
     return NextResponse.json({ members: updatedMembers || [] });
   } catch (error) {
     return handleApiError(error);

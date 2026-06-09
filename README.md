@@ -17,12 +17,24 @@ npm install
 ```bash
 SUPABASE_URL="https://your-project-ref.supabase.co"
 SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
-ADMIN_USERNAME="admin"
-ADMIN_PASSWORD="change-this-password"
 SESSION_SECRET="replace-with-a-long-random-string"
+NEXT_PUBLIC_SUPABASE_URL="https://your-project-ref.supabase.co"
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="your-publishable-or-anon-key"
 ```
 
-4. Run the app:
+4. Create app users manually in Supabase SQL Editor:
+
+```sql
+insert into app_users (username, role, password_hash, must_reset_password)
+values ('your-name', 'super_admin', extensions.crypt('default-password-here', extensions.gen_salt('bf')), true);
+
+insert into app_users (username, role, password_hash, must_reset_password)
+values ('guild-admin', 'admin', extensions.crypt('default-password-here', extensions.gen_salt('bf')), true);
+```
+
+Users must change the default password after first login.
+
+5. Run the app:
 
 ```bash
 npm run dev
@@ -32,7 +44,8 @@ Open `http://localhost:3000`.
 
 ## Current Scope
 
-- Static admin login backed by a signed httpOnly session cookie.
+- Manual Supabase row-managed admin login backed by a signed httpOnly session cookie.
+- `super_admin` users can view audit logs; `admin` users can manage dashboard data.
 - Server-side Supabase access through API routes.
 - Persistent member roster CRUD.
 - Persistent party/group CRUD.
@@ -90,9 +103,9 @@ Set these environment variables in Vercel before deploying:
 ```bash
 SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
-ADMIN_USERNAME
-ADMIN_PASSWORD
 SESSION_SECRET
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 ```
 
 Do not commit `.env.local`.

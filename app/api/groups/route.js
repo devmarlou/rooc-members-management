@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
+import { writeAuditLog } from "@/lib/auditLog";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function POST(request) {
@@ -22,6 +23,13 @@ export async function POST(request) {
       .single();
 
     if (error) throw error;
+    await writeAuditLog(supabase, request, {
+      action: "group.created",
+      targetType: "group",
+      targetId: data.id,
+      summary: `Created group ${data.name}`,
+      metadata: { group: data }
+    });
     return NextResponse.json({ group: data }, { status: 201 });
   } catch (error) {
     return handleApiError(error);

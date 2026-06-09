@@ -177,6 +177,10 @@ h3 {
   margin-top: 24px;
 }
 
+.reset-note {
+  margin-top: 14px;
+}
+
 label span {
   display: block;
   margin-bottom: 7px;
@@ -2453,6 +2457,10 @@ button.party-slot.empty:hover:not(:disabled) {
   width: min(560px, calc(100vw - 32px));
 }
 
+.modal-card.modal-lg {
+  width: min(900px, calc(100vw - 32px));
+}
+
 .modal-header,
 .modal-footer {
   display: flex;
@@ -2470,6 +2478,119 @@ button.party-slot.empty:hover:not(:disabled) {
 
 .modal-body {
   padding: 18px;
+}
+
+.audit-page {
+  display: grid;
+  gap: 16px;
+}
+
+.section-heading,
+.audit-log-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.section-heading {
+  margin-bottom: 0;
+}
+
+.section-heading h2 {
+  margin: 0 0 6px;
+  color: #fafafa;
+  font-size: 24px;
+}
+
+.section-heading p:last-child {
+  margin: 0;
+  color: var(--muted);
+}
+
+.audit-table-wrap {
+  overflow: auto;
+  border: 1px solid rgba(63, 63, 70, 0.78);
+  border-radius: 8px;
+  background: rgba(9, 9, 11, 0.34);
+}
+
+.audit-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+}
+
+.audit-table th,
+.audit-table td {
+  border-bottom: 1px solid rgba(63, 63, 70, 0.72);
+  padding: 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.audit-table th {
+  color: var(--muted-2);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.audit-table td {
+  color: #e4e4e7;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.audit-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.audit-table time,
+.audit-table td:nth-child(6) {
+  color: var(--muted-2);
+  white-space: nowrap;
+}
+
+.audit-log-list {
+  max-height: min(620px, 64vh);
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+  padding-right: 2px;
+}
+
+.audit-log-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid rgba(63, 63, 70, 0.78);
+  border-radius: 8px;
+  background: rgba(9, 9, 11, 0.34);
+  padding: 12px;
+}
+
+.audit-log-row strong,
+.audit-log-row span {
+  display: block;
+}
+
+.audit-log-row strong {
+  color: #fafafa;
+  font-size: 14px;
+}
+
+.audit-log-row span,
+.audit-log-row time {
+  color: var(--muted-2);
+  font-size: 12px;
+}
+
+.audit-log-row time {
+  white-space: nowrap;
 }
 
 .confirm-body {

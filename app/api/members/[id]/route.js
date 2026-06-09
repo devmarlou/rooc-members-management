@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
+import { writeAuditLog } from "@/lib/auditLog";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 const MEMBER_SELECT = "id,char_name,char_class,group_id,party_slot,joined_at,notes,created_at,updated_at";
@@ -48,6 +49,13 @@ export async function PATCH(request, { params }) {
     }
 
     const supabase = getSupabaseAdmin();
+    const beforeResult = await supabase
+      .from("members")
+      .select(MEMBER_SELECT)
+      .eq("id", id)
+      .maybeSingle();
+    if (beforeResult.error && !isMissingPartySlotError(beforeResult.error)) throw beforeResult.error;
+
     let { data, error } = await supabase
       .from("members")
       .update(body)
@@ -67,6 +75,13 @@ export async function PATCH(request, { params }) {
     }
 
     if (error) throw error;
+    await writeAuditLog(supabase, request, {
+      action: "member.updated",
+      targetType: "member",
+      targetId: data.id,
+      summary: `Updated member ${data.char_name}`,
+      metadata: { before: beforeResult.data || null, after: data }
+    });
     return NextResponse.json({ member: data });
   } catch (error) {
     return handleApiError(error);
@@ -78,12 +93,27 @@ export async function DELETE(request, { params }) {
 
   try {
     const { id } = await params;
-    const { error } = await getSupabaseAdmin()
+    const supabase = getSupabaseAdmin();
+    const beforeResult = await supabase
+      .from("members")
+      .select(MEMBER_SELECT)
+      .eq("id", id)
+      .maybeSingle();
+    if (beforeResult.error && !isMissingPartySlotError(beforeResult.error)) throw beforeResult.error;
+
+    const { error } = await supabase
       .from("members")
       .delete()
       .eq("id", id);
 
     if (error) throw error;
+    await writeAuditLog(supabase, request, {
+      action: "member.deleted",
+      targetType: "member",
+      targetId: id,
+      summary: `Deleted member ${beforeResult.data?.char_name || id}`,
+      metadata: { before: beforeResult.data || null }
+    });
     return NextResponse.json({ ok: true });
   } catch (error) {
     return handleApiError(error);

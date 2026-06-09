@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cancelOpenAuction, cancelOpenAuctions } from "@/lib/auctionEngine";
 import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
+import { writeAuditLog } from "@/lib/auditLog";
 import { emitDashboardEvent } from "@/lib/dashboardEvents";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -24,6 +25,13 @@ export async function POST(request) {
       ? await cancelOpenAuctions(supabase, auctionIds)
       : await cancelOpenAuction(supabase, body.auctionId);
     await emitDashboardEvent(supabase, `${auctionType}_auction_cancelled`);
+    await writeAuditLog(supabase, request, {
+      action: "auction.cancelled",
+      targetType: "auction",
+      targetId: body.auctionId || auctionIds[0] || null,
+      summary: `Cancelled ${auctionType} auction`,
+      metadata: { body, auctionIds }
+    });
     return NextResponse.json({ auctionState });
   } catch (error) {
     return handleApiError(error);

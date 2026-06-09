@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
+import { writeAuditLog } from "@/lib/auditLog";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 const MEMBER_SELECT = "id,char_name,char_class,group_id,party_slot,joined_at,notes,created_at,updated_at";
@@ -96,6 +97,14 @@ export async function POST(request) {
       });
       if (progressResult.error) throw progressResult.error;
     }
+
+    await writeAuditLog(supabase, request, {
+      action: "member.created",
+      targetType: "member",
+      targetId: data.id,
+      summary: `Created member ${data.char_name}`,
+      metadata: { member: data }
+    });
 
     return NextResponse.json({ member: data }, { status: 201 });
   } catch (error) {

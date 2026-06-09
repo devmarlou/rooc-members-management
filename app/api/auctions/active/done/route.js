@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { finishActiveAuction } from "@/lib/auctionEngine";
 import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
+import { writeAuditLog } from "@/lib/auditLog";
 import { emitDashboardEvent } from "@/lib/dashboardEvents";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -21,6 +22,13 @@ export async function POST(request) {
     }
     const auctionState = await finishActiveAuction(supabase, body.auctionId);
     await emitDashboardEvent(supabase, `${auctionType}_auction_done`);
+    await writeAuditLog(supabase, request, {
+      action: "auction.finalized",
+      targetType: "auction",
+      targetId: body.auctionId || null,
+      summary: `Finalized ${auctionType} auction`,
+      metadata: { body }
+    });
     return NextResponse.json({ auctionState });
   } catch (error) {
     return handleApiError(error);
