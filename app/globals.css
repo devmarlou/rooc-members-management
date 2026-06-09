@@ -870,6 +870,19 @@ label span {
   padding: 8px;
 }
 
+.party-slot[draggable="true"] {
+  cursor: grab;
+}
+
+.party-slot[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.party-slot.dragging {
+  border-color: rgba(245, 158, 11, 0.55);
+  opacity: 0.62;
+}
+
 .member-row {
   min-height: 62px;
   display: grid;
@@ -999,6 +1012,20 @@ button.party-slot.empty:hover:not(:disabled) {
   border-color: rgba(245, 158, 11, 0.45);
   background: rgba(245, 158, 11, 0.06);
   color: var(--amber-2);
+}
+
+.party-drop-zone {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px dashed rgba(245, 158, 11, 0.55);
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.08);
+  color: var(--amber-2);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .assign-row {

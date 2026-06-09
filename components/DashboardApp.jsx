@@ -103,6 +103,48 @@ function normalizePartyMemberName(name) {
   return PARTY_MEMBER_ORDER_ALIASES[normalized] || normalized;
 }
 
+function sortedPartyRoster(roster, groupName) {
+  const hasSavedSlots = roster.some((member) => Number.isInteger(member.party_slot));
+  return [...roster].sort((a, b) => {
+    if (hasSavedSlots) {
+      return (a.party_slot ?? 99) - (b.party_slot ?? 99) || a.char_name.localeCompare(b.char_name);
+    }
+    const order = PARTY_MEMBER_ORDER[groupName];
+    if (!order) return a.char_name.localeCompare(b.char_name);
+    const aPosition = order.get(normalizePartyMemberName(a.char_name));
+    const bPosition = order.get(normalizePartyMemberName(b.char_name));
+    return (aPosition ?? 99) - (bPosition ?? 99) || a.char_name.localeCompare(b.char_name);
+  });
+}
+
+function buildPartySlots(roster, groupName) {
+  const hasSavedSlots = roster.some((member) => Number.isInteger(member.party_slot));
+  const slots = [null, null, null, null, null];
+
+  if (!hasSavedSlots) {
+    const ordered = sortedPartyRoster(roster, groupName);
+    for (let index = 0; index < slots.length; index++) slots[index] = ordered[index] || null;
+    return slots;
+  }
+
+  const unslotted = [];
+  for (const member of sortedPartyRoster(roster, groupName)) {
+    if (Number.isInteger(member.party_slot) && member.party_slot >= 1 && member.party_slot <= 5 && !slots[member.party_slot - 1]) {
+      slots[member.party_slot - 1] = member;
+    } else {
+      unslotted.push(member);
+    }
+  }
+
+  for (const member of unslotted) {
+    const openIndex = slots.findIndex((slot) => !slot);
+    if (openIndex === -1) break;
+    slots[openIndex] = member;
+  }
+
+  return slots;
+}
+
 function toPhDateTimeParts(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -808,8 +850,9 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
   );
 }
 
-function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDeleteGroup, onPickEmptySlot, onRequestUnassign, onEditMember, onReorderGroupMembers, busy = false, readOnly = false }) {
+function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDeleteGroup, onPickEmptySlot, onRequestUnassign, onEditMember, onMoveMemberToSlot, busy = false, readOnly = false }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [draggingMemberId, setDraggingMemberId] = useState(null);
   const membersByGroup = useMemo(() => {
     const map = {};
     for (const group of groups) map[group.id] = [];
@@ -817,17 +860,7 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
       if (member.group_id && map[member.group_id]) map[member.group_id].push(member);
     }
     for (const group of groups) {
-      const order = PARTY_MEMBER_ORDER[group.name];
-      const hasSavedSlots = map[group.id].some((member) => Number.isInteger(member.party_slot));
-      map[group.id].sort((a, b) => {
-        if (hasSavedSlots) {
-          return (a.party_slot ?? 99) - (b.party_slot ?? 99) || a.char_name.localeCompare(b.char_name);
-        }
-        if (!order) return a.char_name.localeCompare(b.char_name);
-        const aPosition = order.get(normalizePartyMemberName(a.char_name));
-        const bPosition = order.get(normalizePartyMemberName(b.char_name));
-        return (aPosition ?? 99) - (bPosition ?? 99) || a.char_name.localeCompare(b.char_name);
-      });
+      map[group.id] = sortedPartyRoster(map[group.id], group.name);
     }
     return map;
   }, [groups, members]);
@@ -858,14 +891,37 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
     (field.key === "main" && visibleGroups.length < MAIN_FIELD_PARTY_LIMIT)
     || (field.key === "sub" && visibleGroups.length >= MAIN_FIELD_PARTY_LIMIT)
   );
-  const moveMember = (group, roster, member, direction) => {
+  const moveMember = (group, member, targetSlot) => {
     if (readOnly || busy) return;
-    const currentIndex = roster.findIndex((item) => item.id === member.id);
-    const nextIndex = currentIndex + direction;
-    if (currentIndex === -1 || nextIndex < 0 || nextIndex >= roster.length) return;
-    const nextRoster = [...roster];
-    [nextRoster[currentIndex], nextRoster[nextIndex]] = [nextRoster[nextIndex], nextRoster[currentIndex]];
-    onReorderGroupMembers(group, nextRoster.map((item) => item.id));
+    if (targetSlot < 1 || targetSlot > 5) return;
+    onMoveMemberToSlot(member.id, group.id, targetSlot);
+  };
+  const beginDrag = (event, member) => {
+    if (readOnly || busy) return;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", member.id);
+    setDraggingMemberId(member.id);
+  };
+  const acceptDrag = (event) => {
+    if (readOnly || busy) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  };
+  const dropOnSlot = (event, group, slot) => {
+    if (readOnly || busy) return;
+    event.preventDefault();
+    const memberId = event.dataTransfer.getData("text/plain");
+    setDraggingMemberId(null);
+    if (!memberId) return;
+    onMoveMemberToSlot(memberId, group.id, slot + 1);
+  };
+  const dropToUnassigned = (event) => {
+    if (readOnly || busy) return;
+    event.preventDefault();
+    const memberId = event.dataTransfer.getData("text/plain");
+    setDraggingMemberId(null);
+    if (!memberId) return;
+    onMoveMemberToSlot(memberId, null, null);
   };
 
   return (
@@ -876,6 +932,11 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
           <h2>Groups</h2>
         </div>
         <div className="section-actions">
+          {!readOnly && draggingMemberId && (
+            <div className="party-drop-zone" onDragOver={acceptDrag} onDrop={dropToUnassigned}>
+              Drop to unassign
+            </div>
+          )}
           <CollapseButton collapsed={collapsed} onToggle={() => setCollapsed((current) => !current)} />
           {!readOnly && <button className="ghost-button" onClick={onCreateGroup} disabled={collapsed}><Plus size={16} />Create group</button>}
         </div>
@@ -899,10 +960,7 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
               <div className="party-grid">
                 {field.groups.map((group) => {
                   const roster = membersByGroup[group.id] || [];
-                  const hasSavedSlots = roster.some((member) => Number.isInteger(member.party_slot));
-                  const rosterSlots = hasSavedSlots
-                    ? [1, 2, 3, 4, 5].map((slot) => roster.find((member) => member.party_slot === slot) || null)
-                    : [0, 1, 2, 3, 4].map((slot) => roster[slot] || null);
+                  const rosterSlots = buildPartySlots(roster, group.name);
                   return (
                     <article className="party-card" key={group.id}>
                       <header>
@@ -922,16 +980,24 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
                         {[0, 1, 2, 3, 4].map((slot) => {
                           const member = rosterSlots[slot];
                           return member ? (
-                            <div className="party-slot filled" key={member.id}>
+                            <div
+                              className={`party-slot filled ${draggingMemberId === member.id ? "dragging" : ""}`}
+                              key={member.id}
+                              draggable={!readOnly && !busy}
+                              onDragStart={(event) => beginDrag(event, member)}
+                              onDragEnd={() => setDraggingMemberId(null)}
+                              onDragOver={acceptDrag}
+                              onDrop={(event) => dropOnSlot(event, group, slot)}
+                            >
                               <ClassIcon name={member.char_class} size={30} />
                               <button className="slot-name" onClick={() => !readOnly && onEditMember(member)} disabled={readOnly}>{member.char_name}</button>
                               {!readOnly && (
                                 <>
                                   <div className="slot-order-actions">
-                                    <button className="icon-button" onClick={() => moveMember(group, roster, member, -1)} disabled={busy || slot === 0} aria-label={`Move ${member.char_name} up`} title="Move up">
+                                    <button className="icon-button" onClick={() => moveMember(group, member, slot)} disabled={busy || slot === 0} aria-label={`Move ${member.char_name} up`} title="Move up">
                                       <ArrowUp size={13} />
                                     </button>
-                                    <button className="icon-button" onClick={() => moveMember(group, roster, member, 1)} disabled={busy || slot === 4 || slot >= roster.length - 1} aria-label={`Move ${member.char_name} down`} title="Move down">
+                                    <button className="icon-button" onClick={() => moveMember(group, member, slot + 2)} disabled={busy || slot === 4} aria-label={`Move ${member.char_name} down`} title="Move down">
                                       <ArrowDown size={13} />
                                     </button>
                                   </div>
@@ -945,11 +1011,13 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
                             <button
                               className="party-slot empty"
                               key={slot}
-                              onClick={() => !readOnly && onPickEmptySlot(group)}
-                              disabled={readOnly || !unassigned.length}
-                              title={unassigned.length ? `Add member to ${group.name}` : "No unassigned members"}
+                              onClick={() => !readOnly && onPickEmptySlot({ group, slot: slot + 1 })}
+                              onDragOver={acceptDrag}
+                              onDrop={(event) => dropOnSlot(event, group, slot)}
+                              disabled={readOnly || (!unassigned.length && !draggingMemberId)}
+                              title={unassigned.length ? `Add member to ${group.name} slot ${slot + 1}` : "No unassigned members"}
                             >
-                              {unassigned.length ? "Empty slot" : "No unassigned"}
+                              {draggingMemberId ? "Drop here" : unassigned.length ? "Empty slot" : "No unassigned"}
                             </button>
                           );
                         })}
@@ -978,7 +1046,7 @@ function PartiesSection({ members, groups, onCreateGroup, onRenameGroup, onDelet
   );
 }
 
-function PartyMemberPicker({ group, members, currentCount, onCancel, onPickMany, busy }) {
+function PartyMemberPicker({ group, targetSlot, members, currentCount, onCancel, onPickMany, busy }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(() => new Set());
   const openSlots = Math.max(0, 5 - currentCount);
@@ -1007,10 +1075,10 @@ function PartyMemberPicker({ group, members, currentCount, onCancel, onPickMany,
   }
 
   return (
-    <Modal title={`Add to ${group.name}`} onClose={onCancel} size="sm">
+    <Modal title={`Add to ${group.name}${targetSlot ? ` slot ${targetSlot}` : ""}`} onClose={onCancel} size="sm">
       <div className="picker-meta">
         <strong>{currentCount}/5 members</strong>
-        <span>{openSlots} open slot{openSlots === 1 ? "" : "s"} · select up to {openSlots}</span>
+        <span>{targetSlot ? `First selected member goes to slot ${targetSlot}. ` : ""}{openSlots} open slot{openSlots === 1 ? "" : "s"} · select up to {openSlots}</span>
       </div>
       <div className="picker-search">
         <Search size={15} />
@@ -2533,9 +2601,143 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
     return [1, 2, 3, 4, 5].filter((slot) => !used.has(slot));
   }
 
+  function partySlotsFor(memberList, groupId) {
+    const group = groupsById[groupId];
+    const roster = memberList.filter((member) => member.group_id === groupId);
+    return buildPartySlots(roster, group?.name);
+  }
+
+  function memberSlot(memberList, member) {
+    if (!member?.group_id) return null;
+    const slots = partySlotsFor(memberList, member.group_id);
+    const index = slots.findIndex((slotMember) => slotMember?.id === member.id);
+    return index === -1 ? null : index + 1;
+  }
+
+  function applyPartyTargets(memberList, targets) {
+    const targetByMemberId = new Map(targets.map((target) => [target.member_id, target]));
+    return memberList.map((member) => {
+      const target = targetByMemberId.get(member.id);
+      return target
+        ? { ...member, group_id: target.group_id, party_slot: target.party_slot }
+        : member;
+    });
+  }
+
+  function targetsForGroupSlots(groupId, slots) {
+    return slots
+      .map((member, index) => member ? { member_id: member.id, group_id: groupId, party_slot: index + 1 } : null)
+      .filter(Boolean);
+  }
+
+  async function savePartyTargets(targets, successMessage) {
+    if (!targets.length) return;
+    const previousMembers = members;
+    const nextMembers = applyPartyTargets(previousMembers, targets);
+    const groupsByLayoutId = new Map();
+    const unassignedMemberIds = [];
+
+    for (const target of targets) {
+      if (!target.group_id) {
+        unassignedMemberIds.push(target.member_id);
+        continue;
+      }
+      if (!groupsByLayoutId.has(target.group_id)) {
+        groupsByLayoutId.set(target.group_id, { group_id: target.group_id, members: [] });
+      }
+      groupsByLayoutId.get(target.group_id).members.push({
+        member_id: target.member_id,
+        party_slot: target.party_slot
+      });
+    }
+
+    setMembers(nextMembers);
+    setSaving(true);
+    try {
+      const data = await api("/api/parties/layout", {
+        method: "PATCH",
+        body: JSON.stringify({
+          groups: [...groupsByLayoutId.values()],
+          unassignedMemberIds
+        })
+      });
+      const updatedById = new Map((data.members || []).map((member) => [member.id, member]));
+      setMembers((current) => current.map((member) => updatedById.get(member.id) || member));
+      setToast(successMessage || "Party layout saved");
+    } catch (err) {
+      setMembers(previousMembers);
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function moveMemberToSlot(memberId, targetGroupId, targetSlot) {
+    const source = members.find((member) => member.id === memberId);
+    if (!source) return;
+
+    if (!targetGroupId) {
+      const targets = [{ member_id: memberId, group_id: null, party_slot: null }];
+      if (source.group_id) {
+        const sourceSlots = partySlotsFor(members, source.group_id).map((member) => member?.id === memberId ? null : member);
+        targets.push(...targetsForGroupSlots(source.group_id, sourceSlots));
+      }
+      await savePartyTargets(targets, "Member unassigned");
+      return;
+    }
+
+    const slot = Number(targetSlot);
+    if (!Number.isInteger(slot) || slot < 1 || slot > 5) return;
+
+    if (source.group_id === targetGroupId) {
+      const slots = partySlotsFor(members, targetGroupId);
+      const sourceIndex = slots.findIndex((member) => member?.id === memberId);
+      const targetIndex = slot - 1;
+      if (sourceIndex === -1 || sourceIndex === targetIndex) return;
+      [slots[sourceIndex], slots[targetIndex]] = [slots[targetIndex], slots[sourceIndex]];
+      await savePartyTargets(targetsForGroupSlots(targetGroupId, slots), "Party layout saved");
+      return;
+    }
+
+    const targetSlots = partySlotsFor(members, targetGroupId);
+    const targetOccupant = targetSlots[slot - 1];
+    if (targetOccupant?.id === memberId) return;
+
+    const targetCount = members.filter((member) => member.group_id === targetGroupId && member.id !== memberId).length;
+    if (!targetOccupant && targetCount >= 5) {
+      setError("That group already has 5 members.");
+      return;
+    }
+
+    const targets = [];
+    if (source.group_id) {
+      const sourceSlots = partySlotsFor(members, source.group_id);
+      const sourceIndex = sourceSlots.findIndex((member) => member?.id === memberId);
+      if (sourceIndex !== -1) sourceSlots[sourceIndex] = targetOccupant || null;
+      targets.push(...targetsForGroupSlots(source.group_id, sourceSlots));
+    } else if (targetOccupant) {
+      targets.push({ member_id: targetOccupant.id, group_id: null, party_slot: null });
+    }
+    targetSlots[slot - 1] = source;
+    targets.push(...targetsForGroupSlots(targetGroupId, targetSlots));
+    if (targetOccupant) {
+      const occupantTarget = targets.find((target) => target.member_id === targetOccupant.id);
+      if (occupantTarget && !source.group_id) {
+        occupantTarget.group_id = null;
+        occupantTarget.party_slot = null;
+      }
+    }
+
+    await savePartyTargets(targets, "Party layout saved");
+  }
+
   async function assignMember(memberId, groupId) {
     const member = members.find((item) => item.id === memberId);
     if (!member) return;
+    if (!groupId) {
+      await moveMemberToSlot(memberId, null, null);
+      return;
+    }
     const openSlots = groupId ? getOpenPartySlots(groupId, [memberId]) : [];
     if (groupId) {
       const groupCount = members.filter((item) => item.group_id === groupId && item.id !== memberId).length;
@@ -2544,22 +2746,10 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
         return;
       }
     }
-    setSaving(true);
-    try {
-      const data = await api(`/api/members/${memberId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ ...member, group_id: groupId || null, party_slot: groupId ? openSlots[0] || null : null })
-      });
-      setMembers((current) => current.map((item) => item.id === data.member.id ? data.member : item));
-      setToast(groupId ? "Member assigned" : "Member removed from group");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
+    await moveMemberToSlot(memberId, groupId, openSlots[0] || null);
   }
 
-  async function assignMembersToGroup(memberIds, groupId) {
+  async function assignMembersToGroup(memberIds, groupId, preferredSlot = null) {
     const groupCount = members.filter((item) => item.group_id === groupId && !memberIds.includes(item.id)).length;
     const openSlots = 5 - groupCount;
     if (memberIds.length > openSlots) {
@@ -2567,44 +2757,21 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
       return;
     }
 
-    setSaving(true);
-    try {
-      const availableSlots = getOpenPartySlots(groupId, memberIds);
-      const updates = await Promise.all(memberIds.map(async (memberId, index) => {
-        const member = members.find((item) => item.id === memberId);
-        if (!member) return null;
-        const data = await api(`/api/members/${memberId}`, {
-          method: "PATCH",
-          body: JSON.stringify({ ...member, group_id: groupId, party_slot: availableSlots[index] || null })
-        });
-        return data.member;
-      }));
-      const updatedMembers = updates.filter(Boolean);
-      setMembers((current) => current.map((item) => updatedMembers.find((member) => member.id === item.id) || item));
-      setToast(`${updatedMembers.length} member${updatedMembers.length === 1 ? "" : "s"} assigned`);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
+    const selectedMembers = memberIds
+      .map((memberId) => members.find((item) => item.id === memberId))
+      .filter(Boolean);
+    const availableSlots = getOpenPartySlots(groupId, memberIds);
+    const orderedSlots = preferredSlot && availableSlots.includes(preferredSlot)
+      ? [preferredSlot, ...availableSlots.filter((slot) => slot !== preferredSlot)]
+      : availableSlots;
+    const slots = partySlotsFor(members, groupId);
+    for (const [index, member] of selectedMembers.entries()) {
+      const slot = orderedSlots[index];
+      if (!slot) continue;
+      slots[slot - 1] = member;
     }
-  }
-
-  async function reorderGroupMembers(group, orderedMemberIds) {
-    if (!group?.id || !orderedMemberIds.length) return;
-    setSaving(true);
-    try {
-      const data = await api(`/api/groups/${group.id}/members/order`, {
-        method: "PATCH",
-        body: JSON.stringify({ orderedMemberIds })
-      });
-      const updatedById = new Map((data.members || []).map((member) => [member.id, member]));
-      setMembers((current) => current.map((member) => updatedById.get(member.id) || member));
-      setToast(`${group.name} order saved`);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
+    const targets = targetsForGroupSlots(groupId, slots);
+    await savePartyTargets(targets, `${selectedMembers.length} member${selectedMembers.length === 1 ? "" : "s"} assigned`);
   }
 
   async function saveGroup(payload) {
@@ -2958,7 +3125,7 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
                   onPickEmptySlot={setPartyPickerGroup}
                   onRequestUnassign={requestUnassign}
                   onEditMember={setMemberModal}
-                  onReorderGroupMembers={reorderGroupMembers}
+                  onMoveMemberToSlot={moveMemberToSlot}
                   busy={saving}
                   readOnly
                 />
@@ -2986,7 +3153,7 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
                   onPickEmptySlot={setPartyPickerGroup}
                   onRequestUnassign={requestUnassign}
                   onEditMember={setMemberModal}
-                  onReorderGroupMembers={reorderGroupMembers}
+                  onMoveMemberToSlot={moveMemberToSlot}
                   busy={saving}
                   readOnly={false}
                 />
@@ -3049,13 +3216,14 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
 
       {partyPickerGroup && (
         <PartyMemberPicker
-          group={partyPickerGroup}
+          group={partyPickerGroup.group}
+          targetSlot={partyPickerGroup.slot}
           members={unassignedMembers}
-          currentCount={members.filter((member) => member.group_id === partyPickerGroup.id).length}
+          currentCount={members.filter((member) => member.group_id === partyPickerGroup.group.id).length}
           busy={saving}
           onCancel={() => setPartyPickerGroup(null)}
           onPickMany={async (memberIds) => {
-            await assignMembersToGroup(memberIds, partyPickerGroup.id);
+            await assignMembersToGroup(memberIds, partyPickerGroup.group.id, partyPickerGroup.slot);
             setPartyPickerGroup(null);
           }}
         />
