@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 const HELD_TOTALS_KEY = "__held_totals";
 const AUCTION_JOIN_COOLDOWN_MS = 96 * 60 * 60 * 1000;
 const BASELINE_LINEUP = [
+  "WeeYomiBR",
   "Rome",
   "SweetAngel",
   "WeeChrlygBR",
@@ -59,7 +60,6 @@ const BASELINE_LINEUP = [
   "AfyGPDS",
   "WeeJOSHBR",
   "Helxine",
-  "WeeYomiBR",
   "WeeJunBR",
   "Yamato",
   "Shan",

@@ -372,7 +372,7 @@ async function selectMaybeSingle(query) {
 
 async function getOrCreateActiveRound(supabase) {
   const activeRound = await selectMaybeSingle(
-    supabase.from("rounds").select("id,round_number,status").eq("status", "active").limit(1)
+    supabase.from("rounds").select("id,round_number,status,started_at").eq("status", "active").limit(1)
   );
   if (activeRound) return activeRound;
 
@@ -382,7 +382,7 @@ async function getOrCreateActiveRound(supabase) {
   const { data, error } = await supabase
     .from("rounds")
     .insert({ round_number: (latestRound?.round_number || 0) + 1, status: "active" })
-    .select("id,round_number,status")
+    .select("id,round_number,status,started_at")
     .single();
   if (error) throw error;
   return data;
@@ -401,6 +401,14 @@ function isMemberInAuctionCooldown(member, nowMs = Date.now()) {
   return joinedAtMs + AUCTION_JOIN_COOLDOWN_MS > nowMs;
 }
 
+function isMemberLateForRound(member, round) {
+  if (!member?.joined_at || !round?.started_at) return false;
+  const joinedAtMs = new Date(member.joined_at).getTime();
+  const roundStartedAtMs = new Date(round.started_at).getTime();
+  if (Number.isNaN(joinedAtMs) || Number.isNaN(roundStartedAtMs)) return false;
+  return joinedAtMs > roundStartedAtMs;
+}
+
 function completedItemCycles(rows, membersByName, item, caps) {
   const cap = caps.get(item.id) ?? item.default_per_round_cap ?? 0;
   if (cap <= 0) return 0;
@@ -412,12 +420,14 @@ function completedItemCycles(rows, membersByName, item, caps) {
   return Math.min(...eligibleRows.map((row) => Math.floor((row.received[item.item_key] || 0) / cap)));
 }
 
-function currentCycleReceived(row, items, caps, completedCyclesByItemKey) {
+function currentCycleReceived(row, items, caps, completedCyclesByItemKey, membersByName, round) {
   const heldTotals = { ...row.received };
   const received = {
     ...row.received,
     [HELD_TOTALS_KEY]: heldTotals
   };
+  const member = membersByName.get(normalizeName(row.char_name));
+  const needsBaseline = member && (isMemberInAuctionCooldown(member) || isMemberLateForRound(member, round));
 
   for (const item of items) {
     if (!item.gates_round_completion) continue;
@@ -427,6 +437,10 @@ function currentCycleReceived(row, items, caps, completedCyclesByItemKey) {
       continue;
     }
     const completedCycles = completedCyclesByItemKey.get(item.item_key) || 0;
+    const minimumHeldForCycle = completedCycles * cap;
+    if (needsBaseline && (heldTotals[item.item_key] || 0) < minimumHeldForCycle) {
+      heldTotals[item.item_key] = minimumHeldForCycle;
+    }
     received[item.item_key] = Math.min(Math.max((heldTotals[item.item_key] || 0) - completedCycles * cap, 0), cap);
   }
 
@@ -576,7 +590,7 @@ rows.forEach((row, index) => {
     member_id: member.id,
     position: index + 1
   });
-  const received = currentCycleReceived(row, itemsResult.data || [], caps, completedCyclesByItemKey);
+  const received = currentCycleReceived(row, itemsResult.data || [], caps, completedCyclesByItemKey, membersByName, activeRound);
   progressRows.push({
     round_id: activeRound.id,
     member_id: member.id,
