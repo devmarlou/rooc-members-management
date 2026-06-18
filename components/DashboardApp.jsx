@@ -2126,7 +2126,7 @@ function AuctionFoundation({
           <div className="auction-logout-heading">
             <div>
               <p className="eyebrow">required action</p>
-              <h3><LogOut size={22} />NEEDS LOG OUT?</h3>
+              <h3><LogOut size={22} />LOG OUT or 4 DAYS COOLDOWN?</h3>
               <em>These members have no item allocation in the running auction.</em>
             </div>
             <span>{logoutRows.length} member{logoutRows.length === 1 ? "" : "s"}</span>
