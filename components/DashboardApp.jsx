@@ -92,9 +92,9 @@ const PARTY_MEMBER_ORDER = Object.fromEntries(
 );
 const AUCTION_PAGE_ITEM_ORDER = {
   puppet_card: 1,
-  feather_ld: 2,
-  feather_ts: 3,
-  puppet_fragment: 4
+  puppet_fragment: 2,
+  feather_ld: 3,
+  feather_ts: 4
 };
 const SHARED_FEATHER_PAGE_KEYS = new Set(["feather_ld", "feather_ts"]);
 
@@ -594,7 +594,7 @@ function Header({ username, role, onLogout, auditLogView = false, publicView = f
       {publicGlAuction && (
         <div className="topbar-announcement">
           <Gavel size={15} />
-          <span>{publicGlAuction.status === "locked" ? "GL/WoE Auction list is locked. League Prize may be prepared next." : "GL/WoE Auction is running. Check the auction table for current bid instructions."}</span>
+          <span>{publicGlAuction.status === "locked" ? "Guild Auction list is locked. League Prize may be prepared next." : "Guild Auction is running. Check the auction table for current bid instructions."}</span>
         </div>
       )}
     </header>
@@ -1114,14 +1114,14 @@ function PartyMemberPicker({ group, targetSlot, members, currentCount, onCancel,
 }
 
 function auctionTypeLabel(type) {
-  return type === "league_prize" ? "League Prize" : "GL/WoE";
+  return type === "league_prize" ? "League Prize" : "Guild Auction";
 }
 
 function dashboardEventMessage(eventType) {
   const messages = {
-    gl_woe_auction_started: "GL/WoE Auction is now running.",
-    gl_woe_auction_cant_pay: "Someone skipped GL/WoE Auction. The bid list was updated.",
-    gl_woe_auction_done: "GL/WoE Auction is done. Shared progress was updated.",
+    gl_woe_auction_started: "Guild Auction is now running.",
+    gl_woe_auction_cant_pay: "Someone skipped Guild Auction. The bid list was updated.",
+    gl_woe_auction_done: "Guild Auction is done. Shared progress was updated.",
     league_prize_auction_started: "League Prize Auction is now running.",
     league_prize_auction_cant_pay: "Someone skipped League Prize Auction. The bid list was updated.",
     league_prize_auction_done: "League Prize Auction is done. Shared progress was updated.",
@@ -1140,8 +1140,6 @@ function auctionDisplayGroupKey(item) {
 }
 
 function auctionDisplayItemOrder(item) {
-  if (item?.item_key === "feather_ld") return 1;
-  if (item?.item_key === "feather_ts") return 2;
   return AUCTION_PAGE_ITEM_ORDER[item?.item_key] || item?.sort_order || 99;
 }
 
@@ -1154,32 +1152,13 @@ function auctionUnitDisplaySlot(unit) {
 }
 
 function displayPositionedAuctionUnits(auction, auctionItems) {
-  const itemById = new Map(auctionItems.map((item) => [item.id, item]));
-  const grouped = new Map();
-  for (const unit of auction.units || []) {
-    const item = itemById.get(unit.item_id) || { id: unit.item_id, item_key: unit.item_key, sort_order: 99 };
-    const groupKey = auctionDisplayGroupKey(item);
-    const entries = grouped.get(groupKey) || [];
-    entries.push({ unit, item });
-    grouped.set(groupKey, entries);
-  }
-
-  const displayByUnit = new Map();
-  for (const entries of grouped.values()) {
-    entries.sort((a, b) => (
-      auctionDisplayItemOrder(a.item) - auctionDisplayItemOrder(b.item)
-      || (a.unit.page || 0) - (b.unit.page || 0)
-      || (a.unit.slot || 0) - (b.unit.slot || 0)
-    ));
-    entries.forEach(({ unit }, index) => {
-      displayByUnit.set(unit, {
-        displayPage: Math.floor(index / 4) + 1,
-        displaySlot: (index % 4) + 1
-      });
-    });
-  }
-
-  return (auction.units || []).map((unit) => ({ ...unit, ...(displayByUnit.get(unit) || {}) }));
+  // Keep the original auction book page/slot numbers. Item-specific page tabs used to
+  // reindex these per item; restore that behavior here only if those tabs come back.
+  return (auction.units || []).map((unit) => ({
+    ...unit,
+    displayPage: unit.page,
+    displaySlot: unit.slot
+  }));
 }
 
 function compactSlots(units) {
@@ -1258,6 +1237,22 @@ function uniqueBidderNames(auctions = [], auctionItems = []) {
   }
 
   return names;
+}
+
+function logoutCandidateRows(auctionState) {
+  const activeAuctions = auctionState?.activeAuctions || (auctionState?.activeAuction ? [auctionState.activeAuction] : []);
+  if (!activeAuctions.length) return [];
+
+  const allocatedMemberIds = new Set();
+  for (const auction of activeAuctions) {
+    for (const unit of auction.units || []) {
+      if (unit.member_id) allocatedMemberIds.add(unit.member_id);
+    }
+  }
+
+  return (auctionState?.progress || [])
+    .filter((row) => row.member?.id && !allocatedMemberIds.has(row.member.id))
+    .sort((a, b) => a.position - b.position || String(a.member.char_name || "").localeCompare(String(b.member.char_name || "")));
 }
 
 function groupedAuctionBids(units = [], queue = []) {
@@ -1447,7 +1442,7 @@ function buildAuctionPages(auction, auctionItems, selectedItemId = null) {
 }
 
 function auctionItemPageForMember(auction, auctionItems, itemId, memberId) {
-  if (!itemId || !memberId) return null;
+  if (!memberId) return null;
   const pages = buildAuctionPages(auction, auctionItems, itemId);
   for (const page of pages) {
     const slot = page.slots.find((entry) => entry.member?.id === memberId || entry.member_id === memberId || entry.unit?.member_id === memberId);
@@ -1460,7 +1455,7 @@ function AuctionPageView({ auction, auctionItems, page, onPageChange, selectedIt
   const itemOptions = auctionPageItemOptions(auction, auctionItems);
   const safeSelectedItemId = itemOptions.some((item) => item.id === selectedItemId)
     ? selectedItemId
-    : itemOptions[0]?.id || null;
+    : null;
   const selectedItem = itemOptions.find((item) => item.id === safeSelectedItemId) || null;
   const pages = buildAuctionPages(auction, auctionItems, safeSelectedItemId);
   const pageCount = pages.length || 1;
@@ -1475,21 +1470,19 @@ function AuctionPageView({ auction, auctionItems, page, onPageChange, selectedIt
   return (
     <div className="auction-page-view">
       <div className="auction-item-tabs" aria-label="Auction item page filter">
-        {itemOptions.map((item) => (
-          <button
-            type="button"
-            className={item.id === safeSelectedItemId ? "active" : ""}
-            onClick={() => onSelectedItemChange(item.id)}
-            key={item.id}
-          >
-            <ItemIcon itemKey={item.item_key} label={item.name || item.short_name} />
-            <span>{item.short_name}</span>
-          </button>
-        ))}
+        {/* Keep selectedItemId plumbing intact so item-specific page tabs can be restored later. */}
+        <button
+          type="button"
+          className={!safeSelectedItemId ? "active" : ""}
+          onClick={() => onSelectedItemChange(null)}
+        >
+          <LayoutGrid size={14} />
+          <span>All items</span>
+        </button>
       </div>
       <div className="auction-page-controls">
         <button className="ghost-button mini" type="button" onClick={() => setPage(safePage - 1)} disabled={safePage <= 1}>Prev</button>
-        <strong>{selectedItem?.short_name || "Item"} Page {currentPage.displayPage || safePage}</strong>
+        <strong>{selectedItem?.short_name || "All items"} Page {currentPage.displayPage || safePage}</strong>
         <button className="ghost-button mini" type="button" onClick={() => setPage(safePage + 1)} disabled={safePage >= pageCount}>Next</button>
       </div>
       <div className="auction-page-card">
@@ -1539,7 +1532,7 @@ function AuctionPageView({ auction, auctionItems, page, onPageChange, selectedIt
       </div>
       <div className="auction-page-controls bottom">
         <button className="ghost-button mini" type="button" onClick={() => setPage(safePage - 1)} disabled={safePage <= 1}>Prev</button>
-        <span>{selectedItem?.short_name || "Item"} page {currentPage.displayPage || safePage}</span>
+        <span>{selectedItem?.short_name || "All items"} page {currentPage.displayPage || safePage}</span>
         <button className="ghost-button mini" type="button" onClick={() => setPage(safePage + 1)} disabled={safePage >= pageCount}>Next</button>
       </div>
     </div>
@@ -1549,7 +1542,7 @@ function AuctionPageView({ auction, auctionItems, page, onPageChange, selectedIt
 function AuctionStartForm({ type, auctionItems, internalCaps = {}, onCancel, onStart, busy }) {
   const applicable = auctionItems.filter((item) => itemAppliesTo(item, type));
   const cappedItems = applicable.filter((item) => item.gates_round_completion);
-  const [name, setName] = useState(type === "league_prize" ? "League Prize" : "GL/WoE Auction");
+  const [name, setName] = useState(type === "league_prize" ? "League Prize" : "Guild Auction");
   const [inventory, setInventory] = useState(() => Object.fromEntries(applicable.map((item) => [item.item_key, "0"])));
   const [useInGameCaps, setUseInGameCaps] = useState(false);
   const [inGameCaps, setInGameCaps] = useState(() => Object.fromEntries(cappedItems.map((item) => [item.item_key, ""])));
@@ -1609,7 +1602,7 @@ function AuctionStartForm({ type, auctionItems, internalCaps = {}, onCancel, onS
           ))}
         </div>
       )}
-      <p className="field-note">{type === "gl_woe" ? "Lock this GL/WoE list if you want to run optional League Prize after reviewing can't-pay members." : "League Prize is optional. Add only the items available from the event."}</p>
+      <p className="field-note">{type === "gl_woe" ? "Lock this Guild Auction list if you want to run optional League Prize after reviewing can't-pay members." : "League Prize is optional. Add only the items available from the event."}</p>
       <div className="form-actions">
         <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
         <button className="primary-button" disabled={busy}>
@@ -1648,7 +1641,7 @@ function AuctionLimitsForm({ auctionItems, auctionState, onCancel, onSave, busy 
           </label>
         ))}
       </div>
-      <p className="field-note">These shared caps apply to every member in the auction lineup. Illusion Fragments are free-for-all and do not affect limits.</p>
+      <p className="field-note">These shared caps apply to every member in the auction lineup. Illusion Card Fragments are free-for-all and do not affect limits.</p>
       <div className="form-actions">
         <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
         <button className="primary-button" disabled={busy}>
@@ -2013,10 +2006,12 @@ function AuctionFoundation({
   const canStartLeague = Boolean(activeRound && lockedGlReadyForLeague && !leagueAuction);
   const leagueHint = glAuction
     ? lockedGlReadyForLeague
-      ? "League Prize is ready. It will use current progress plus locked GL/WoE reservations."
-      : "Lock-in the GL/WoE auction first, then League Prize becomes available."
-    : "Create and lock a GL/WoE auction first, then League Prize becomes available.";
+      ? "League Prize is ready. It will use current progress plus locked Guild Auction reservations."
+      : "Lock-in the Guild Auction first, then League Prize becomes available."
+    : "Create and lock a Guild Auction first, then League Prize becomes available.";
   const bidderNames = uniqueBidderNames(activeAuctions, auctionItems);
+  const logoutRows = logoutCandidateRows(auctionState);
+  const logoutNames = logoutRows.map((row) => row.member.char_name).filter(Boolean);
 
   function applyAuctionSearch(nextQuery) {
     setAuctionSearch(nextQuery);
@@ -2146,6 +2141,40 @@ function AuctionFoundation({
         </div>
       ) : null}
 
+      {activeAuctions.length ? (
+        <div className="auction-logout-panel">
+          <div className="auction-logout-heading">
+            <div>
+              <p className="eyebrow">no bid allocation</p>
+              <h3><LogOut size={17} />Log out</h3>
+            </div>
+            <span>{logoutRows.length} member{logoutRows.length === 1 ? "" : "s"}</span>
+            {!readOnly && (
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => onCopyBidderNames(logoutNames, "logout member")}
+                disabled={!logoutNames.length}
+              >
+                <Copy size={15} />Copy names
+              </button>
+            )}
+          </div>
+          {logoutRows.length ? (
+            <div className="auction-logout-list">
+              {logoutRows.map((row) => (
+                <span className="auction-logout-chip" key={row.member.id}>
+                  <strong>{row.member.char_name}</strong>
+                  <em>Line {row.position}</em>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div className="auction-logout-empty">Every lineup member has an active bid allocation.</div>
+          )}
+        </div>
+      ) : null}
+
       <div className={`auction-grid${activeAuctions.length > 1 ? " two-up" : ""}`}>
         {activeAuctions.length ? (
           activeAuctions.map((auction) => {
@@ -2156,7 +2185,7 @@ function AuctionFoundation({
             const pageItemOptions = auctionPageItemOptions(auction, auctionItems);
             const selectedPageItemId = pageItemOptions.some((item) => item.id === auctionPageItems[auction.id])
               ? auctionPageItems[auction.id]
-              : pageItemOptions[0]?.id || null;
+              : null;
             const pageStateKey = `${auction.id}:${selectedPageItemId || "all"}`;
             const currentPage = auctionPages[pageStateKey] || 1;
             const searchQuery = auctionSearch;
@@ -2184,7 +2213,7 @@ function AuctionFoundation({
                   <em>{locked ? `${auctionTypeLabel(auction.type)} locked` : auctionTypeLabel(auction.type)}</em>
                 </div>
                 {!readOnly && (
-                  <p>{locked ? "This GL/WoE list is locked. League Prize can now use these reserved bids." : "Review the generated page table, then finalize the auction."}</p>
+                  <p>{locked ? "This Guild Auction list is locked. League Prize can now use these reserved bids." : "Review the generated page table, then finalize the auction."}</p>
                 )}
                 <div className="active-auction-stats">
                   <span><Clock3 size={14} />{locked ? "Locked" : "Active"}</span>
@@ -2308,7 +2337,7 @@ function AuctionFoundation({
               <strong>No active auction</strong>
               <em>{activeRound ? "ready" : "waiting"}</em>
             </div>
-            <p>{activeRound ? "Start GL/WoE or optional League Prize when you are ready to distribute items." : "Create the auction lineup first so the app can lock the randomized source list."}</p>
+            <p>{activeRound ? "Start Guild Auction or optional League Prize when you are ready to distribute items." : "Create the auction lineup first so the app can lock the randomized source list."}</p>
             <div className="active-auction-stats">
               <span><Clock3 size={14} />Waiting</span>
               <span><Gavel size={14} />0 pages</span>
@@ -2322,8 +2351,8 @@ function AuctionFoundation({
       {!readOnly && (
         <>
           <div className="auction-start-row">
-            <button className="primary-button" type="button" disabled={!activeRound || Boolean(glAuction) || Boolean(leagueAuction)} onClick={() => onOpenStartAuction("gl_woe")}><Plus size={16} />New GL/WoE Auction</button>
-            <button className="ghost-button" type="button" disabled={!canStartLeague} onClick={() => onOpenStartAuction("league_prize")} title={canStartLeague ? "Start League Prize" : "Lock-in GL/WoE first"}><Plus size={16} />New League Prize Auction</button>
+            <button className="primary-button" type="button" disabled={!activeRound || Boolean(glAuction) || Boolean(leagueAuction)} onClick={() => onOpenStartAuction("gl_woe")}><Plus size={16} />New Guild Auction</button>
+            <button className="ghost-button" type="button" disabled={!canStartLeague} onClick={() => onOpenStartAuction("league_prize")} title={canStartLeague ? "Start League Prize" : "Lock-in Guild Auction first"}><Plus size={16} />New League Prize Auction</button>
             {pairedEventActive && (
               <button className="primary-button" type="button" onClick={() => onDoneEvent([glAuction, leagueAuction])} disabled={busy}>
                 {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
@@ -2896,8 +2925,8 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
   function requestLockAuction(auction) {
     if (!auction) return;
     setConfirmAction({
-      title: "Lock-in GL/WoE list",
-      body: `Freeze ${auction.name || "this GL/WoE auction"} so League Prize can start from the next incomplete member using these reserved bids?`,
+      title: "Lock-in Guild Auction list",
+      body: `Freeze ${auction.name || "this Guild Auction"} so League Prize can start from the next incomplete member using these reserved bids?`,
       confirmLabel: "Lock list",
       tone: "default",
       run: async () => {
@@ -2906,7 +2935,7 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
           body: JSON.stringify({ auctionId: auction.id })
         });
         setAuctionState(data.auctionState);
-        setToast("GL/WoE list locked");
+        setToast("Guild Auction list locked");
       }
     });
   }
@@ -2958,7 +2987,7 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
     const hasLeaguePrize = orderedAuctions.some((auction) => auction.type === "league_prize");
     const title = hasLeaguePrize ? "Cancel event auctions" : "Cancel auction";
     const body = hasLeaguePrize
-      ? "Cancel the open League Prize and GL/WoE auction lists? Finished history and member progress will not be changed."
+      ? "Cancel the open League Prize and Guild Auction lists? Finished history and member progress will not be changed."
       : `Cancel ${orderedAuctions[0]?.name || "this auction"}? Finished history and member progress will not be changed.`;
     setConfirmAction({
       title,
@@ -3008,12 +3037,13 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
     }
   }
 
-  async function copyBidderNames(names) {
+  async function copyBidderNames(names, label = "bidder") {
+    const copyNames = names || [];
     try {
-      await navigator.clipboard.writeText((names || []).join("\n"));
-      setToast(`${names.length} unique bidder${names.length === 1 ? "" : "s"} copied`);
+      await navigator.clipboard.writeText(copyNames.join("\n"));
+      setToast(`${copyNames.length} unique ${label}${copyNames.length === 1 ? "" : "s"} copied`);
     } catch (err) {
-      setError("Could not copy the bidder list.");
+      setError(`Could not copy the ${label} list.`);
     }
   }
 

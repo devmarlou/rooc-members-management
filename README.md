@@ -50,7 +50,7 @@ Open `http://localhost:3000`.
 - Persistent member roster CRUD.
 - Persistent party/group CRUD.
 - Assign and remove members from parties.
-- Auction lineup, GL/WoE, League Prize, shared progress, and public read-only views.
+- Auction lineup, Guild Auction, League Prize, shared progress, and public read-only views.
 - 96h auction cooldown based on each member's PH joined date/time.
 
 ## Imports
