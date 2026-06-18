@@ -1952,7 +1952,7 @@ button.party-slot.empty:hover:not(:disabled) {
   display: inline-grid;
   align-items: center;
   gap: 4px 6px;
-  min-width: 88px;
+  min-width: 70px;
   justify-content: center;
   justify-items: center;
   border: 1px solid rgba(63, 63, 70, 0.72);
@@ -1971,16 +1971,6 @@ button.party-slot.empty:hover:not(:disabled) {
 .progress-cycle-pill .item-icon {
   width: 16px;
   height: 16px;
-}
-
-.progress-table .progress-cycle-pill strong {
-  display: block;
-  max-width: none;
-  color: currentColor;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 10px;
-  line-height: 1;
-  font-weight: 900;
 }
 
 .progress-table .progress-cycle-pill em {
@@ -2012,12 +2002,6 @@ button.party-slot.empty:hover:not(:disabled) {
   border-color: rgba(248, 113, 113, 0.34);
   background: rgba(127, 29, 29, 0.14);
   color: #fca5a5;
-}
-
-.progress-cycle-pill.held-puppet_card strong,
-.progress-cycle-pill.held-feather_ld strong,
-.progress-cycle-pill.held-feather_ts strong {
-  color: currentColor;
 }
 
 .progress-status {

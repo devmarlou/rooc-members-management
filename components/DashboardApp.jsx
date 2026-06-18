@@ -1970,7 +1970,6 @@ function MemberProgressTable({ auctionItems, auctionState }) {
                         <span className={`progress-cycle-pill held-${item.item_key}`} key={item.id}>
                           <ItemIcon itemKey={item.item_key} label={item.name || item.short_name} />
                           <em>Cycle {itemCycleCount(row, item)}</em>
-                          <strong>{item.short_name} x{heldItemCount(row, item)}</strong>
                         </span>
                       ))}
                     </div>
