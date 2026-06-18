@@ -3,7 +3,7 @@ import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
 import { writeAuditLog } from "@/lib/auditLog";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
-const MEMBER_SELECT = "id,char_name,char_class,group_id,party_slot,joined_at,notes,created_at,updated_at";
+const MEMBER_SELECT = "id,char_name,char_class,group_id,party_slot,is_officer,joined_at,notes,created_at,updated_at";
 
 function isMissingPartySlotError(error) {
   const message = String(error?.message || "");

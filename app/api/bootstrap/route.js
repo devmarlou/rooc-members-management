@@ -3,7 +3,7 @@ import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
 import { getAuctionState } from "@/lib/auctionEngine";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
-const MEMBER_SELECT = "id,char_name,char_class,group_id,party_slot,joined_at,notes,created_at,updated_at";
+const MEMBER_SELECT = "id,char_name,char_class,group_id,party_slot,is_officer,joined_at,notes,created_at,updated_at";
 const MEMBER_SELECT_FALLBACK = "id,char_name,char_class,group_id,joined_at,notes,created_at,updated_at";
 
 function isMissingPartySlotError(error) {
@@ -26,7 +26,7 @@ async function fetchMembers(supabase) {
 
   return {
     ...fallback,
-    data: fallback.data?.map((member) => ({ ...member, party_slot: null }))
+    data: fallback.data?.map((member) => ({ ...member, party_slot: null, is_officer: false }))
   };
 }
 

@@ -3,7 +3,7 @@ import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
 import { writeAuditLog } from "@/lib/auditLog";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
-const MEMBER_SELECT = "id,char_name,char_class,group_id,party_slot,joined_at,notes,created_at,updated_at";
+const MEMBER_SELECT = "id,char_name,char_class,group_id,party_slot,is_officer,joined_at,notes,created_at,updated_at";
 const MEMBER_SELECT_FALLBACK = "id,char_name,char_class,group_id,joined_at,notes,created_at,updated_at";
 
 function isMissingPartySlotError(error) {
@@ -18,12 +18,12 @@ function cleanPartySlot(value) {
 }
 
 function withoutPartySlot(body) {
-  const { party_slot, ...rest } = body;
+  const { party_slot, is_officer, ...rest } = body;
   return rest;
 }
 
 function withFallbackSlot(member) {
-  return member ? { ...member, party_slot: null } : member;
+  return member ? { ...member, party_slot: null, is_officer: false } : member;
 }
 
 function cleanMemberPayload(payload) {
@@ -33,6 +33,7 @@ function cleanMemberPayload(payload) {
     char_class: String(payload.char_class || "").trim(),
     group_id,
     party_slot: group_id ? cleanPartySlot(payload.party_slot) : null,
+    is_officer: Boolean(payload.is_officer),
     joined_at: payload.joined_at || null,
     notes: payload.notes ? String(payload.notes).trim() : null
   };

@@ -37,6 +37,7 @@ const emptyMember = {
   char_class: "Lord Knight",
   group_id: "",
   party_slot: null,
+  is_officer: false,
   joined_at: "",
   notes: ""
 };
@@ -487,6 +488,14 @@ function MemberForm({ groups, initial, onCancel, onSave, busy }) {
           {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
         </select>
       </label>
+      <label className="checkbox-row wide">
+        <input
+          type="checkbox"
+          checked={Boolean(form.is_officer)}
+          onChange={(event) => update("is_officer", event.target.checked)}
+        />
+        <span>Officer - does not need to log out when unallocated</span>
+      </label>
       <label className="wide">
         <span>Joined date/time</span>
         <div className="joined-fields">
@@ -784,7 +793,10 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
                           <div className="roster-class-cell">
                             <ClassIcon name={member.char_class} size={20} />
                             <div className="roster-class-info">
-                              <strong>{member.char_name}</strong>
+                              <strong>
+                                {member.char_name}
+                                {member.is_officer && <span className="officer-badge">Officer</span>}
+                              </strong>
                               <span>{groupsById[member.group_id]?.name || "Unassigned"}</span>
                               {cooldown && <em>{formatCooldownRemaining(cooldown.remainingMs)} cooldown</em>}
                             </div>
@@ -822,7 +834,10 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
                       <div className={`member-row ${cooldown ? "cooldown" : ""}`} key={member.id} title={cooldownLabel || undefined}>
                         <ClassIcon name={member.char_class} size={32} />
                         <div className="member-main">
-                          <strong>{member.char_name}</strong>
+                          <strong>
+                            {member.char_name}
+                            {member.is_officer && <span className="officer-badge">Officer</span>}
+                          </strong>
                           <span>{member.char_class}</span>
                           <em>Party: {groupsById[member.group_id]?.name || "Unassigned"}</em>
                           {cooldown && <b>{formatCooldownRemaining(cooldown.remainingMs)} auction cooldown</b>}
@@ -1251,7 +1266,7 @@ function logoutCandidateRows(auctionState) {
   }
 
   return (auctionState?.progress || [])
-    .filter((row) => row.member?.id && !allocatedMemberIds.has(row.member.id))
+    .filter((row) => row.member?.id && !row.member?.is_officer && !allocatedMemberIds.has(row.member.id))
     .sort((a, b) => a.position - b.position || String(a.member.char_name || "").localeCompare(String(b.member.char_name || "")));
 }
 
@@ -1374,6 +1389,18 @@ function auctionPageItemOptions(auction, auctionItems) {
     ));
 }
 
+function auctionItemPageJumps(auction, auctionItems) {
+  const quantityByItemId = new Map((auction.inventory || []).map((row) => [row.item_id, row.quantity || 0]));
+  let slotOffset = 0;
+  return auctionPageItemOptions(auction, auctionItems).map((item) => {
+    const quantity = quantityByItemId.get(item.id) || 0;
+    const startPage = Math.floor(slotOffset / 4) + 1;
+    const endPage = Math.floor((slotOffset + quantity - 1) / 4) + 1;
+    slotOffset += quantity;
+    return { item, quantity, startPage, endPage };
+  });
+}
+
 function buildAuctionPages(auction, auctionItems, selectedItemId = null) {
   const selectedItem = auctionItems.find((item) => item.id === selectedItemId) || null;
   const applicableItems = auctionItems
@@ -1453,11 +1480,12 @@ function auctionItemPageForMember(auction, auctionItems, itemId, memberId) {
 
 function AuctionPageView({ auction, auctionItems, page, onPageChange, selectedItemId, onSelectedItemChange, searchQuery = "" }) {
   const itemOptions = auctionPageItemOptions(auction, auctionItems);
+  const itemPageJumps = auctionItemPageJumps(auction, auctionItems);
   const safeSelectedItemId = itemOptions.some((item) => item.id === selectedItemId)
     ? selectedItemId
     : null;
   const selectedItem = itemOptions.find((item) => item.id === safeSelectedItemId) || null;
-  const pages = buildAuctionPages(auction, auctionItems, safeSelectedItemId);
+  const pages = buildAuctionPages(auction, auctionItems, null);
   const pageCount = pages.length || 1;
   const safePage = Math.min(Math.max(page || 1, 1), pageCount);
   const currentPage = pages[safePage - 1] || { page: 1, slots: [] };
@@ -1470,19 +1498,56 @@ function AuctionPageView({ auction, auctionItems, page, onPageChange, selectedIt
   return (
     <div className="auction-page-view">
       <div className="auction-item-tabs" aria-label="Auction item page filter">
-        {/* Keep selectedItemId plumbing intact so item-specific page tabs can be restored later. */}
+        {/* Item buttons are page jumps in the combined book; selectedItemId plumbing remains for possible item-only tabs later. */}
         <button
           type="button"
           className={!safeSelectedItemId ? "active" : ""}
-          onClick={() => onSelectedItemChange(null)}
+          onClick={() => {
+            onSelectedItemChange(null);
+            setPage(1);
+          }}
         >
           <LayoutGrid size={14} />
           <span>All items</span>
         </button>
+        {itemPageJumps.map(({ item, quantity, startPage }) => {
+          return (
+            <button
+              type="button"
+              className={safeSelectedItemId === item.id ? "active" : ""}
+              onClick={() => {
+                onSelectedItemChange(item.id);
+                setPage(startPage);
+              }}
+              key={item.id}
+            >
+              <ItemIcon itemKey={item.item_key} label={item.name || item.short_name} />
+              <span>{item.short_name}</span>
+              <em>Page {startPage}</em>
+              <strong>x{quantity}</strong>
+            </button>
+          );
+        })}
       </div>
       <div className="auction-page-controls">
         <button className="ghost-button mini" type="button" onClick={() => setPage(safePage - 1)} disabled={safePage <= 1}>Prev</button>
-        <strong>{selectedItem?.short_name || "All items"} Page {currentPage.displayPage || safePage}</strong>
+        <label className="auction-page-jump">
+          <input
+            type="number"
+            min="1"
+            max={pageCount}
+            value={currentPage.displayPage || safePage}
+            onChange={(event) => setPage(Number.parseInt(event.target.value, 10) || 1)}
+            aria-label="Jump to page"
+          />
+          <span className="auction-page-divider">|</span>
+          <input
+            type="text"
+            value={pageCount}
+            disabled
+            aria-label="Total pages"
+          />
+        </label>
         <button className="ghost-button mini" type="button" onClick={() => setPage(safePage + 1)} disabled={safePage >= pageCount}>Next</button>
       </div>
       <div className="auction-page-card">
@@ -1532,7 +1597,21 @@ function AuctionPageView({ auction, auctionItems, page, onPageChange, selectedIt
       </div>
       <div className="auction-page-controls bottom">
         <button className="ghost-button mini" type="button" onClick={() => setPage(safePage - 1)} disabled={safePage <= 1}>Prev</button>
-        <span>{selectedItem?.short_name || "All items"} page {currentPage.displayPage || safePage}</span>
+        <span className="auction-page-jump static">
+          <input
+            type="text"
+            value={currentPage.displayPage || safePage}
+            disabled
+            aria-label="Current page"
+          />
+          <span className="auction-page-divider">|</span>
+          <input
+            type="text"
+            value={pageCount}
+            disabled
+            aria-label="Total pages"
+          />
+        </span>
         <button className="ghost-button mini" type="button" onClick={() => setPage(safePage + 1)} disabled={safePage >= pageCount}>Next</button>
       </div>
     </div>
@@ -2025,28 +2104,10 @@ function AuctionFoundation({
       const match = bidRows.find((row) => auctionSearchMatches(row, trimmedQuery));
       if (!match) continue;
 
-      const itemOptions = auctionPageItemOptions(auction, auctionItems);
-      const currentItemId = itemOptions.some((item) => item.id === auctionPageItems[auction.id])
-        ? auctionPageItems[auction.id]
-        : itemOptions[0]?.id || null;
-      let targetItemId = currentItemId;
-      let targetPage = auctionItemPageForMember(auction, auctionItems, targetItemId, match.member_id);
-
-      if (!targetPage) {
-        const matchingItem = itemOptions
-          .map((item) => ({ item, page: auctionItemPageForMember(auction, auctionItems, item.id, match.member_id) }))
-          .find(({ page }) => page);
-        if (matchingItem) {
-          targetItemId = matchingItem.item.id;
-          targetPage = matchingItem.page;
-        }
-      }
-
-      if (targetItemId && targetPage) {
-        nextPages[`${auction.id}:${targetItemId}`] = targetPage;
-        if (targetItemId !== currentItemId) {
-          nextPageItems[auction.id] = targetItemId;
-        }
+      const targetPage = auctionItemPageForMember(auction, auctionItems, null, match.member_id);
+      if (targetPage) {
+        nextPages[`${auction.id}:all`] = targetPage;
+        nextPageItems[auction.id] = null;
       }
     }
 
@@ -2059,6 +2120,42 @@ function AuctionFoundation({
   }
 
   return (
+    <>
+      {activeAuctions.length ? (
+        <section className="content-section auction-logout-section">
+          <div className="auction-logout-heading">
+            <div>
+              <p className="eyebrow">required action</p>
+              <h3><LogOut size={22} />NEEDS LOG OUT?</h3>
+              <em>These members have no item allocation in the running auction.</em>
+            </div>
+            <span>{logoutRows.length} member{logoutRows.length === 1 ? "" : "s"}</span>
+            {!readOnly && (
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => onCopyBidderNames(logoutNames, "logout member")}
+                disabled={!logoutNames.length}
+              >
+                <Copy size={15} />Copy names
+              </button>
+            )}
+          </div>
+          {logoutRows.length ? (
+            <div className="auction-logout-list">
+              {logoutRows.map((row) => (
+                <div className="auction-logout-row" key={row.member.id}>
+                  <strong>{row.member.char_name}</strong>
+                  <span>Line {row.position}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="auction-logout-empty">Every lineup member has an active bid allocation.</div>
+          )}
+        </section>
+      ) : null}
+
     <section className="content-section auction-section">
       <div className="section-title-row">
         <div>
@@ -2092,13 +2189,13 @@ function AuctionFoundation({
       )}
 
       {activeAuctions.length ? (
-        <div className="auction-shared-tools">
+        <div className="auction-table-tools">
           <label className="auction-search auction-search-shared">
             <Search size={15} />
             <input
               value={auctionSearch}
               onChange={(event) => applyAuctionSearch(event.target.value)}
-              placeholder="Search member across active auctions"
+              placeholder="Search auction list"
             />
             {auctionSearch && (
               <button
@@ -2110,7 +2207,7 @@ function AuctionFoundation({
               </button>
             )}
           </label>
-          <div className="auction-view-toggle auction-view-toggle-shared" aria-label="Auction view">
+          <div className="auction-view-toggle" aria-label="Auction view">
             <button
               type="button"
               className={auctionView === "list" ? "active" : ""}
@@ -2141,40 +2238,6 @@ function AuctionFoundation({
         </div>
       ) : null}
 
-      {activeAuctions.length ? (
-        <div className="auction-logout-panel">
-          <div className="auction-logout-heading">
-            <div>
-              <p className="eyebrow">no bid allocation</p>
-              <h3><LogOut size={17} />Log out</h3>
-            </div>
-            <span>{logoutRows.length} member{logoutRows.length === 1 ? "" : "s"}</span>
-            {!readOnly && (
-              <button
-                className="ghost-button"
-                type="button"
-                onClick={() => onCopyBidderNames(logoutNames, "logout member")}
-                disabled={!logoutNames.length}
-              >
-                <Copy size={15} />Copy names
-              </button>
-            )}
-          </div>
-          {logoutRows.length ? (
-            <div className="auction-logout-list">
-              {logoutRows.map((row) => (
-                <span className="auction-logout-chip" key={row.member.id}>
-                  <strong>{row.member.char_name}</strong>
-                  <em>Line {row.position}</em>
-                </span>
-              ))}
-            </div>
-          ) : (
-            <div className="auction-logout-empty">Every lineup member has an active bid allocation.</div>
-          )}
-        </div>
-      ) : null}
-
       <div className={`auction-grid${activeAuctions.length > 1 ? " two-up" : ""}`}>
         {activeAuctions.length ? (
           activeAuctions.map((auction) => {
@@ -2186,7 +2249,7 @@ function AuctionFoundation({
             const selectedPageItemId = pageItemOptions.some((item) => item.id === auctionPageItems[auction.id])
               ? auctionPageItems[auction.id]
               : null;
-            const pageStateKey = `${auction.id}:${selectedPageItemId || "all"}`;
+            const pageStateKey = `${auction.id}:all`;
             const currentPage = auctionPages[pageStateKey] || 1;
             const searchQuery = auctionSearch;
             const filteredBidRows = searchQuery.trim()
@@ -2220,17 +2283,19 @@ function AuctionFoundation({
                   <span><Gavel size={14} />{auction.pageCount || 0} pages</span>
                   <span><Trophy size={14} />{auction.units?.length || 0} allocations</span>
                 </div>
-                <div className="auction-prize-summary" aria-label="Auction prize inventory">
-                  {inventorySummary.length ? inventorySummary.map(({ item, quantity }) => (
-                    <span className={`auction-prize-pill prize-${item.item_key}`} key={item.id}>
-                      <ItemIcon itemKey={item.item_key} label={item.name || item.short_name} />
-                      <strong>{item.short_name}</strong>
-                      <em>x{quantity}</em>
-                    </span>
-                  )) : (
-                    <span className="auction-prize-empty">No prizes entered</span>
-                  )}
-                </div>
+                {activeView !== "page" && (
+                  <div className="auction-prize-summary" aria-label="Auction prize inventory">
+                    {inventorySummary.length ? inventorySummary.map(({ item, quantity }) => (
+                      <span className={`auction-prize-pill prize-${item.item_key}`} key={item.id}>
+                        <ItemIcon itemKey={item.item_key} label={item.name || item.short_name} />
+                        <strong>{item.short_name}</strong>
+                        <em>x{quantity}</em>
+                      </span>
+                    )) : (
+                      <span className="auction-prize-empty">No prizes entered</span>
+                    )}
+                  </div>
+                )}
                 {searchLocation && (
                   <div className={searchMatch ? "auction-search-result" : "auction-search-result empty"}>
                     {searchMatch ? (
@@ -2373,6 +2438,7 @@ function AuctionFoundation({
         </>
       )}
     </section>
+    </>
   );
 }
 

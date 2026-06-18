@@ -102,6 +102,7 @@ create table if not exists members (
   char_class text not null,
   group_id uuid references groups(id) on delete set null,
   party_slot int check (party_slot is null or (party_slot between 1 and 5)),
+  is_officer boolean not null default false,
   joined_at timestamptz,
   notes text,
   created_at timestamptz not null default now(),
@@ -112,12 +113,16 @@ alter table members
 add column if not exists party_slot int check (party_slot is null or (party_slot between 1 and 5));
 
 alter table members
+add column if not exists is_officer boolean not null default false;
+
+alter table members
 alter column joined_at type timestamptz
 using joined_at::timestamptz;
 
 create index if not exists members_group_id_idx on members(group_id);
 create index if not exists members_group_slot_idx on members(group_id, party_slot);
 create index if not exists members_char_class_idx on members(char_class);
+create index if not exists members_is_officer_idx on members(is_officer);
 
 create or replace function set_updated_at()
 returns trigger
