@@ -10,7 +10,7 @@ Next.js + Supabase guild admin dashboard for members, parties, and the upcoming 
 npm install
 ```
 
-2. Create a Supabase project and run [supabase/schema.sql](./supabase/schema.sql) in the SQL Editor.
+2. Create a Supabase project and apply your local database schema in the SQL Editor.
 
 3. Copy `.env.example` to `.env.local` and fill in:
 
@@ -67,7 +67,7 @@ Import the party groups and slot order from the main-field CSV:
 npm run import:party-groups -- "/path/to/main-field.csv" --create-missing
 ```
 
-Before using manual party slot reordering, run [supabase/migrations/20260609_add_member_party_slot.sql](./supabase/migrations/20260609_add_member_party_slot.sql) in the Supabase SQL Editor.
+Before using manual party slot reordering, apply the local member party slot migration in the Supabase SQL Editor.
 
 Import the current auction cycle from the ROOC Auction Log. The Auction Log is the source of truth for who is in the active lineup and in what order; the Masterfile only supplies missing class names.
 
