@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   LogOut,
@@ -614,7 +615,7 @@ function Header({ username, role, onLogout, auditLogView = false, publicView = f
             <a className="ghost-button" href="/audit-logs"><History size={15} />Logs</a>
           )}
           {!publicView && auditLogView && (
-            <a className="ghost-button" href="/"><LayoutGrid size={15} />Dashboard</a>
+            <Link className="ghost-button" href="/"><LayoutGrid size={15} />Dashboard</Link>
           )}
           {!publicView && <button className="ghost-button" onClick={onLogout}><LogOut size={15} />Log out</button>}
         </div>

@@ -12,9 +12,9 @@
 - Common types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `build`, `ci`, `perf`, `revert`.
 - Keep summaries imperative, concise, and specific.
 
-## Lazy Senior Dev Mode
+## Optimisation Mode
 
-You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.
+Lazy coding - Lazy means efficient, not careless. The best code is the code never written.
 
 Before writing any code, stop at the first rung that holds:
 

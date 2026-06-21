@@ -2,17 +2,31 @@
 
 Next.js + Supabase guild admin dashboard for members, parties, and the upcoming auction system.
 
-## Local Setup
+## Development Setup
 
-1. Install dependencies:
+This is a Next.js app connected to the team-owned live Supabase database. Do not create a new Supabase project for local development; use the shared environment values from the team.
+
+### Prerequisites
+
+- Node.js 20+
+- npm
+- Team-provided `.env.local` values for the shared Supabase project
+
+### macOS
 
 ```bash
+git clone <repo-url>
+cd "Member Dashboard"
 npm install
 ```
 
-2. Create a Supabase project and apply your local database schema in the SQL Editor.
+Create `.env.local` from the example:
 
-3. Copy `.env.example` to `.env.local` and fill in:
+```bash
+cp .env.example .env.local
+```
+
+Fill in the team-provided environment values:
 
 ```bash
 SUPABASE_URL="https://your-project-ref.supabase.co"
@@ -22,25 +36,57 @@ NEXT_PUBLIC_SUPABASE_URL="https://your-project-ref.supabase.co"
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="your-publishable-or-anon-key"
 ```
 
-4. Create app users manually in Supabase SQL Editor:
-
-```sql
-insert into app_users (username, role, password_hash, must_reset_password)
-values ('your-name', 'super_admin', extensions.crypt('default-password-here', extensions.gen_salt('bf')), true);
-
-insert into app_users (username, role, password_hash, must_reset_password)
-values ('guild-admin', 'admin', extensions.crypt('default-password-here', extensions.gen_salt('bf')), true);
-```
-
-Users must change the default password after first login.
-
-5. Run the app:
+Start the dev server:
 
 ```bash
 npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+### Windows
+
+Use PowerShell:
+
+```powershell
+git clone <repo-url>
+cd "Member Dashboard"
+npm install
+```
+
+Create `.env.local` from the example:
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+Fill in the team-provided environment values:
+
+```powershell
+SUPABASE_URL="https://your-project-ref.supabase.co"
+SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
+SESSION_SECRET="replace-with-a-long-random-string"
+NEXT_PUBLIC_SUPABASE_URL="https://your-project-ref.supabase.co"
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="your-publishable-or-anon-key"
+```
+
+Start the dev server:
+
+```powershell
+npm run dev
+```
+
+Open `http://localhost:3000`.
+
+## Useful Scripts
+
+```bash
+npm run dev
+npm run build
+npm run lint
+```
+
+`npm run dev` starts the local Next.js server. `npm run build` verifies the app compiles. `npm run lint` runs ESLint against the repo.
 
 ## Current Scope
 
@@ -53,48 +99,17 @@ Open `http://localhost:3000`.
 - Auction lineup, Guild Auction, League Prize, shared progress, and public read-only views.
 - 96h auction cooldown based on each member's PH joined date/time.
 
-## Imports
+## Core Logic
 
-Import the original member masterfile:
+- `app/api/**/route.js` contains the server actions used by the UI.
+- `lib/supabaseAdmin.js` creates the server-side Supabase client using the service role key.
+- `lib/session.js` handles the signed admin session cookie.
+- `lib/auctionEngine.js` owns the main auction flow: active rounds, lineup order, item caps, allocation state, cant-pay handling, auction finalization, and public/admin state hydration.
+- `lib/dashboardEvents.js` emits dashboard refresh events after mutations so open clients can reload current state.
 
-```bash
-npm run import:members -- "/path/to/Encore Masterfile - Sheet1.csv"
-```
+## Shared Database
 
-Import the party groups and slot order from the main-field CSV:
-
-```bash
-npm run import:party-groups -- "/path/to/main-field.csv" --create-missing
-```
-
-Before using manual party slot reordering, apply the local member party slot migration in the Supabase SQL Editor.
-
-Import the current auction cycle from the ROOC Auction Log. The Auction Log is the source of truth for who is in the active lineup and in what order; the Masterfile only supplies missing class names.
-
-Dry-run first:
-
-```bash
-npm run import:auction-state -- "/path/to/Copy of Encore ROOC - Auction Log.csv" \
-  --class-source "/path/to/Encore Masterfile - Sheet1.csv" \
-  --roster-source "/path/to/current-rooc-members.txt" \
-  --joined-at "Osnub=2026-05-14 23:00" \
-  --replace-active \
-  --dry-run
-```
-
-Apply it:
-
-```bash
-npm run import:auction-state -- "/path/to/Copy of Encore ROOC - Auction Log.csv" \
-  --class-source "/path/to/Encore Masterfile - Sheet1.csv" \
-  --roster-source "/path/to/current-rooc-members.txt" \
-  --joined-at "Osnub=2026-05-14 23:00" \
-  --replace-active \
-  --clear-auctions
-```
-
-`--clear-auctions` removes open/history auctions for the active lineup so the imported cycle can be tested cleanly.
-`--roster-source` lets a plain text or CSV member list control the current auction queue while copying item progress from matching names in the Auction Log.
+Local development points at the live team database. Treat local actions as real data changes unless you are working in a separate test account or agreed test window.
 
 ## Vercel
 

@@ -9,7 +9,7 @@
     "import:party-groups": "node scripts/import-party-groups.mjs",
     "import:auction-state": "node scripts/import-auction-state.mjs",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@supabase/supabase-js": "latest",
