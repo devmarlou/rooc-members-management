@@ -3,12 +3,12 @@ import { handleApiError } from "@/lib/api";
 import { getAuctionState } from "@/lib/auctionEngine";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
-const MEMBER_SELECT = "id,char_name,char_class,group_id,party_slot,is_officer,joined_at,created_at,updated_at";
+const MEMBER_SELECT = "id,char_name,char_class,group_id,party_slot,is_officer,auction_priority_override,joined_at,created_at,updated_at";
 const MEMBER_SELECT_FALLBACK = "id,char_name,char_class,group_id,joined_at,created_at,updated_at";
 
 function isMissingPartySlotError(error) {
   const message = String(error?.message || "");
-  return error?.code === "42703" || message.includes("party_slot");
+  return error?.code === "42703" || message.includes("party_slot") || message.includes("auction_priority_override");
 }
 
 async function fetchMembers(supabase) {
@@ -26,7 +26,7 @@ async function fetchMembers(supabase) {
 
   return {
     ...fallback,
-    data: fallback.data?.map((member) => ({ ...member, party_slot: null, is_officer: false }))
+    data: fallback.data?.map((member) => ({ ...member, party_slot: null, is_officer: false, auction_priority_override: false }))
   };
 }
 

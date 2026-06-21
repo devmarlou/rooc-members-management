@@ -792,7 +792,8 @@ label span {
   font-weight: 800;
 }
 
-.officer-badge {
+.officer-badge,
+.priority-badge {
   display: inline-flex;
   align-items: center;
   margin-left: 6px;
@@ -807,6 +808,12 @@ label span {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   vertical-align: middle;
+}
+
+.priority-badge {
+  border-color: rgba(56, 189, 248, 0.36);
+  background: rgba(56, 189, 248, 0.12);
+  color: #7dd3fc;
 }
 
 .roster-class-cell span {

@@ -38,6 +38,7 @@ const emptyMember = {
   group_id: "",
   party_slot: null,
   is_officer: false,
+  auction_priority_override: false,
   joined_at: "",
   notes: ""
 };
@@ -102,6 +103,10 @@ const SHARED_FEATHER_PAGE_KEYS = new Set(["feather_ld", "feather_ts"]);
 function normalizePartyMemberName(name) {
   const normalized = String(name || "").trim().toLowerCase();
   return PARTY_MEMBER_ORDER_ALIASES[normalized] || normalized;
+}
+
+function auctionPriorityRank(member) {
+  return member?.auction_priority_override ? 0 : 1;
 }
 
 function sortedPartyRoster(roster, groupName) {
@@ -445,7 +450,7 @@ function ConfirmModal({ title, body, confirmLabel = "Confirm", tone = "danger", 
   );
 }
 
-function MemberForm({ groups, initial, onCancel, onSave, busy }) {
+function MemberForm({ groups, initial, onCancel, onSave, onCatchUp, busy }) {
   const joinedParts = toPhDateTimeParts(initial?.joined_at) || {};
   const [form, setForm] = useState(() => ({
     ...emptyMember,
@@ -496,6 +501,14 @@ function MemberForm({ groups, initial, onCancel, onSave, busy }) {
         />
         <span>Officer - does not need to log out when unallocated</span>
       </label>
+      <label className="checkbox-row wide">
+        <input
+          type="checkbox"
+          checked={Boolean(form.auction_priority_override)}
+          onChange={(event) => update("auction_priority_override", event.target.checked)}
+        />
+        <span>Auction priority override - starts ahead of normal rotation</span>
+      </label>
       <label className="wide">
         <span>Joined date/time</span>
         <div className="joined-fields">
@@ -510,6 +523,12 @@ function MemberForm({ groups, initial, onCancel, onSave, busy }) {
       </label>
       <div className="form-actions wide">
         <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
+        {initial?.id && (
+          <button type="button" className="ghost-button" onClick={() => onCatchUp?.(initial)} disabled={busy}>
+            <RefreshCw size={15} />
+            Catch up cycles
+          </button>
+        )}
         <button className="primary-button" disabled={busy}>
           {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
           Save member
@@ -796,6 +815,7 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
                               <strong>
                                 {member.char_name}
                                 {member.is_officer && <span className="officer-badge">Officer</span>}
+                                {member.auction_priority_override && <span className="priority-badge">Priority</span>}
                               </strong>
                               <span>{groupsById[member.group_id]?.name || "Unassigned"}</span>
                               {cooldown && <em>{formatCooldownRemaining(cooldown.remainingMs)} cooldown</em>}
@@ -837,6 +857,7 @@ function MembersSection({ members, groupsById, classFilter, onClassFilter, onAdd
                           <strong>
                             {member.char_name}
                             {member.is_officer && <span className="officer-badge">Officer</span>}
+                            {member.auction_priority_override && <span className="priority-badge">Priority</span>}
                           </strong>
                           <span>{member.char_class}</span>
                           <em>Party: {groupsById[member.group_id]?.name || "Unassigned"}</em>
@@ -1167,13 +1188,18 @@ function auctionUnitDisplaySlot(unit) {
 }
 
 function displayPositionedAuctionUnits(auction, auctionItems) {
-  // Keep the original auction book page/slot numbers. Item-specific page tabs used to
-  // reindex these per item; restore that behavior here only if those tabs come back.
-  return (auction.units || []).map((unit) => ({
-    ...unit,
-    displayPage: unit.page,
-    displaySlot: unit.slot
-  }));
+  // Priority overrides move ahead of normal rotation; everyone else keeps the generated order.
+  return [...(auction.units || [])]
+    .sort((a, b) => (
+      auctionPriorityRank(a.member) - auctionPriorityRank(b.member)
+      || (a.page || 0) - (b.page || 0)
+      || (a.slot || 0) - (b.slot || 0)
+    ))
+    .map((unit, index) => ({
+      ...unit,
+      displayPage: Math.floor(index / 4) + 1,
+      displaySlot: (index % 4) + 1
+    }));
 }
 
 function compactSlots(units) {
@@ -1424,7 +1450,10 @@ function buildAuctionPages(auction, auctionItems, selectedItemId = null) {
     unitsByItemId.set(unit.item_id, itemUnits);
   }
   for (const itemUnits of unitsByItemId.values()) {
-    itemUnits.sort((a, b) => (a.page || 0) - (b.page || 0) || (a.slot || 0) - (b.slot || 0));
+    itemUnits.sort((a, b) => (
+      auctionUnitDisplayPage(a) - auctionUnitDisplayPage(b)
+      || auctionUnitDisplaySlot(a) - auctionUnitDisplaySlot(b)
+    ));
   }
   const slots = [];
   let displayIndex = 0;
@@ -1897,7 +1926,9 @@ function MemberProgressTable({ auctionItems, auctionState }) {
   const limitedItems = auctionItems.filter((item) => item.gates_round_completion);
   const rows = auctionState?.progress || [];
   const nowMs = Date.now();
-  const priorityMemberId = rows.find((row) => !getAuctionCooldown(row.member, nowMs) && !progressRowReady(row, limitedItems))?.member.id || null;
+  const priorityMemberId = [...rows]
+    .sort((a, b) => auctionPriorityRank(a.member) - auctionPriorityRank(b.member) || a.position - b.position)
+    .find((row) => !getAuctionCooldown(row.member, nowMs) && !progressRowReady(row, limitedItems))?.member.id || null;
   const activeBidStatus = buildActiveBidStatus(auctionState, limitedItems);
   const itemSummaries = limitedItems.map((item) => {
     let capped = 0;
@@ -2241,7 +2272,8 @@ function AuctionFoundation({
       <div className={`auction-grid${activeAuctions.length > 1 ? " two-up" : ""}`}>
         {activeAuctions.length ? (
           activeAuctions.map((auction) => {
-            const bidRows = groupedAuctionBids(displayPositionedAuctionUnits(auction, auctionItems), auction.queue || []);
+            const displayAuction = { ...auction, units: displayPositionedAuctionUnits(auction, auctionItems) };
+            const bidRows = groupedAuctionBids(displayAuction.units, auction.queue || []);
             const inventorySummary = auctionInventorySummary(auction, auctionItems);
             const locked = auction.status === "locked";
             const activeView = auctionView;
@@ -2318,7 +2350,7 @@ function AuctionFoundation({
                 <div className="auction-view-panel">
                   {activeView === "page" ? (
                     <AuctionPageView
-                      auction={auction}
+                      auction={displayAuction}
                       auctionItems={auctionItems}
                       page={currentPage}
                       onPageChange={(page) => setAuctionPages((current) => ({ ...current, [pageStateKey]: page }))}
@@ -2668,6 +2700,22 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
     } finally {
       setSaving(false);
     }
+  }
+
+  function requestCatchUpMemberCycles(member) {
+    if (!member?.id) return;
+    setMemberModal(null);
+    setConfirmAction({
+      title: "Catch up auction cycles",
+      body: `Catch ${member.char_name} up to the current completed item cycles? This is a manual progress correction and will not create auction allocations.`,
+      confirmLabel: "Catch up cycles",
+      tone: "default",
+      run: async () => {
+        const data = await api(`/api/members/${member.id}/catch-up`, { method: "POST" });
+        setAuctionState(data.auctionState || null);
+        setToast(data.changes?.length ? "Member cycles caught up" : "Member was already caught up");
+      }
+    });
   }
 
   async function deleteMember(member) {
@@ -3282,6 +3330,7 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
             initial={memberModal.id ? memberModal : emptyMember}
             onCancel={() => setMemberModal(null)}
             onSave={saveMember}
+            onCatchUp={requestCatchUpMemberCycles}
             busy={saving}
           />
         </Modal>
