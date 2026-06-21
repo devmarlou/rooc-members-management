@@ -1188,18 +1188,11 @@ function auctionUnitDisplaySlot(unit) {
 }
 
 function displayPositionedAuctionUnits(auction, auctionItems) {
-  // Priority overrides move ahead of normal rotation; everyone else keeps the generated order.
-  return [...(auction.units || [])]
-    .sort((a, b) => (
-      auctionPriorityRank(a.member) - auctionPriorityRank(b.member)
-      || (a.page || 0) - (b.page || 0)
-      || (a.slot || 0) - (b.slot || 0)
-    ))
-    .map((unit, index) => ({
-      ...unit,
-      displayPage: Math.floor(index / 4) + 1,
-      displaySlot: (index % 4) + 1
-    }));
+  return (auction.units || []).map((unit) => ({
+    ...unit,
+    displayPage: unit.page,
+    displaySlot: unit.slot
+  }));
 }
 
 function compactSlots(units) {
