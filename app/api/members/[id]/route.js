@@ -103,6 +103,30 @@ export async function DELETE(request, { params }) {
       .maybeSingle();
     if (beforeResult.error && !isMissingPartySlotError(beforeResult.error)) throw beforeResult.error;
 
+    const activeRoundResult = await supabase
+      .from("rounds")
+      .select("id,round_number")
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle();
+    if (activeRoundResult.error) throw activeRoundResult.error;
+
+    if (activeRoundResult.data) {
+      const lineupResult = await supabase
+        .from("rotation_list")
+        .select("id")
+        .eq("round_id", activeRoundResult.data.id)
+        .eq("member_id", id)
+        .limit(1)
+        .maybeSingle();
+      if (lineupResult.error) throw lineupResult.error;
+      if (lineupResult.data) {
+        return NextResponse.json({
+          error: `Cannot delete ${beforeResult.data?.char_name || "this member"} while auction round ${activeRoundResult.data.round_number || ""} is active. Finish the round first, or keep the member record until the next lineup.`
+        }, { status: 409 });
+      }
+    }
+
     const { error } = await supabase
       .from("members")
       .delete()
