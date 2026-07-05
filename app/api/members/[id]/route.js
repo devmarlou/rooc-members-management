@@ -112,19 +112,9 @@ export async function DELETE(request, { params }) {
     if (openAuctionResult.error) throw openAuctionResult.error;
 
     if (openAuctionResult.data) {
-      const queueResult = await supabase
-        .from("auction_queue")
-        .select("id")
-        .eq("auction_id", openAuctionResult.data.id)
-        .eq("member_id", id)
-        .limit(1)
-        .maybeSingle();
-      if (queueResult.error) throw queueResult.error;
-      if (queueResult.data) {
-        return NextResponse.json({
-          error: `Cannot delete ${beforeResult.data?.char_name || "this member"} while ${openAuctionResult.data.name || "an auction"} is ${openAuctionResult.data.status}. Finish or cancel the auction first.`
-        }, { status: 409 });
-      }
+      return NextResponse.json({
+        error: `Cannot delete members while ${openAuctionResult.data.name || "an auction"} is ${openAuctionResult.data.status}. Finish or cancel the auction first.`
+      }, { status: 409 });
     }
 
     const { error } = await supabase
