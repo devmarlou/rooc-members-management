@@ -212,6 +212,7 @@ function formatPhDateTime(timestampMs) {
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
+    cache: "no-store",
     ...options,
     headers: {
       "Content-Type": "application/json",
