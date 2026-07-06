@@ -2499,6 +2499,34 @@ button.party-slot.empty:hover:not(:disabled) {
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
+.member-cap-overrides {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(63, 63, 70, 0.72);
+  border-radius: 8px;
+  background: rgba(9, 9, 11, 0.24);
+  padding: 12px;
+}
+
+.member-cap-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.member-cap-header span {
+  color: #e4e4e7;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.member-cap-header em {
+  color: var(--muted-2);
+  font-size: 12px;
+  font-style: normal;
+}
+
 .checkbox-row {
   display: flex;
   align-items: center;

@@ -452,19 +452,36 @@ function ConfirmModal({ title, body, confirmLabel = "Confirm", tone = "danger", 
   );
 }
 
-function MemberForm({ groups, initial, onCancel, onSave, onCatchUp, busy }) {
+function MemberForm({ groups, auctionItems = [], auctionState = null, initial, onCancel, onSave, onCatchUp, busy }) {
   const joinedParts = toPhDateTimeParts(initial?.joined_at) || {};
+  const cappedAuctionItems = auctionItems.filter((item) => item.gates_round_completion);
+  const savedMemberCaps = auctionState?.memberCapOverrides?.[initial?.id] || {};
+  const sharedCaps = auctionState?.itemCaps || {};
   const [form, setForm] = useState(() => ({
     ...emptyMember,
     ...initial,
     group_id: initial?.group_id || "",
     joined_date: joinedParts.date || "",
     joined_time: joinedParts.time || "",
-    notes: initial?.notes || ""
+    notes: initial?.notes || "",
+    memberCapOverrides: Object.fromEntries(cappedAuctionItems.map((item) => [
+      item.item_key,
+      savedMemberCaps[item.item_key] === undefined ? "" : String(savedMemberCaps[item.item_key])
+    ]))
   }));
 
   function update(key, value) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateMemberCap(itemKey, value) {
+    setForm((current) => ({
+      ...current,
+      memberCapOverrides: {
+        ...(current.memberCapOverrides || {}),
+        [itemKey]: value
+      }
+    }));
   }
 
   function submit(event) {
@@ -472,7 +489,8 @@ function MemberForm({ groups, initial, onCancel, onSave, onCatchUp, busy }) {
     onSave({
       ...form,
       group_id: form.group_id || null,
-      joined_at: toIsoTimestamp(form.joined_date, form.joined_time)
+      joined_at: toIsoTimestamp(form.joined_date, form.joined_time),
+      ...(initial?.id && auctionState?.activeRound ? { memberCapOverrides: form.memberCapOverrides || {} } : {})
     });
   }
 
@@ -511,6 +529,28 @@ function MemberForm({ groups, initial, onCancel, onSave, onCatchUp, busy }) {
         />
         <span>Auction priority override - starts ahead of normal rotation</span>
       </label>
+      {initial?.id && auctionState?.activeRound && cappedAuctionItems.length > 0 && (
+        <div className="member-cap-overrides wide">
+          <div className="member-cap-header">
+            <span>Auction limit override</span>
+            <em>Blank follows shared limit</em>
+          </div>
+          <div className="auction-form-items compact">
+            {cappedAuctionItems.map((item) => (
+              <label key={item.id}>
+                <span>{item.short_name} member limit</span>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder={`Shared ${sharedCaps[item.item_key] ?? item.default_per_round_cap ?? 0}`}
+                  value={form.memberCapOverrides?.[item.item_key] ?? ""}
+                  onChange={(event) => updateMemberCap(item.item_key, event.target.value)}
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
       <label className="wide">
         <span>Joined date/time</span>
         <div className="joined-fields">
@@ -2684,7 +2724,11 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
       setMembers((current) => editing
         ? current.map((member) => member.id === data.member.id ? data.member : member)
         : [...current, data.member].sort((a, b) => a.char_name.localeCompare(b.char_name)));
-      syncAuctionMember(data.member);
+      if (data.auctionState) {
+        setAuctionState(data.auctionState);
+      } else {
+        syncAuctionMember(data.member);
+      }
       if (!editing && auctionState?.activeRound) {
         await loadData();
       }
@@ -3322,6 +3366,8 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
         <Modal title={memberModal.id ? "Edit member" : "Add member"} onClose={() => setMemberModal(null)}>
           <MemberForm
             groups={groups}
+            auctionItems={auctionItems}
+            auctionState={auctionState}
             initial={memberModal.id ? memberModal : emptyMember}
             onCancel={() => setMemberModal(null)}
             onSave={saveMember}

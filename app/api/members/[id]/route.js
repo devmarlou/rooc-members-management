@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
 import { writeAuditLog } from "@/lib/auditLog";
+import { updateMemberCapOverrides } from "@/lib/auctionEngine";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 const MEMBER_SELECT = "id,char_name,char_class,group_id,party_slot,is_officer,auction_priority_override,joined_at,notes,created_at,updated_at";
@@ -45,7 +46,8 @@ export async function PATCH(request, { params }) {
 
   try {
     const { id } = await params;
-    const body = cleanMemberPayload(await request.json());
+    const payload = await request.json();
+    const body = cleanMemberPayload(payload);
     if (!body.char_name || !body.char_class) {
       return NextResponse.json({ error: "Character name and class are required." }, { status: 400 });
     }
@@ -77,14 +79,19 @@ export async function PATCH(request, { params }) {
     }
 
     if (error) throw error;
+
+    const auctionState = Object.prototype.hasOwnProperty.call(payload || {}, "memberCapOverrides")
+      ? await updateMemberCapOverrides(supabase, id, payload.memberCapOverrides)
+      : null;
+
     await writeAuditLog(supabase, request, {
       action: "member.updated",
       targetType: "member",
       targetId: data.id,
       summary: `Updated member ${data.char_name}`,
-      metadata: { before: beforeResult.data || null, after: data }
+      metadata: { before: beforeResult.data || null, after: data, memberCapOverrides: payload.memberCapOverrides || null }
     });
-    return NextResponse.json({ member: data });
+    return NextResponse.json({ member: data, auctionState });
   } catch (error) {
     return handleApiError(error);
   }
