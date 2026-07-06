@@ -457,6 +457,10 @@ function MemberForm({ groups, auctionItems = [], auctionState = null, initial, o
   const cappedAuctionItems = auctionItems.filter((item) => item.gates_round_completion);
   const savedMemberCaps = auctionState?.memberCapOverrides?.[initial?.id] || {};
   const sharedCaps = auctionState?.itemCaps || {};
+  const initialMemberCapOverrides = Object.fromEntries(cappedAuctionItems.map((item) => [
+    item.item_key,
+    savedMemberCaps[item.item_key] === undefined ? "" : String(savedMemberCaps[item.item_key])
+  ]));
   const [form, setForm] = useState(() => ({
     ...emptyMember,
     ...initial,
@@ -464,10 +468,7 @@ function MemberForm({ groups, auctionItems = [], auctionState = null, initial, o
     joined_date: joinedParts.date || "",
     joined_time: joinedParts.time || "",
     notes: initial?.notes || "",
-    memberCapOverrides: Object.fromEntries(cappedAuctionItems.map((item) => [
-      item.item_key,
-      savedMemberCaps[item.item_key] === undefined ? "" : String(savedMemberCaps[item.item_key])
-    ]))
+    memberCapOverrides: initialMemberCapOverrides
   }));
 
   function update(key, value) {
@@ -486,11 +487,12 @@ function MemberForm({ groups, auctionItems = [], auctionState = null, initial, o
 
   function submit(event) {
     event.preventDefault();
+    const memberCapOverridesChanged = JSON.stringify(form.memberCapOverrides || {}) !== JSON.stringify(initialMemberCapOverrides);
     onSave({
       ...form,
       group_id: form.group_id || null,
       joined_at: toIsoTimestamp(form.joined_date, form.joined_time),
-      ...(initial?.id && auctionState?.activeRound ? { memberCapOverrides: form.memberCapOverrides || {} } : {})
+      ...(initial?.id && auctionState?.activeRound && memberCapOverridesChanged ? { memberCapOverrides: form.memberCapOverrides || {} } : {})
     });
   }
 
@@ -533,7 +535,7 @@ function MemberForm({ groups, auctionItems = [], auctionState = null, initial, o
         <div className="member-cap-overrides wide">
           <div className="member-cap-header">
             <span>Auction limit override</span>
-            <em>Blank follows shared limit</em>
+            <em>Blank follows auction/default limit</em>
           </div>
           <div className="auction-form-items compact">
             {cappedAuctionItems.map((item) => (
