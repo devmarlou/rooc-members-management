@@ -1798,6 +1798,44 @@ function AuctionLimitsForm({ auctionItems, auctionState, onCancel, onSave, busy 
   );
 }
 
+function GlobalAuctionDefaultsForm({ auctionItems, onCancel, onSave, busy }) {
+  const limitedItems = auctionItems.filter((item) => item.gates_round_completion);
+  const [caps, setCaps] = useState(() => Object.fromEntries(
+    limitedItems.map((item) => [item.item_key, String(item.default_per_round_cap ?? 0)])
+  ));
+
+  function submit(event) {
+    event.preventDefault();
+    onSave(Object.fromEntries(limitedItems.map((item) => [item.item_key, Number.parseInt(caps[item.item_key] || "0", 10) || 0])));
+  }
+
+  return (
+    <form onSubmit={submit} className="form-grid single">
+      <div className="auction-form-items">
+        {limitedItems.map((item) => (
+          <label key={item.id}>
+            <span>{item.name}</span>
+            <input
+              type="number"
+              min="0"
+              value={caps[item.item_key] ?? "0"}
+              onChange={(event) => setCaps((current) => ({ ...current, [item.item_key]: event.target.value }))}
+            />
+          </label>
+        ))}
+      </div>
+      <p className="field-note">These defaults are used for future rounds and as the fallback when no active-round or member-specific override exists.</p>
+      <div className="form-actions">
+        <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
+        <button className="primary-button" disabled={busy}>
+          {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
+          Save defaults
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function FinalizePreviewModal({ preview, busy, onCancel, onConfirm }) {
   const warnings = preview?.warnings || [];
   const itemSummaries = preview?.itemSummaries || [];
@@ -2129,6 +2167,8 @@ function AuctionFoundation({
   auctionState,
   onOpenStartAuction,
   onOpenLimits,
+  onOpenGlobalLimits,
+  canManageGlobalDefaults = false,
   onLockAuction,
   onDoneAuction,
   onCancelAuction,
@@ -2252,6 +2292,9 @@ function AuctionFoundation({
           </div>
           <div className="round-actions">
             <button className="ghost-button" type="button" onClick={onOpenLimits} disabled={!activeRound || hasOpenAuctions}><Settings size={15} />Adjust limits</button>
+            {canManageGlobalDefaults && (
+              <button className="ghost-button" type="button" onClick={onOpenGlobalLimits}><Settings size={15} />Global defaults</button>
+            )}
           </div>
         </div>
       )}
@@ -2525,6 +2568,7 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
   const [limitModalOpen, setLimitModalOpen] = useState(false);
   const [auctionStartType, setAuctionStartType] = useState(null);
   const [auctionLimitsOpen, setAuctionLimitsOpen] = useState(false);
+  const [globalLimitsOpen, setGlobalLimitsOpen] = useState(false);
   const [partyPickerGroup, setPartyPickerGroup] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
   const [finalizePreview, setFinalizePreview] = useState(null);
@@ -3058,6 +3102,24 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
     }
   }
 
+  async function saveGlobalAuctionLimits(caps) {
+    setSaving(true);
+    try {
+      const data = await api("/api/auctions/default-limits", {
+        method: "PATCH",
+        body: JSON.stringify({ caps })
+      });
+      setAuctionItems(data.auctionItems || []);
+      setAuctionState((current) => current && !current.activeRound ? { ...current, itemCaps: caps } : current);
+      setGlobalLimitsOpen(false);
+      setToast("Global auction defaults updated");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function requestCantPay(member, auction) {
     if (!member) return;
     const auctionName = auction?.name || "this auction";
@@ -3292,6 +3354,8 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
                   busy={saving}
                   onOpenStartAuction={setAuctionStartType}
                   onOpenLimits={() => setAuctionLimitsOpen(true)}
+                  onOpenGlobalLimits={() => setGlobalLimitsOpen(true)}
+                  canManageGlobalDefaults={false}
                   onLockAuction={requestLockAuction}
                   onDoneAuction={requestDoneAuction}
                   onCancelAuction={requestCancelAuction}
@@ -3347,6 +3411,8 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
                   busy={saving}
                   onOpenStartAuction={setAuctionStartType}
                   onOpenLimits={() => setAuctionLimitsOpen(true)}
+                  onOpenGlobalLimits={() => setGlobalLimitsOpen(true)}
+                  canManageGlobalDefaults={["admin", "super_admin"].includes(session.role)}
                   onLockAuction={requestLockAuction}
                   onDoneAuction={requestDoneAuction}
                   onCancelAuction={requestCancelAuction}
@@ -3437,6 +3503,17 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
             busy={saving}
             onCancel={() => setAuctionLimitsOpen(false)}
             onSave={saveAuctionLimits}
+          />
+        </Modal>
+      )}
+
+      {globalLimitsOpen && (
+        <Modal title="Global auction defaults" onClose={() => setGlobalLimitsOpen(false)}>
+          <GlobalAuctionDefaultsForm
+            auctionItems={auctionItems}
+            busy={saving}
+            onCancel={() => setGlobalLimitsOpen(false)}
+            onSave={saveGlobalAuctionLimits}
           />
         </Modal>
       )}
