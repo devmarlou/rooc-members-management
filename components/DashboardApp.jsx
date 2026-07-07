@@ -529,7 +529,7 @@ function MemberForm({ groups, auctionItems = [], auctionState = null, initial, o
           checked={Boolean(form.auction_priority_override)}
           onChange={(event) => update("auction_priority_override", event.target.checked)}
         />
-        <span>Auction priority override - starts ahead of normal rotation</span>
+        <span>Auction priority override - starts ahead for L&D and T&S</span>
       </label>
       {initial?.id && auctionState?.activeRound && cappedAuctionItems.length > 0 && (
         <div className="member-cap-overrides wide">
