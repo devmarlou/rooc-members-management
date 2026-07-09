@@ -20,6 +20,7 @@ import {
   Loader2,
   AlertTriangle,
   Copy,
+  Save,
   RefreshCw,
   ChevronDown,
   ChevronUp,
@@ -1824,7 +1825,7 @@ function GlobalAuctionDefaultsForm({ auctionItems, onCancel, onSave, busy }) {
           </label>
         ))}
       </div>
-      <p className="field-note">These defaults are used for future rounds and as the fallback when no active-round or member-specific override exists.</p>
+      <p className="field-note">These defaults are used for future auction lineups and as the fallback when no lineup or member-specific override exists.</p>
       <div className="form-actions">
         <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
         <button className="primary-button" disabled={busy}>
@@ -2168,6 +2169,8 @@ function AuctionFoundation({
   onOpenStartAuction,
   onOpenLimits,
   onOpenGlobalLimits,
+  onSaveSavepoint,
+  onRestoreSavepoint,
   canManageGlobalDefaults = false,
   onLockAuction,
   onDoneAuction,
@@ -2293,7 +2296,11 @@ function AuctionFoundation({
           <div className="round-actions">
             <button className="ghost-button" type="button" onClick={onOpenLimits} disabled={!activeRound || hasOpenAuctions}><Settings size={15} />Adjust limits</button>
             {canManageGlobalDefaults && (
-              <button className="ghost-button" type="button" onClick={onOpenGlobalLimits}><Settings size={15} />Global defaults</button>
+              <>
+                <button className="ghost-button" type="button" onClick={onOpenGlobalLimits}><Settings size={15} />Global defaults</button>
+                <button className="ghost-button" type="button" onClick={onSaveSavepoint} disabled={!activeRound || busy}><Save size={15} />Save savepoint</button>
+                <button className="danger-button soft" type="button" onClick={onRestoreSavepoint} disabled={busy}><RefreshCw size={15} />Restore savepoint</button>
+              </>
             )}
           </div>
         </div>
@@ -2792,13 +2799,46 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
     setMemberModal(null);
     setConfirmAction({
       title: "Catch up auction cycles",
-      body: `Catch ${member.char_name} up to the current completed item cycles? This is a manual progress correction and will not create auction allocations.`,
+      body: `Catch ${member.char_name} up to current completed item cycles for cooldown overlap? This only updates cycle history and will not create auction allocations.`,
       confirmLabel: "Catch up cycles",
       tone: "default",
       run: async () => {
         const data = await api(`/api/members/${member.id}/catch-up`, { method: "POST" });
         setAuctionState(data.auctionState || null);
         setToast(data.changes?.length ? "Member cycles caught up" : "Member was already caught up");
+      }
+    });
+  }
+
+  function requestSaveAuctionSavepoint() {
+    setConfirmAction({
+      title: "Save auction savepoint",
+      body: "Save the current auction lineup, progress, limits, and auction history as the restore point for testing?",
+      confirmLabel: "Save savepoint",
+      tone: "default",
+      run: async () => {
+        const data = await api("/api/auctions/savepoint", {
+          method: "POST",
+          body: JSON.stringify({ action: "save" })
+        });
+        setToast(data.savepoint?.created_at ? "Auction savepoint saved" : "Savepoint saved");
+      }
+    });
+  }
+
+  function requestRestoreAuctionSavepoint() {
+    setConfirmAction({
+      title: "Restore auction savepoint",
+      body: "Restore the saved auction checkpoint? This removes test auctions and returns lineup progress, limits, and auction history to the savepoint.",
+      confirmLabel: "Restore savepoint",
+      tone: "danger",
+      run: async () => {
+        const data = await api("/api/auctions/savepoint", {
+          method: "POST",
+          body: JSON.stringify({ action: "restore" })
+        });
+        if (data.auctionState) setAuctionState(data.auctionState);
+        setToast("Auction savepoint restored");
       }
     });
   }
@@ -3355,6 +3395,8 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
                   onOpenStartAuction={setAuctionStartType}
                   onOpenLimits={() => setAuctionLimitsOpen(true)}
                   onOpenGlobalLimits={() => setGlobalLimitsOpen(true)}
+                  onSaveSavepoint={requestSaveAuctionSavepoint}
+                  onRestoreSavepoint={requestRestoreAuctionSavepoint}
                   canManageGlobalDefaults={false}
                   onLockAuction={requestLockAuction}
                   onDoneAuction={requestDoneAuction}
@@ -3412,6 +3454,8 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
                   onOpenStartAuction={setAuctionStartType}
                   onOpenLimits={() => setAuctionLimitsOpen(true)}
                   onOpenGlobalLimits={() => setGlobalLimitsOpen(true)}
+                  onSaveSavepoint={requestSaveAuctionSavepoint}
+                  onRestoreSavepoint={requestRestoreAuctionSavepoint}
                   canManageGlobalDefaults={["admin", "super_admin"].includes(session.role)}
                   onLockAuction={requestLockAuction}
                   onDoneAuction={requestDoneAuction}

@@ -93,16 +93,14 @@ function catchUpReceived({ memberId, received, items, progressRows, membersById,
     });
     const targetHeld = targetCycles * cap;
     const beforeHeld = receivedHeldCount(nextReceived, item.item_key);
-    const afterHeld = targetHeld;
-    if (afterHeld === beforeHeld) continue;
+    if (targetHeld <= beforeHeld) continue;
 
-    heldTotals[item.item_key] = afterHeld;
-    nextReceived[item.item_key] = Math.min(Math.max(afterHeld - targetHeld, 0), cap);
+    heldTotals[item.item_key] = targetHeld;
     changes.push({
       item_key: item.item_key,
       short_name: item.short_name,
       beforeHeld,
-      afterHeld,
+      afterHeld: targetHeld,
       targetCycles
     });
   }
