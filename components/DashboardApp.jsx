@@ -48,7 +48,7 @@ const emptyMember = {
 const AUCTION_JOIN_COOLDOWN_HOURS = 96;
 const AUCTION_JOIN_COOLDOWN_MS = AUCTION_JOIN_COOLDOWN_HOURS * 60 * 60 * 1000;
 const PH_TIME_ZONE = "Asia/Manila";
-const DEFAULT_GUILD_MEMBER_LIMIT = 78;
+const DEFAULT_GUILD_MEMBER_LIMIT = 80;
 const PROGRESS_SUMMARY_ITEM_LABELS = {
   puppet_card: "Puppet Card",
   feather_ld: "Light and Dark",
@@ -2697,9 +2697,7 @@ export default function DashboardApp({ publicView = false, auditLogView = false 
     if (!members.length || memberLimit !== null) return;
     const stored = window.localStorage.getItem("encore_member_limit");
     const parsed = stored ? Number.parseInt(stored, 10) : NaN;
-    const savedLimit = Number.isFinite(parsed)
-      ? Math.min(parsed, DEFAULT_GUILD_MEMBER_LIMIT)
-      : DEFAULT_GUILD_MEMBER_LIMIT;
+    const savedLimit = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_GUILD_MEMBER_LIMIT;
     setMemberLimit(Math.max(savedLimit, members.length));
   }, [memberLimit, members.length]);
 
