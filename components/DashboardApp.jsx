@@ -233,10 +233,6 @@ function ClassIcon({ name, size = 34, glow = true }) {
   );
 }
 
-function NoiseLayer() {
-  return <div className="noise-layer" aria-hidden="true" />;
-}
-
 function LoginScreen({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -262,25 +258,36 @@ function LoginScreen({ onLogin }) {
 
   return (
     <main className="login-page">
-      <section className="login-card">
-        <div className="brand-mark"><Shield size={28} /></div>
-        <p className="eyebrow">guild admin</p>
-        <h1>ENCORE</h1>
-        <form onSubmit={submit} className="login-form">
+      <section className="login-shell" aria-labelledby="login-title">
+        <aside className="login-brand">
+          <div className="brand-mark"><Shield size={28} /></div>
+          <div>
+            <h1>ENCORE</h1>
+            <p>Ragnarok Origin Classic</p>
+            <p>Prontera 6</p>
+          </div>
+          <p className="login-brand-note">Guild management and auction allocation.</p>
+        </aside>
+        <section className="login-card">
+          <p className="login-kicker">Guild administration</p>
+          <h2 id="login-title">Sign in</h2>
+          <p className="login-intro">Use your guild account to manage the roster, parties, and auctions.</p>
+          <form onSubmit={submit} className="login-form">
           <label>
             <span>Username</span>
-            <input value={username} onChange={(event) => setUsername(event.target.value)} autoFocus />
+            <input value={username} onChange={(event) => setUsername(event.target.value)} autoFocus autoComplete="username" />
           </label>
           <label>
             <span>Password</span>
-            <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" />
+            <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" />
           </label>
-          {error && <p className="form-error">{error}</p>}
+          {error && <p className="form-error" role="alert">{error}</p>}
           <button className="primary-button full" disabled={busy}>
             {busy ? <Loader2 className="spin" size={16} /> : <Shield size={16} />}
             Sign in
           </button>
-        </form>
+          </form>
+        </section>
       </section>
     </main>
   );
@@ -322,30 +329,40 @@ function ResetPasswordScreen({ username, onReset }) {
 
   return (
     <main className="login-page">
-      <section className="login-card">
-        <div className="brand-mark"><KeyRound size={28} /></div>
-        <p className="eyebrow">first login</p>
-        <h1>RESET</h1>
-        <p className="field-note reset-note">Signed in as {username}. Change the default password before opening the dashboard.</p>
-        <form onSubmit={submit} className="login-form">
+      <section className="login-shell" aria-labelledby="reset-title">
+        <aside className="login-brand">
+          <div className="brand-mark"><Shield size={28} /></div>
+          <div>
+            <h1>ENCORE</h1>
+            <p>Ragnarok Origin Classic</p>
+            <p>Prontera 6</p>
+          </div>
+          <p className="login-brand-note">Guild management and auction allocation.</p>
+        </aside>
+        <section className="login-card">
+          <p className="login-kicker"><KeyRound size={14} />First sign in</p>
+          <h2 id="reset-title">Set a new password</h2>
+          <p className="login-intro">Signed in as {username}. Change the default password before opening the dashboard.</p>
+          <form onSubmit={submit} className="login-form">
           <label>
             <span>Current password</span>
-            <input value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} type="password" autoFocus />
+            <input value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} type="password" autoFocus autoComplete="current-password" />
           </label>
           <label>
             <span>New password</span>
-            <input value={newPassword} onChange={(event) => setNewPassword(event.target.value)} type="password" />
+            <input value={newPassword} onChange={(event) => setNewPassword(event.target.value)} type="password" autoComplete="new-password" />
           </label>
           <label>
             <span>Confirm password</span>
-            <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} type="password" />
+            <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} type="password" autoComplete="new-password" />
           </label>
-          {(error || passwordMismatch) && <p className="form-error">{error || "New passwords do not match."}</p>}
+          {(error || passwordMismatch) && <p className="form-error" role="alert">{error || "New passwords do not match."}</p>}
           <button className="primary-button full" disabled={busy || passwordMismatch}>
             {busy ? <Loader2 className="spin" size={16} /> : <Check size={16} />}
             Save password
           </button>
-        </form>
+          </form>
+        </section>
       </section>
     </main>
   );
