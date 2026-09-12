@@ -3,7 +3,7 @@ import "./admin.css";
 
 export const metadata = {
   title: "ENCORE Guild Admin",
-  description: "Member and auction dashboard for ENCORE guild admins"
+  description: "Member and auction dashboard for ENCORE",
 };
 
 export default function RootLayout({ children }) {

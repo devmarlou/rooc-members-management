@@ -179,9 +179,10 @@
 .guild-console .auction-logout-heading h3 { color: var(--text); }
 .guild-console .auction-logout-list { max-height: 180px; overflow: auto; }
 .guild-console .auction-logout-row { background: transparent; border-color: var(--line); }
-.guild-console .class-grid { grid-auto-flow: column; grid-auto-columns: min(340px, 100%); grid-template-columns: none; align-items: start; overflow-x: auto; padding-bottom: 12px; scrollbar-color: #6b88ab #101722; }
-.guild-console .class-column .member-list { max-height: 560px; overflow-y: auto; scrollbar-color: #6b88ab #101722; }
-.guild-console .roster-table-wrap { max-height: 540px; overflow: auto; border: 1px solid var(--line); scrollbar-color: #52637a #101722; }
+.guild-console .class-grid { grid-auto-flow: column; grid-auto-columns: min(340px, 100%); grid-template-columns: none; align-items: stretch; overflow-x: auto; padding-bottom: 12px; scrollbar-color: #6b88ab #101722; }
+.guild-console .class-column { height: 100%; }
+.guild-console .class-column .member-list { max-height: none; overflow: visible; }
+.guild-console .roster-table-wrap { max-height: none; overflow-x: auto; overflow-y: visible; border: 1px solid var(--line); scrollbar-color: #52637a #101722; }
 .guild-console .roster-table { width: 100%; min-width: 880px; border-collapse: collapse; text-align: left; }
 .guild-console .roster-table th { position: sticky; top: 0; z-index: 1; background: #223148; color: #cedcee; }
 .guild-console .roster-table :is(th, td) { padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
@@ -217,6 +218,10 @@
 .guild-console .progress-cycle-summary { gap: 4px; }
 .guild-console .progress-table .progress-cycle-pill { display: inline-flex; gap: 4px; min-width: 0; padding: 3px 4px; margin-top: 0; }
 .guild-console .progress-cycle-pill .item-icon { width: 14px; height: 14px; }
+.guild-console .progress-cycle-pill.received { background: #203a5d; border-color: #4d6f9b; color: #bfd9ff; }
+.guild-console .progress-cycle-pill.pending { background: #172130; border-color: #344459; color: #aab9cc; }
+.guild-console .progress-cycle-pill.received em { color: #dbe9ff; }
+.guild-console .progress-cycle-pill.pending em { color: #aab9cc; }
 @media (min-width: 761px) {
   .guild-console .bid-line { grid-template-columns: 16px 58px minmax(0, 1fr) 30px; align-items: start; }
   .guild-console .bid-line > code { grid-column: 3; grid-row: 1; }
@@ -238,11 +243,72 @@
 .guild-console .footer-strip { background: #141e2c; border-color: var(--line); color: var(--muted); }
 .guild-console .toast { background: #20334a; border-color: #689bda; color: var(--text); }
 
+/* Admin navigation: one clear rail for the three working areas. */
+.admin-console { display: grid; grid-template-columns: 232px minmax(0, 1fr); }
+.admin-workspace { min-width: 0; min-height: 100vh; }
+.admin-sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  height: 100vh;
+  flex-direction: column;
+  padding: 20px 12px;
+  border-right: 1px solid var(--line);
+  background: #141e2c;
+}
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px;
+  color: var(--text);
+  text-decoration: none;
+}
+.sidebar-brand .brand-mark { flex: 0 0 auto; }
+.sidebar-brand > span:last-child { display: grid; gap: 2px; min-width: 0; }
+.sidebar-brand strong { color: var(--text); font-size: 16px !important; font-weight: 800; letter-spacing: .1em; }
+.sidebar-brand em { color: var(--muted); font-size: 14px !important; font-style: normal; }
+.admin-navigation { display: grid; gap: 4px; margin-top: 28px; }
+.admin-navigation a {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  color: var(--muted);
+  font-weight: 600;
+  text-decoration: none;
+}
+.admin-navigation a:hover { border-color: var(--line); background: #1a2738; color: var(--text); }
+.admin-navigation a.active { border-color: #41628d; background: #203a5d; color: #dbe9ff; }
+.admin-navigation a.active svg { color: #8cbaff; }
+.nav-label-short { display: none; }
+.admin-navigation em { color: inherit; font-size: 14px !important; font-style: normal; }
+.sidebar-note { margin: auto 8px 4px; color: var(--muted); font-size: 14px !important; line-height: 1.55; }
+.admin-workspace .topbar { position: sticky; top: 0; z-index: 5; }
+.admin-workspace .topbar-inner.compact { min-height: 64px; justify-content: flex-end; }
+.admin-workspace .dashboard { width: min(1600px, calc(100% - 64px)); }
+.admin-workspace .footer-strip { width: 100%; }
+
 @media (max-width: 1100px) {
   .guild-console .party-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .guild-console .auction-grid.two-up { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
+  .admin-console { display: block; }
+  .admin-sidebar { position: static; height: auto; flex-direction: row; align-items: center; gap: 10px; padding: 10px 12px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .sidebar-brand, .sidebar-note { display: none; }
+  .admin-navigation { display: flex; width: 100%; gap: 4px; margin: 0; }
+  .admin-navigation a { flex: 1 1 0; grid-template-columns: 18px minmax(0, 1fr); gap: 5px; min-height: 40px; padding: 0 5px; white-space: nowrap; }
+  .admin-navigation em { display: none; }
+  .nav-label-full { display: none; }
+  .nav-label-short { display: inline; }
+  .admin-workspace .topbar { position: relative; }
+  .admin-workspace .topbar-inner.compact { min-height: 56px; justify-content: flex-start; }
+  .admin-workspace .dashboard { width: calc(100% - 24px); }
   .guild-console .auction-workflow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .guild-console .auction-workflow li { flex-direction: column; padding: 10px; gap: 8px; }
   .guild-console .auction-workflow strong { font-size: 14px !important; }
