@@ -55,6 +55,7 @@ const AUCTION_JOIN_COOLDOWN_HOURS = 96;
 const AUCTION_JOIN_COOLDOWN_MS = AUCTION_JOIN_COOLDOWN_HOURS * 60 * 60 * 1000;
 const PH_TIME_ZONE = "Asia/Manila";
 const DEFAULT_GUILD_MEMBER_LIMIT = 80;
+const DASHBOARD_CACHE_MAX_AGE_MS = 30_000;
 const ITEM_ICON_SRC = {
   puppet_card: "/icons/puppet.png",
   feather_ld: "/icons/light-dark.png",
@@ -122,6 +123,12 @@ const AUCTION_PAGE_ITEM_ORDER = {
   feather_ts: 4,
 };
 const SHARED_FEATHER_PAGE_KEYS = new Set(["feather_ld", "feather_ts"]);
+let adminSessionCache = null;
+const dashboardDataCache = { admin: null, public: null };
+
+function dashboardCacheKey(publicView) {
+  return publicView ? "public" : "admin";
+}
 
 function normalizePartyMemberName(name) {
   const normalized = String(name || "")
@@ -3865,18 +3872,20 @@ export default function DashboardApp({
   auditLogView = false,
   adminPage = "members",
 }) {
+  const cacheKey = dashboardCacheKey(publicView);
+  const cachedDashboardData = dashboardDataCache[cacheKey]?.data || null;
   const [session, setSession] = useState({
-    loading: true,
-    authenticated: false,
-    username: "",
-    role: "",
-    mustResetPassword: false,
+    loading: publicView ? false : !adminSessionCache,
+    authenticated: publicView || Boolean(adminSessionCache?.authenticated),
+    username: publicView ? "public" : adminSessionCache?.username || "",
+    role: publicView ? "" : adminSessionCache?.role || "",
+    mustResetPassword: Boolean(adminSessionCache?.mustResetPassword),
   });
-  const [members, setMembers] = useState([]);
-  const [groups, setGroups] = useState([]);
-  const [auctionItems, setAuctionItems] = useState([]);
-  const [auctionState, setAuctionState] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [members, setMembers] = useState(cachedDashboardData?.members || []);
+  const [groups, setGroups] = useState(cachedDashboardData?.groups || []);
+  const [auctionItems, setAuctionItems] = useState(cachedDashboardData?.auctionItems || []);
+  const [auctionState, setAuctionState] = useState(cachedDashboardData?.auctionState || null);
+  const [loading, setLoading] = useState(publicView && !cachedDashboardData);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [memberModal, setMemberModal] = useState(null);
@@ -3896,6 +3905,8 @@ export default function DashboardApp({
   const realtimeTimerRef = useRef(null);
   const realtimeLoadingRef = useRef(false);
   const scrollRestoreRef = useRef(null);
+  const hasDashboardDataRef = useRef(Boolean(cachedDashboardData));
+  const skipCacheSyncRef = useRef(Boolean(cachedDashboardData));
 
   const groupsById = useMemo(
     () => Object.fromEntries(groups.map((group) => [group.id, group])),
@@ -3939,14 +3950,27 @@ export default function DashboardApp({
   const loadData = useCallback(
     async ({ silent = false } = {}) => {
       if (realtimeLoadingRef.current) return;
+      const cached = dashboardDataCache[cacheKey];
+      const cacheIsFresh = cached && Date.now() - cached.loadedAt < DASHBOARD_CACHE_MAX_AGE_MS;
+      if (cached) {
+        skipCacheSyncRef.current = true;
+        hasDashboardDataRef.current = true;
+        setMembers(cached.data.members || []);
+        setGroups(cached.data.groups || []);
+        setAuctionItems(cached.data.auctionItems || []);
+        setAuctionState(cached.data.auctionState || null);
+        if (!silent && cacheIsFresh) return;
+      }
       realtimeLoadingRef.current = true;
       if (silent) captureScrollPosition();
-      if (!silent) setLoading(true);
+      if (!silent && !cached) setLoading(true);
       setError("");
       try {
         const data = await api(
           publicView ? "/api/public/bootstrap" : "/api/bootstrap",
         );
+        dashboardDataCache[cacheKey] = { data, loadedAt: Date.now() };
+        hasDashboardDataRef.current = true;
         setMembers(data.members || []);
         setGroups(data.groups || []);
         setAuctionItems(data.auctionItems || []);
@@ -3959,7 +3983,7 @@ export default function DashboardApp({
         if (silent) restoreScrollPosition();
       }
     },
-    [captureScrollPosition, publicView, restoreScrollPosition],
+    [cacheKey, captureScrollPosition, publicView, restoreScrollPosition],
   );
 
   async function checkSession() {
@@ -3975,13 +3999,16 @@ export default function DashboardApp({
       return;
     }
     const data = await api("/api/auth/session");
-    setSession({
+    const nextSession = {
       loading: false,
       authenticated: data.authenticated,
       username: data.username || "",
       role: data.role || "",
       mustResetPassword: Boolean(data.mustResetPassword),
-    });
+    };
+    adminSessionCache = nextSession;
+    if (!nextSession.authenticated) dashboardDataCache.admin = null;
+    setSession(nextSession);
     if (data.authenticated && !data.mustResetPassword) {
       if (auditLogView) {
         if (data.role === "super_admin") loadAuditLogs();
@@ -4003,6 +4030,18 @@ export default function DashboardApp({
       setError(err.message);
     });
   }, [loadData, publicView]);
+
+  useEffect(() => {
+    if (!hasDashboardDataRef.current) return;
+    if (skipCacheSyncRef.current) {
+      skipCacheSyncRef.current = false;
+      return;
+    }
+    dashboardDataCache[cacheKey] = {
+      data: { members, groups, auctionItems, auctionState },
+      loadedAt: Date.now(),
+    };
+  }, [auctionItems, auctionState, cacheKey, groups, members]);
 
   useEffect(() => {
     if (!session.authenticated) return undefined;
@@ -4103,6 +4142,8 @@ export default function DashboardApp({
 
   async function logout() {
     await api("/api/auth/logout", { method: "POST" });
+    adminSessionCache = null;
+    dashboardDataCache.admin = null;
     setSession({
       loading: false,
       authenticated: false,
@@ -4774,7 +4815,7 @@ export default function DashboardApp({
 
   if (session.loading) {
     return (
-      <main className="loading-page">
+      <main className="loading-page guild-console">
         <Loader2 className="spin" size={28} />
       </main>
     );
