@@ -1,4 +1,4 @@
-# Auction System — Logic Spec (v3.3)
+# Auction System — Logic Spec (v3.4)
 
 Companion document to `guild-admin-dashboard-spec.md`. Defines the rules and behavior for the automated auction allocation feature.
 
@@ -8,14 +8,12 @@ Companion document to `guild-admin-dashboard-spec.md`. Defines the rules and beh
 
 After a guild event (GL/WoE) drops a pool of rewards, the admin opens an auction in the dashboard. The system:
 
-1. Takes the **queue** — auto-generated from ALL members, ordered by round rotation + carry-over priority
+1. Takes the **queue** — auto-generated from all eligible members in the permanent rotation
 2. Takes an **inventory of items** (with per-item quantities) and **per-round caps** (with optional per-member overrides)
 3. **Distributes items to members in queue order**, skipping items the member has already maxed out in this round
 4. **Assigns each member page numbers + slot ranges** (4 items per page, fixed by game UI)
-5. Admin can mark **"Can't Pay"** live → that member is bumped, next-in-line takes the slot
-6. When admin clicks **"Done"** on the GL/WoE auction, progress is recorded
-7. Admin can then optionally start a **League Prize auction** (sequential, not parallel) for members who didn't complete their haul
-8. When ALL members complete their full haul (across both auction types) → the **round ends**, progress resets, queue reshuffles
+5. When admin clicks **"Done"** on the GL/WoE auction, progress is recorded
+6. Admin can optionally pair a **League Prize auction** with the locked Guild Auction
 
 ---
 
@@ -62,16 +60,18 @@ A **round** is a complete cycle where every member receives their full per-round
 - When the **last member completes** (gating items only), the round auto-ends. Progress resets, new round begins with **freshly randomized rotation list**.
 - Admin can also manually trigger "Start New Round."
 
-### The Locked Rotation List (source of truth)
+### The Permanent Locked Rotation List (source of truth)
 
-At the start of every round, the system creates a **locked rotation list** — a random shuffle of all members. This list is the single source of truth for queue order throughout the entire round.
+The system creates a **locked rotation list once** by randomly shuffling all existing members. This permanent list is the single source of truth for auction order.
+
+Priority members have an auction-level feather entitlement: at the start of every Guild or League auction they receive L&D and T&S first, even when stored cycle progress is already capped. Their `8 L&D / 10 T&S` limits remain hard within that individual auction, so an item crossing into a new cycle mid-auction cannot allocate a second batch to them. Puppet Card does not use priority; it follows the shared permanent rotation at one card per member.
 
 - **At round start:** `SELECT * FROM members ORDER BY random()` → assign positions 1..N → lock
-- **Lock duration:** entire round (cannot be re-shuffled mid-round)
+- **Lock duration:** permanent; item-cycle completion never reshuffles it
 - **Mid-round changes:**
   - Member leaves the guild → removed from the rotation list (and cascades to any in-progress auction)
   - New member joins → appended to the END of the list with the next position number
-- **Round end:** old list is discarded, new round generates a fresh shuffle
+- **New members:** appended to the end and become auction-eligible after the 96-hour cooldown
 
 > The queue for every auction in the round is derived from this locked list. There is no other ordering logic — the rotation list IS the rotation. Carry-overs and skips operate within the framework of this list, not by replacing it.
 

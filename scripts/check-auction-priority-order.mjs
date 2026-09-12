@@ -26,15 +26,15 @@ const context = {
     position: index + 1
   })),
   progressByMemberId: new Map([
-    ["prio-a", { member_id: "prio-a", received: { feather_ld: 9 } }],
-    ["prio-b", { member_id: "prio-b", received: { feather_ld: 9 } }],
-    ["full", { member_id: "full", received: { feather_ld: 3 } }],
+    ["prio-a", { member_id: "prio-a", received: { feather_ld: 8 } }],
+    ["prio-b", { member_id: "prio-b", received: { feather_ld: 8 } }],
+    ["full", { member_id: "full", received: { feather_ld: 5 } }],
     ["start", { member_id: "start", received: { feather_ld: 0 } }],
     ["next", { member_id: "next", received: { feather_ld: 0 } }]
   ]),
   capResolver: {
     capFor(memberId) {
-      return memberId.startsWith("prio-") ? 9 : 3;
+      return memberId.startsWith("prio-") ? 8 : 5;
     },
     hasMemberCap() {
       return false;
@@ -44,16 +44,20 @@ const context = {
 
 const result = buildAllocationRows({
   context,
-  inventoryByItemId: new Map([[ld.id, 24]])
+  inventoryByItemId: new Map([[ld.id, 26]])
 });
 
 const namesById = new Map(members.map((member) => [member.id, member.char_name]));
 const orderedNames = result.units.map((unit) => namesById.get(unit.member_id));
 
-assert.deepEqual(orderedNames.slice(0, 3), ["fredplays", "fredplays", "fredplays"]);
-assert.deepEqual(orderedNames.slice(3, 12), Array(9).fill("BanoobsDR"));
-assert.deepEqual(orderedNames.slice(12, 21), Array(9).fill("DocxBR"));
-assert.deepEqual(orderedNames.slice(21, 24), Array(3).fill("NextNeed"));
-assert.equal(result.units.length, 24);
+assert.deepEqual(orderedNames, [
+  ...Array(5).fill("fredplays"),
+  ...Array(8).fill("BanoobsDR"),
+  ...Array(8).fill("DocxBR"),
+  ...Array(5).fill("NextNeed")
+]);
+assert.equal(result.units.length, 26);
+assert.equal(result.units.filter((unit) => unit.member_id === "prio-a").length, 8);
+assert.equal(result.units.filter((unit) => unit.member_id === "prio-b").length, 8);
 
 console.log("auction priority order check passed");
