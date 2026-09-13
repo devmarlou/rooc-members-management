@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSessionToken, SESSION_COOKIE } from "@/lib/session";
+import { createSessionToken, getSession, SESSION_COOKIE } from "@/lib/session";
 import {
   OAUTH_STATE_COOKIE,
   PENDING_REGISTRATION_COOKIE,
@@ -22,8 +22,22 @@ function redirectToLogin(request, authError) {
   return response;
 }
 
+function redirectToAccount(request, params) {
+  const url = new URL("/account", request.url);
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  const response = NextResponse.redirect(url);
+  response.cookies.delete(OAUTH_STATE_COOKIE);
+  return response;
+}
+
 function landingPathForRole(role) {
   return role === "admin" || role === "super_admin" ? "/" : "/account";
+}
+
+function friendlyLinkError(message) {
+  if (message.includes("discord_already_linked")) return "already_linked_elsewhere";
+  if (message.includes("already_linked")) return "already_linked";
+  return "link_failed";
 }
 
 export async function GET(request) {
@@ -44,6 +58,27 @@ export async function GET(request) {
     const discordUserId = identity.id;
 
     const supabase = getSupabaseAdmin();
+
+    // "Connect Discord" from an already-logged-in account (app/api/auth/discord/link/start/route.js)
+    // — never touches the sign-in/registration-detection path below.
+    if (stateData.intent === "link") {
+      const session = getSession(request);
+      if (!session || session.userId !== stateData.accountId) {
+        return redirectToLogin(request, "discord_state_invalid");
+      }
+
+      const { error: linkError } = await supabase.rpc("link_discord_account", {
+        p_account_id: session.userId,
+        p_discord_user_id: discordUserId
+      });
+      if (linkError) {
+        console.error("[discord/callback] link_discord_account RPC failed:", linkError);
+        return redirectToAccount(request, { linkError: friendlyLinkError(String(linkError.message || "")) });
+      }
+
+      return redirectToAccount(request, { linkSuccess: "1" });
+    }
+
     const { data, error } = await supabase.rpc("discord_lookup_account", {
       p_discord_user_id: discordUserId
     });

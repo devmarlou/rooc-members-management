@@ -348,6 +348,7 @@ function LoginScreen({ onLogin, registerStep = "", authError = "" }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState("login");
 
   async function submit(event) {
     event.preventDefault();
@@ -368,6 +369,10 @@ function LoginScreen({ onLogin, registerStep = "", authError = "" }) {
 
   if (registerStep === "complete") {
     return <DiscordRegistrationCompleteScreen />;
+  }
+
+  if (mode === "local-register") {
+    return <LocalRegistrationCompleteScreen onBack={() => setMode("login")} />;
   }
 
   const authErrorMessage = DISCORD_AUTH_ERROR_MESSAGES[authError] || null;
@@ -440,6 +445,9 @@ function LoginScreen({ onLogin, registerStep = "", authError = "" }) {
               Continue with Discord
             </a>
           </div>
+          <button type="button" className="link-button" onClick={() => setMode("local-register")}>
+            Register without Discord
+          </button>
         </section>
       </section>
     </main>
@@ -623,6 +631,192 @@ function DiscordRegistrationCompleteScreen() {
               Complete registration
             </button>
           </form>
+        </section>
+      </section>
+    </main>
+  );
+}
+
+// Local (non-Discord) counterpart to DiscordRegistrationCompleteScreen above —
+// same fields/flow (username, password, character, mandatory initial stats,
+// "awaiting approval" confirmation), posting to /api/auth/register instead.
+// Discord can always be connected afterward from AccountScreen's "Connect
+// Discord" button.
+function LocalRegistrationCompleteScreen({ onBack }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [charName, setCharName] = useState("");
+  const [charClass, setCharClass] = useState("");
+  const [classOptions, setClassOptions] = useState([]);
+  const [statsForm, setStatsForm] = useState({ video_link: "" });
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  function updateStat(key, value) {
+    setStatsForm((current) => ({ ...current, [key]: value }));
+  }
+
+  // This screen renders before any session exists, so it can't read the
+  // JobClassesContext — fetch the public bootstrap directly for its options.
+  useEffect(() => {
+    let cancelled = false;
+    api("/api/public/bootstrap")
+      .then((data) => {
+        if (cancelled) return;
+        const options = data.jobClasses || [];
+        setClassOptions(options);
+        setCharClass((current) => current || options[0]?.name || "");
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await api("/api/auth/register", {
+        method: "POST",
+        body: JSON.stringify({ username, password, charName, charClass, stats: statsForm }),
+      });
+      // Registrations land as pending — no session is issued yet, so show a
+      // confirmation here rather than logging in.
+      setSubmitted(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (submitted) {
+    return (
+      <main className="login-page">
+        <section className="login-shell" aria-labelledby="local-register-pending-title">
+          <aside className="login-brand">
+            <div className="brand-mark">
+              <Shield size={28} />
+            </div>
+            <div>
+              <h1>ENCORE</h1>
+              <p>Ragnarok Origin Classic</p>
+              <p>Prontera 6</p>
+            </div>
+            <p className="login-brand-note">
+              Guild management and auction allocation.
+            </p>
+          </aside>
+          <section className="login-card">
+            <p className="login-kicker">Registration submitted</p>
+            <h2 id="local-register-pending-title">Awaiting admin approval</h2>
+            <p className="login-intro">
+              Thanks, {username}! An officer needs to approve your registration
+              before you can sign in. Check back soon, or ask a guild officer to
+              approve you. You can connect Discord later from your account page.
+            </p>
+            <div className="login-discord-links">
+              <button type="button" className="ghost-button" onClick={onBack}>
+                Back to sign in
+              </button>
+            </div>
+          </section>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="login-page">
+      <section className="login-shell" aria-labelledby="local-register-title">
+        <aside className="login-brand">
+          <div className="brand-mark">
+            <Shield size={28} />
+          </div>
+          <div>
+            <h1>ENCORE</h1>
+            <p>Ragnarok Origin Classic</p>
+            <p>Prontera 6</p>
+          </div>
+          <p className="login-brand-note">
+            Guild management and auction allocation.
+          </p>
+        </aside>
+        <section className="login-card">
+          <p className="login-kicker">Register</p>
+          <h2 id="local-register-title">Create your account</h2>
+          <p className="login-intro">
+            Pick a username and password, and tell us your character so we can
+            add you to the roster. No Discord account is required — you can
+            connect one later from your account page if you want to.
+          </p>
+          <form onSubmit={submit} className="login-form">
+            <label>
+              <span>Username</span>
+              <input
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                autoFocus
+                autoComplete="username"
+              />
+            </label>
+            <label>
+              <span>Password</span>
+              <input
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                type="password"
+                autoComplete="new-password"
+              />
+            </label>
+            <label>
+              <span>Character name</span>
+              <input
+                value={charName}
+                onChange={(event) => setCharName(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>Class</span>
+              <select
+                value={charClass}
+                onChange={(event) => setCharClass(event.target.value)}
+              >
+                {classOptions.map((cls) => (
+                  <option key={cls.name} value={cls.name}>
+                    {cls.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="wide">
+              <h3 className="form-subsection-title">Initial stats submission</h3>
+              <p className="field-note">
+                An initial stats snapshot is required to join the roster — the
+                officers use this to place you correctly in auctions.
+              </p>
+            </div>
+            <StatsFormFields form={statsForm} onChange={updateStat} />
+            {error && (
+              <p className="form-error" role="alert">
+                {error}
+              </p>
+            )}
+            <button className="primary-button full" disabled={busy}>
+              {busy ? (
+                <Loader2 className="spin" size={16} />
+              ) : (
+                <Check size={16} />
+              )}
+              Complete registration
+            </button>
+          </form>
+          <button type="button" className="link-button" onClick={onBack}>
+            Back to sign in
+          </button>
         </section>
       </section>
     </main>
@@ -1174,6 +1368,7 @@ function AccountScreen() {
   const [statsError, setStatsError] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [linkNotice, setLinkNotice] = useState(null);
 
   function loadAccount() {
     return api("/api/account")
@@ -1184,6 +1379,31 @@ function AccountScreen() {
 
   useEffect(() => {
     loadAccount();
+  }, []);
+
+  // "Connect Discord" round-trips through a full-page redirect
+  // (app/api/auth/discord/link/start -> Discord -> callback -> here), so read
+  // its result off the URL once on mount rather than local component state.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const linkSuccess = params.get("linkSuccess");
+    const linkError = params.get("linkError");
+    if (linkSuccess) {
+      setLinkNotice({ type: "success", message: "Discord account connected." });
+    } else if (linkError) {
+      const messages = {
+        already_linked_elsewhere: "That Discord account is already connected to a different guild account.",
+        already_linked: "Your account is already connected to Discord.",
+        link_failed: "Could not connect your Discord account. Please try again.",
+      };
+      setLinkNotice({ type: "error", message: messages[linkError] || messages.link_failed });
+    }
+    if (linkSuccess || linkError) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("linkSuccess");
+      url.searchParams.delete("linkError");
+      window.history.replaceState({}, "", url);
+    }
   }, []);
 
   function loadStats() {
@@ -1254,6 +1474,13 @@ function AccountScreen() {
             <p>Identity and linked character details.</p>
           </div>
         </div>
+        {linkNotice && (
+          <div className={linkNotice.type === "error" ? "alert-panel" : "success-panel"}>
+            {linkNotice.type === "error" ? <AlertTriangle size={17} /> : <Check size={17} />}
+            <span>{linkNotice.message}</span>
+            <button onClick={() => setLinkNotice(null)}>Dismiss</button>
+          </div>
+        )}
         <div className="form-grid">
           <label>
             <span>Username</span>
@@ -1262,6 +1489,16 @@ function AccountScreen() {
           <label>
             <span>Role</span>
             <input value={roleLabel} disabled />
+          </label>
+          <label>
+            <span>Discord</span>
+            {account.discordLinked ? (
+              <input value="Connected" disabled />
+            ) : (
+              <a className="ghost-button" href="/api/auth/discord/link/start">
+                Connect Discord
+              </a>
+            )}
           </label>
           {account.member ? (
             <>
