@@ -103,9 +103,12 @@ export async function DELETE(request, { params }) {
   try {
     const { id } = await params;
     const supabase = getSupabaseAdmin();
+    // account_id isn't part of the shared MEMBER_SELECT (PATCH's response shape
+    // stays unchanged) — pulled in here only so we know whether to cascade the
+    // account delete below.
     const beforeResult = await supabase
       .from("members")
-      .select(MEMBER_SELECT)
+      .select(`${MEMBER_SELECT},account_id`)
       .eq("id", id)
       .maybeSingle();
     if (beforeResult.error && !isMissingPartySlotError(beforeResult.error)) throw beforeResult.error;
@@ -130,14 +133,29 @@ export async function DELETE(request, { params }) {
       .eq("id", id);
 
     if (error) throw error;
+
+    // A deleted member has left the guild, so their login shouldn't survive them —
+    // cascade-delete the linked app_users row too, mirroring the same
+    // members-then-app_users delete order already used when a pending
+    // registration is rejected (app/api/members/pending/[id]/route.js).
+    const accountId = beforeResult.data?.account_id || null;
+    let accountDeleted = false;
+    if (accountId) {
+      const { error: deleteAccountError } = await supabase.from("app_users").delete().eq("id", accountId);
+      if (deleteAccountError) throw deleteAccountError;
+      accountDeleted = true;
+    }
+
     await writeAuditLog(supabase, request, {
       action: "member.deleted",
       targetType: "member",
       targetId: id,
-      summary: `Deleted member ${beforeResult.data?.char_name || id}`,
-      metadata: { before: beforeResult.data || null }
+      summary: accountDeleted
+        ? `Deleted member ${beforeResult.data?.char_name || id} and their linked account`
+        : `Deleted member ${beforeResult.data?.char_name || id}`,
+      metadata: { before: beforeResult.data || null, accountDeleted }
     });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, accountDeleted });
   } catch (error) {
     return handleApiError(error);
   }
