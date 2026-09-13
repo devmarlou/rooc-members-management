@@ -2564,7 +2564,7 @@ function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role 
 // Discord self-registrations sit at status='pending' until an admin approves or
 // rejects them here — approving is the only place new Discord signups get
 // enrolled into the active auction round (see app/api/members/pending/[id]/route.js).
-function PendingMembersPanel({ pending, busyId, onApprove, onReject }) {
+function PendingMembersPanel({ pending, busyId, onApprove, onReject, onViewMember }) {
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const filtered = normalizedQuery
@@ -2614,6 +2614,16 @@ function PendingMembersPanel({ pending, busyId, onApprove, onReject }) {
               <span className="pending-member-username">@{account.username}</span>
             </div>
             <div className="pending-member-actions">
+              <button
+                type="button"
+                className="ghost-button"
+                disabled={!account.member}
+                title={account.member ? "View submitted stats" : "No character on this registration"}
+                onClick={() => onViewMember(account.member.id)}
+              >
+                <History size={15} />
+                Stats
+              </button>
               <button
                 type="button"
                 className="ghost-button"
@@ -6842,6 +6852,7 @@ export default function DashboardApp({
                           busyId={pendingActionId}
                           onApprove={(account) => respondToPending(account, "approve")}
                           onReject={(account) => respondToPending(account, "reject")}
+                          onViewMember={viewMemberStats}
                         />
                       )}
 
