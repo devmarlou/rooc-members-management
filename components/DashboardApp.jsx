@@ -6002,15 +6002,15 @@ export default function DashboardApp({
   async function deleteMember(member) {
     setConfirmAction({
       title: "Delete member",
-      body: `Delete ${member.char_name}? This removes them from the guild roster and any party slot.`,
+      body: `Delete ${member.char_name}? This removes them from the guild roster and any party slot, and deletes their login account if they have one.`,
       confirmLabel: "Delete member",
       tone: "danger",
       run: async () => {
-        await api(`/api/members/${member.id}`, { method: "DELETE" });
+        const data = await api(`/api/members/${member.id}`, { method: "DELETE" });
         setMembers((current) =>
           current.filter((item) => item.id !== member.id),
         );
-        setToast("Member deleted");
+        setToast(data?.accountDeleted ? "Member and linked account deleted" : "Member deleted");
       },
     });
   }
