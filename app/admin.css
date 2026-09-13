@@ -237,10 +237,19 @@
 .guild-console :is(.class-card, .party-card) { background: #121d2b; border-color: var(--line); }
 .guild-console :is(.class-card-header, .party-card-header) { border-color: var(--line); background: #202e40; }
 .guild-console .class-member-row { padding-block: 10px; }
-.guild-console .party-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.guild-console .party-slot { background: #172130; border-color: var(--line); min-height: 66px; }
+.guild-console .party-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+/* Compact party cards so a full row of 4 fits on one screen without scrolling —
+   was min-height:66px with 10px slot padding + 7px gaps, tall enough that only
+   2-3 parties were visible at once on a typical laptop viewport. */
+.guild-console .party-card header { min-height: 40px; padding: 8px 10px; }
+.guild-console .party-slots { gap: 5px; padding: 8px; }
+.guild-console .party-slot { background: #172130; border-color: var(--line); min-height: 44px; padding: 6px 8px; gap: 8px; }
 .guild-console .party-slot.empty { background: transparent; }
 .guild-console .party-slot:hover { border-color: #6384af; }
+.guild-console .party-slot .class-icon { width: 22px !important; height: 22px !important; }
+.guild-console .slot-name { font-size: 13px; }
+.guild-console .party-field-stack { gap: 14px; }
+.guild-console .party-field-section { gap: 8px; }
 .guild-console .progress-table-wrap { max-height: none; overflow-x: auto; }
 .guild-console .progress-table { min-width: 960px; }
 .guild-console .progress-col-line { width: 44px; }
