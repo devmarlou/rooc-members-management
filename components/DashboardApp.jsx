@@ -1369,6 +1369,10 @@ function AccountScreen() {
   const [formOpen, setFormOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [linkNotice, setLinkNotice] = useState(null);
+  const [nameEditing, setNameEditing] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameError, setNameError] = useState("");
 
   function loadAccount() {
     return api("/api/account")
@@ -1439,6 +1443,43 @@ function AccountScreen() {
 
   const statTrends = useMemo(() => buildStatTrends(stats[0], stats[1]), [stats]);
 
+  function startEditingName() {
+    setNameValue(account.member.char_name);
+    setNameError("");
+    setNameEditing(true);
+  }
+
+  function cancelEditingName() {
+    setNameEditing(false);
+    setNameError("");
+  }
+
+  async function saveName() {
+    const trimmed = nameValue.trim();
+    if (!trimmed) {
+      setNameError("Character name is required.");
+      return;
+    }
+    if (trimmed === account.member.char_name) {
+      setNameEditing(false);
+      return;
+    }
+    setNameSaving(true);
+    setNameError("");
+    try {
+      const data = await api("/api/account", {
+        method: "PATCH",
+        body: JSON.stringify({ charName: trimmed }),
+      });
+      setAccount((current) => ({ ...current, member: { ...current.member, ...data.member } }));
+      setNameEditing(false);
+    } catch (err) {
+      setNameError(err.message);
+    } finally {
+      setNameSaving(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="loading-panel">
@@ -1504,7 +1545,50 @@ function AccountScreen() {
             <>
               <label>
                 <span>Character name</span>
-                <input value={account.member.char_name} disabled />
+                <div className="field-with-action">
+                  <input
+                    value={nameEditing ? nameValue : account.member.char_name}
+                    disabled={!nameEditing || nameSaving}
+                    onChange={(event) => setNameValue(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") saveName();
+                      if (event.key === "Escape") cancelEditingName();
+                    }}
+                    autoFocus={nameEditing}
+                  />
+                  {nameEditing ? (
+                    <>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        onClick={saveName}
+                        disabled={nameSaving}
+                        aria-label="Save character name"
+                      >
+                        {nameSaving ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        onClick={cancelEditingName}
+                        disabled={nameSaving}
+                        aria-label="Cancel"
+                      >
+                        <X size={15} />
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="icon-button"
+                      onClick={startEditingName}
+                      aria-label="Rename character"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                  )}
+                </div>
+                {nameError && <span className="field-error">{nameError}</span>}
               </label>
               <label>
                 <span>Class</span>
