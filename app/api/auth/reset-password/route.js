@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
-import { createSessionToken, SESSION_COOKIE } from "@/lib/session";
+import { createSessionToken, sessionDurationSeconds, SESSION_COOKIE } from "@/lib/session";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function POST(request) {
@@ -38,7 +38,7 @@ export async function POST(request) {
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
-      maxAge: 60 * 60 * 12
+      maxAge: sessionDurationSeconds(session.role) // mirrors the token exp in lib/session.js
     });
     return response;
   } catch (error) {

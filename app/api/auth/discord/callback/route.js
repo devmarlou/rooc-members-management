@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSessionToken, getSession, SESSION_COOKIE } from "@/lib/session";
+import { createSessionToken, getSession, sessionDurationSeconds, SESSION_COOKIE } from "@/lib/session";
 import {
   OAUTH_STATE_COOKIE,
   PENDING_REGISTRATION_COOKIE,
@@ -101,7 +101,7 @@ export async function GET(request) {
         sameSite: "lax",
         secure: process.env.NODE_ENV === "production",
         path: "/",
-        maxAge: 60 * 60 * 12
+        maxAge: sessionDurationSeconds(account.role) // mirrors the token exp in lib/session.js
       });
       return response;
     }
