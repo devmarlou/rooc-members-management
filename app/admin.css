@@ -529,6 +529,42 @@
 .login-divider::before, .login-divider::after { content: ""; flex: 1; height: 1px; background: #344459; }
 .login-discord-links { display: flex; flex-direction: column; gap: 10px; }
 .login-discord-links .ghost-button { justify-content: center; min-height: 42px; border-radius: 0; }
+.login-card .link-button {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  border: none;
+  background: none;
+  padding: 0;
+  color: #8cbaff;
+  font-size: 13px;
+  text-align: center;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.login-card .link-button:hover { color: #b7d3ff; }
+
+/* Success variant of globals.css's .alert-panel (same layout, green instead of
+   red) — used for the "Discord connected" confirmation on AccountScreen. */
+.success-panel {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  border-radius: 10px;
+  background: rgba(52, 211, 153, 0.08);
+  padding: 18px;
+  color: #a7f3d0;
+}
+.success-panel button {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: #6ee7b7;
+  font-weight: 800;
+}
 @media (max-width: 640px) {
   .login-page { padding: 16px; place-items: start center; }
   .login-shell { grid-template-columns: 1fr; }
