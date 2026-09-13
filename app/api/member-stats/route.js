@@ -41,12 +41,14 @@ export async function GET(request) {
     }
 
     // Admin-tier: a per-member summary across the whole roster, including
-    // members who haven't submitted anything yet.
+    // members who haven't submitted anything yet. Selects every stats column
+    // (not just the simplified table's few fields) so the admin UI's "all
+    // stats" table view can render the full sheet without a second fetch.
     const [membersResult, statsResult] = await Promise.all([
       supabase.from("members").select("id,char_name,char_class").order("char_name", { ascending: true }),
       supabase
         .from("member_stats")
-        .select("member_id,submitted_at,damage_type,hp,effective_pdef,effective_mdef,video_link")
+        .select(STATS_SELECT)
         .order("submitted_at", { ascending: false })
     ]);
     if (membersResult.error) throw membersResult.error;

@@ -37,6 +37,7 @@ import {
   ArrowDown,
   LayoutGrid,
   List,
+  Table2,
   History,
   KeyRound,
   User,
@@ -775,6 +776,7 @@ const STATS_CORE_FIELDS = [
   { key: "equipment_mdef_pct", label: "Equipment MDEF %" },
 ];
 
+
 // The subset of stats worth flagging when they change between the OLD and
 // UPDATED submissions — the rest are tracked but not important enough to
 // highlight (would be too noisy). All ten are "higher is better" stats, so
@@ -871,6 +873,24 @@ const STATS_OPTIONAL_GROUPS = [
     ],
   },
 ];
+
+// Column groups for the admin "all stats" table view — built from the same
+// core/optional field lists the history cards and form use, so the full-sheet
+// table can't drift out of sync with them. Rendered as a grouped header (one
+// spanning title per group, e.g. "Damage & reduction") so ~35 columns read as
+// distinct sections instead of one undifferentiated wall of numbers.
+const STATS_ALL_TABLE_GROUPS = [
+  {
+    title: "Core & Effective",
+    fields: [
+      ...STATS_CORE_FIELDS,
+      { key: "effective_pdef", label: "Effective PDEF" },
+      { key: "effective_mdef", label: "Effective MDEF" },
+    ],
+  },
+  ...STATS_OPTIONAL_GROUPS,
+];
+const STATS_ALL_TABLE_FIELDS = STATS_ALL_TABLE_GROUPS.flatMap((group) => group.fields);
 
 // Mirrors the server-side formula in lib/memberStats.js's buildStatsRow — kept
 // in sync manually since this one runs client-side for a live preview only;
@@ -1950,6 +1970,7 @@ function JobClassesPanel({ jobClasses, onAdd, onEdit, onDelete, busy }) {
 
 function MemberStatsAdminPanel({ summary, loading, onViewMember }) {
   const [query, setQuery] = useState("");
+  const [view, setView] = useState("all");
   const normalizedQuery = query.trim().toLowerCase();
   const filtered = normalizedQuery
     ? summary.filter(
@@ -1970,17 +1991,39 @@ function MemberStatsAdminPanel({ summary, loading, onViewMember }) {
             only, not used by the auction system.
           </p>
         </div>
-        {summary.length > 5 && (
-          <label className="search-box">
-            <Search size={15} />
-            <input
-              aria-label="Search members"
-              placeholder="Search name or class"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </label>
-        )}
+        <div className="section-actions">
+          <div className="view-toggle" aria-label="Stats table view">
+            <button
+              type="button"
+              className={view === "simplified" ? "active" : ""}
+              onClick={() => setView("simplified")}
+              aria-pressed={view === "simplified"}
+            >
+              <List size={15} />
+              Simplified
+            </button>
+            <button
+              type="button"
+              className={view === "all" ? "active" : ""}
+              onClick={() => setView("all")}
+              aria-pressed={view === "all"}
+            >
+              <Table2 size={15} />
+              All stats
+            </button>
+          </div>
+          {summary.length > 5 && (
+            <label className="search-box">
+              <Search size={15} />
+              <input
+                aria-label="Search members"
+                placeholder="Search name or class"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </label>
+          )}
+        </div>
       </div>
       {loading ? (
         <div className="loading-panel">
@@ -1990,6 +2033,102 @@ function MemberStatsAdminPanel({ summary, loading, onViewMember }) {
       ) : filtered.length === 0 ? (
         <div className="empty-panel">
           No members match &ldquo;{query}&rdquo;.
+        </div>
+      ) : view === "all" ? (
+        <div
+          className="roster-table-wrap"
+          tabIndex={0}
+          role="region"
+          aria-label="Member stats table, all fields"
+        >
+          <table className="roster-table stats-all-table">
+            <thead>
+              <tr>
+                <th rowSpan={2} className="stats-sticky-col">Member</th>
+                <th rowSpan={2}>Class</th>
+                <th rowSpan={2}>Damage type</th>
+                <th rowSpan={2}>Last submitted</th>
+                {STATS_ALL_TABLE_GROUPS.map((group) => (
+                  <th key={group.title} colSpan={group.fields.length} className="stats-group-header">
+                    {group.title}
+                  </th>
+                ))}
+                <th rowSpan={2}>Proof</th>
+                <th rowSpan={2}>Actions</th>
+              </tr>
+              <tr>
+                {STATS_ALL_TABLE_FIELDS.map((field) => (
+                  <th key={field.key}>{field.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((row) => (
+                <tr key={row.member_id}>
+                  <td className="stats-sticky-col">
+                    <strong>{row.char_name}</strong>
+                  </td>
+                  <td>
+                    <span className="roster-class-label">
+                      <ClassIcon name={row.char_class} size={24} />
+                      {row.char_class}
+                    </span>
+                  </td>
+                  <td>
+                    {row.latest ? (
+                      row.latest.damage_type === "magic" ? "Magic" : row.latest.damage_type === "physical" ? "Physical" : "—"
+                    ) : (
+                      <span className="table-secondary">No submissions</span>
+                    )}
+                  </td>
+                  <td>
+                    {row.latest ? (
+                      formatStatsTimestamp(row.latest.submitted_at)
+                    ) : (
+                      <span className="table-secondary">No submissions</span>
+                    )}
+                  </td>
+                  {STATS_ALL_TABLE_FIELDS.map((field) => (
+                    <td key={field.key}>
+                      {!row.latest
+                        ? "-"
+                        : field.key === "effective_pdef" || field.key === "effective_mdef"
+                          ? formatStatDecimal(row.latest[field.key])
+                          : row.latest[field.key] ?? "-"}
+                    </td>
+                  ))}
+                  <td>
+                    {row.latest?.video_link ? (
+                      <a
+                        className="ghost-button"
+                        href={ensureAbsoluteUrl(row.latest.video_link)}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                      >
+                        <ExternalLink size={13} />
+                        View
+                      </a>
+                    ) : (
+                      <span className="table-secondary">—</span>
+                    )}
+                  </td>
+                  <td>
+                    <button
+                      className="ghost-button"
+                      onClick={() => onViewMember(row.member_id)}
+                      disabled={!row.latest}
+                      title={
+                        row.latest ? "View history" : "No submissions yet"
+                      }
+                    >
+                      <History size={14} />
+                      History
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
         <div

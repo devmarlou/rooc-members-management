@@ -191,8 +191,38 @@
 .guild-console .class-column .member-list { max-height: none; overflow: visible; }
 .guild-console .roster-table-wrap { max-height: none; overflow-x: auto; overflow-y: visible; border: 1px solid var(--line); scrollbar-color: #52637a #101722; }
 .guild-console .roster-table { width: 100%; min-width: 880px; border-collapse: collapse; text-align: left; }
+/* "All stats" view has ~35 columns (the full sheet, not the simplified 6) —
+   let it size to its natural content width instead of stretching to 100%,
+   which would otherwise squash every column past the point of readability. */
+.guild-console .roster-table.stats-all-table { width: max-content; min-width: 100%; }
 .guild-console .roster-table th { position: sticky; top: 0; z-index: 1; background: #223148; color: #cedcee; }
 .guild-console .roster-table :is(th, td) { padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+/* Two-row grouped header (see STATS_ALL_TABLE_GROUPS) doesn't stack cleanly
+   with a single shared `top: 0` — vertical header-pinning wasn't the actual
+   ask here, so it's dropped for this table; only the Member column pins
+   (horizontally) so a row stays identifiable while scrolling through ~35
+   stat columns. */
+.guild-console .stats-all-table thead th { position: static; }
+.guild-console .stats-all-table .stats-group-header {
+  background: #1b2940;
+  color: #9fc1f2;
+  font-size: 11px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: center;
+  border-left: 2px solid #478beb;
+}
+.guild-console .stats-all-table tbody tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+.guild-console :is(.stats-all-table th, .stats-all-table td).stats-sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--panel);
+  box-shadow: 2px 0 0 var(--line);
+}
+.guild-console .stats-all-table thead th.stats-sticky-col { background: #223148; z-index: 3; }
+.guild-console .stats-all-table tbody tr:nth-child(even) td.stats-sticky-col { background: #1e2937; }
+.guild-console .stats-all-table tbody tr:hover td.stats-sticky-col { background: #1d2e44; }
 .guild-console .roster-table tbody tr:hover { background: #1d2e44; }
 .guild-console .roster-class-label { display: flex; align-items: center; gap: 8px; }
 .guild-console .roster-table .table-secondary { color: var(--muted); font-size: 14px !important; }
@@ -207,7 +237,7 @@
 .guild-console :is(.class-card, .party-card) { background: #121d2b; border-color: var(--line); }
 .guild-console :is(.class-card-header, .party-card-header) { border-color: var(--line); background: #202e40; }
 .guild-console .class-member-row { padding-block: 10px; }
-.guild-console .party-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.guild-console .party-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .guild-console .party-slot { background: #172130; border-color: var(--line); min-height: 66px; }
 .guild-console .party-slot.empty { background: transparent; }
 .guild-console .party-slot:hover { border-color: #6384af; }
@@ -343,7 +373,7 @@
 .admin-workspace .footer-strip { width: 100%; }
 
 @media (max-width: 1100px) {
-  .guild-console .party-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .guild-console .party-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .guild-console .auction-grid.two-up { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
