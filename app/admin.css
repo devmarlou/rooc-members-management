@@ -256,6 +256,10 @@
 /* Two cards (OLD + UPDATED) sit side by side once there's room; stacks below that. */
 .guild-console .stats-history { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; align-items: start; }
 .guild-console .stats-history-card { display: flex; flex-direction: column; gap: 8px; background: #121d2b; border: 1px solid var(--line); padding: 12px; font-size: 13px; }
+/* UPDATED is always the newest submission (leftmost/first card) — a green
+   accent border makes that identifiable at a glance without relying on the
+   OLD/UPDATED text badge alone. */
+.guild-console .stats-history-card.is-updated { border-color: #34d399; }
 /* Always two fixed rows (badge+timestamp, then damage type+proof link) so the
    header lines up the same way regardless of card width or content length. */
 .guild-console .stats-history-card > header { display: flex; flex-direction: column; gap: 6px; }

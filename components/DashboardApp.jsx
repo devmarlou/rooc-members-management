@@ -1079,7 +1079,7 @@ function StatTrendValue({ fieldKey, value, trends, invert }) {
 function StatsHistoryCard({ row, label, trends }) {
   const isOld = label !== "updated";
   return (
-    <article className="stats-history-card">
+    <article className={`stats-history-card ${isOld ? "" : "is-updated"}`}>
       <header>
         <div className="stats-history-heading">
           <span className={`history-badge ${label === "updated" ? "is-updated" : "is-old"}`}>
