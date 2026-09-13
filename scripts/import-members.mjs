@@ -5,7 +5,6 @@ import { createClient } from "@supabase/supabase-js";
 const classAliases = new Map([
   ["HighPriest", "High Priest"],
   ["Minstrel", "Bard"],
-  ["Gypsy", "Dancer"],
   ["Mastersmith", "Whitesmith"],
   ["Summoner", "Doram"]
 ]);

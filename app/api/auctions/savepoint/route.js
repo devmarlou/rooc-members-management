@@ -1,17 +1,9 @@
 import { NextResponse } from "next/server";
-import { requireAuth, unauthorized } from "@/lib/api";
+import { requireAdmin, unauthorized } from "@/lib/api";
 import { writeAuditLog } from "@/lib/auditLog";
 import { emitDashboardEvent } from "@/lib/dashboardEvents";
 import { captureAuctionSavepoint, latestAuctionSavepoint, restoreAuctionSavepoint } from "@/lib/auctionSavepoint";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-
-function forbidden() {
-  return NextResponse.json({ error: "Only admins can manage auction savepoints." }, { status: 403 });
-}
-
-function canManageSavepoints(session) {
-  return ["admin", "super_admin"].includes(session?.role);
-}
 
 function savepointSummary(savepoint) {
   return savepoint
@@ -25,9 +17,8 @@ function savepointSummary(savepoint) {
 }
 
 export async function GET(request) {
-  const session = requireAuth(request);
+  const session = requireAdmin(request);
   if (!session) return unauthorized();
-  if (!canManageSavepoints(session)) return forbidden();
 
   const supabase = getSupabaseAdmin();
   const savepoint = await latestAuctionSavepoint(supabase);
@@ -35,9 +26,8 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const session = requireAuth(request);
+  const session = requireAdmin(request);
   if (!session) return unauthorized();
-  if (!canManageSavepoints(session)) return forbidden();
 
   try {
     const body = await request.json().catch(() => ({}));

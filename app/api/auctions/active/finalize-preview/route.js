@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { previewFinishAuction, previewFinishEventAuctions } from "@/lib/auctionEngine";
-import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
+import { handleApiError, requireAdmin, unauthorized } from "@/lib/api";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function POST(request) {
-  if (!requireAuth(request)) return unauthorized();
+  if (!requireAdmin(request)) return unauthorized();
 
   try {
     const body = await request.json().catch(() => ({}));

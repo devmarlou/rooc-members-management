@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
+import { handleApiError, requireAdmin, unauthorized } from "@/lib/api";
 import { writeAuditLog } from "@/lib/auditLog";
 import { getAuctionState } from "@/lib/auctionEngine";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
@@ -110,7 +110,7 @@ function catchUpReceived({ memberId, received, items, progressRows, membersById,
 }
 
 export async function POST(request, { params }) {
-  if (!requireAuth(request)) return unauthorized();
+  if (!requireAdmin(request)) return unauthorized();
 
   try {
     const { id } = await params;

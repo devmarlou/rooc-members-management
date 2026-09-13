@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
+import { handleApiError, requireAdmin, unauthorized } from "@/lib/api";
 import { writeAuditLog } from "@/lib/auditLog";
 import { startAuction } from "@/lib/auctionEngine";
 import { emitDashboardEvent } from "@/lib/dashboardEvents";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function POST(request) {
-  if (!requireAuth(request)) return unauthorized();
+  if (!requireAdmin(request)) return unauthorized();
 
   try {
     const supabase = getSupabaseAdmin();

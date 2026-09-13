@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
+import { handleApiError, requireAdmin, unauthorized } from "@/lib/api";
 import { writeAuditLog } from "@/lib/auditLog";
 import { updateMemberCapOverrides } from "@/lib/auctionEngine";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
@@ -42,7 +42,7 @@ function cleanMemberPayload(payload) {
 }
 
 export async function PATCH(request, { params }) {
-  if (!requireAuth(request)) return unauthorized();
+  if (!requireAdmin(request)) return unauthorized();
 
   try {
     const { id } = await params;
@@ -98,7 +98,7 @@ export async function PATCH(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
-  if (!requireAuth(request)) return unauthorized();
+  if (!requireAdmin(request)) return unauthorized();
 
   try {
     const { id } = await params;

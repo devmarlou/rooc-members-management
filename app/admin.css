@@ -95,6 +95,13 @@
 .guild-console .section-title-row { align-items: flex-start; margin-bottom: 20px; }
 .guild-console .section-description { color: var(--muted); margin: 5px 0 0; max-width: 75ch; }
 .guild-console .status-pill { background: #223955; color: #bed8ff; border-color: #42638b; }
+.guild-console .pending-members-panel { border-color: #6b88ab; }
+.guild-console .pending-members-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.guild-console .pending-member-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: #121d2b; border: 1px solid var(--line); padding: 12px 16px; }
+.guild-console .pending-member-info { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; color: var(--text); }
+.guild-console .pending-member-info span { color: var(--muted); font-size: 13px; }
+.guild-console .pending-member-username::before { content: "· "; }
+.guild-console .pending-member-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .guild-console .auction-section { border-top: 3px solid #478beb; }
 .guild-console .auction-workflow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; margin: 0 0 20px; padding: 0; border: 1px solid var(--line); }
 .guild-console .auction-workflow li { display: flex; gap: 12px; align-items: flex-start; padding: 16px; background: #121d2b; }
@@ -223,6 +230,7 @@
 .guild-console .progress-cycle-pill.received em { color: #dbe9ff; }
 .guild-console .progress-cycle-pill.pending em { color: #aab9cc; }
 @media (min-width: 761px) {
+  .guild-console .allocation-table tbody tr:not(:last-child) > td { border-bottom: 2px solid #526985; }
   .guild-console .bid-line { grid-template-columns: 16px 58px minmax(0, 1fr) 30px; align-items: start; }
   .guild-console .bid-line > code { grid-column: 3; grid-row: 1; }
   .guild-console .bid-line > span { grid-column: 4; text-align: right; }
@@ -242,6 +250,43 @@
 .guild-console .form-actions { border-top: 1px solid var(--line); padding-top: 16px; }
 .guild-console .footer-strip { background: #141e2c; border-color: var(--line); color: var(--muted); }
 .guild-console .toast { background: #20334a; border-color: #689bda; color: var(--text); }
+.guild-console .form-subsection-title { margin: 0 0 8px; font-size: 14px; color: #d8e4f4; }
+.guild-console .job-class-icon-picker { display: flex; align-items: center; gap: 12px; }
+.guild-console .job-class-icon-picker img { border-radius: 6px; object-fit: cover; }
+/* Two cards (OLD + UPDATED) sit side by side once there's room; stacks below that. */
+.guild-console .stats-history { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; align-items: start; }
+.guild-console .stats-history-card { display: flex; flex-direction: column; gap: 8px; background: #121d2b; border: 1px solid var(--line); padding: 12px; font-size: 13px; }
+/* Always two fixed rows (badge+timestamp, then damage type+proof link) so the
+   header lines up the same way regardless of card width or content length. */
+.guild-console .stats-history-card > header { display: flex; flex-direction: column; gap: 6px; }
+.guild-console .stats-history-heading { display: flex; align-items: center; gap: 8px; }
+.guild-console .stats-history-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.guild-console .stats-history-card h4.form-subsection-title { margin-top: 4px; font-size: 12px; }
+.guild-console .stats-history-field { display: flex; flex-direction: column; gap: 1px; }
+.guild-console .stats-history-field span { color: var(--muted); font-size: 11px; }
+.guild-console .stats-history-field strong { font-size: 13px; }
+/* Priority stats (see PRIORITY_STAT_KEYS) shown like a head-to-head
+   comparison chart — all ten are "higher is better", so whichever card
+   (OLD or UPDATED) actually holds the bigger number for a given stat gets
+   the "up"/green treatment and the smaller one gets "down"/red, regardless
+   of which card that happens to be (see StatTrendValue's `invert` prop). */
+.guild-console .stats-history-field strong.stat-trend { display: inline-flex; align-items: center; gap: 2px; }
+.guild-console .stats-history-field strong.stat-trend-up { color: #34d399; }
+.guild-console .stats-history-field strong.stat-trend-down { color: #f87171; }
+.guild-console .history-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.guild-console .history-badge.is-updated { background: rgba(16, 185, 129, 0.18); color: #34d399; }
+.guild-console .history-badge.is-old { background: rgba(113, 113, 122, 0.2); color: #a1a1aa; }
+.guild-console .stats-video-row { display: flex; gap: 8px; }
+.guild-console .stats-video-row input { flex: 1; min-width: 0; }
 
 /* Admin navigation: one clear rail for the three working areas. */
 .admin-console { display: grid; grid-template-columns: 232px minmax(0, 1fr); }
@@ -446,6 +491,10 @@
 .login-form .primary-button { min-height: 42px; border: 1px solid #478beb; border-radius: 0; background: #276acb; box-shadow: none; font-size: 16px; font-weight: 600; }
 .login-form .primary-button:hover:not(:disabled) { background: #337add; }
 .login-form .form-error { margin: 0; border: 1px solid #784451; border-radius: 0; background: #33212a; color: #ffb5be; padding: 9px 10px; font-size: 14px; }
+.login-divider { display: flex; align-items: center; gap: 10px; margin: 20px 0; color: #6c7f98; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.login-divider::before, .login-divider::after { content: ""; flex: 1; height: 1px; background: #344459; }
+.login-discord-links { display: flex; flex-direction: column; gap: 10px; }
+.login-discord-links .ghost-button { justify-content: center; min-height: 42px; border-radius: 0; }
 @media (max-width: 640px) {
   .login-page { padding: 16px; place-items: start center; }
   .login-shell { grid-template-columns: 1fr; }

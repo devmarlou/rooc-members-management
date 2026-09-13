@@ -2410,7 +2410,8 @@ button.party-slot.empty:hover:not(:disabled) {
 }
 
 .auction-form-items.compact {
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
 }
 
 .member-cap-overrides {

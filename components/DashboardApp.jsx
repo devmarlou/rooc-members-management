@@ -1,7 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   LogOut,
   Plus,
@@ -30,15 +39,16 @@ import {
   List,
   History,
   KeyRound,
+  User,
+  BarChart3,
+  Layers,
+  ExternalLink,
 } from "lucide-react";
-import {
-  classByName,
-  classes,
-  classOrder,
-  colorGroups,
-} from "@/components/data";
+import { colorGroups } from "@/components/data";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import { auctionPageNavigation } from "@/lib/auctionPageSearch";
+import { GUILD_MEMBER_LIMIT } from "@/lib/constants";
+import { ensureAbsoluteUrl } from "@/lib/memberStats";
 
 const emptyMember = {
   char_name: "",
@@ -54,7 +64,8 @@ const emptyMember = {
 const AUCTION_JOIN_COOLDOWN_HOURS = 96;
 const AUCTION_JOIN_COOLDOWN_MS = AUCTION_JOIN_COOLDOWN_HOURS * 60 * 60 * 1000;
 const PH_TIME_ZONE = "Asia/Manila";
-const DEFAULT_GUILD_MEMBER_LIMIT = 80;
+// GUILD_MEMBER_LIMIT (80) is a hard cap enforced server-side too — see lib/constants.js.
+const DEFAULT_GUILD_MEMBER_LIMIT = GUILD_MEMBER_LIMIT;
 const DASHBOARD_CACHE_MAX_AGE_MS = 30_000;
 const ITEM_ICON_SRC = {
   puppet_card: "/icons/puppet.png",
@@ -274,7 +285,33 @@ async function api(path, options = {}) {
   return data;
 }
 
+// Same contract as api(), but for FormData bodies (icon uploads) — no
+// Content-Type header, so the browser sets the multipart boundary itself.
+async function apiForm(path, options = {}) {
+  const response = await fetch(path, { cache: "no-store", ...options });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+
+// Job classes used to be a static array in components/data.js; they now live
+// in the job_classes table and are loaded via bootstrap. This context makes
+// the live list available to components (ClassIcon, Stats, MembersSection,
+// MemberForm, ...) that are defined outside DashboardApp without threading
+// props through every layer.
+const JobClassesContext = createContext({
+  jobClasses: [],
+  classes: [],
+  classOrder: [],
+  classByName: {},
+});
+
+function useJobClasses() {
+  return useContext(JobClassesContext);
+}
+
 function ClassIcon({ name, size = 34, glow = true }) {
+  const { classByName } = useJobClasses();
   const cls = classByName[name];
   if (!cls?.icon)
     return (
@@ -294,7 +331,18 @@ function ClassIcon({ name, size = 34, glow = true }) {
   );
 }
 
-function LoginScreen({ onLogin }) {
+const DISCORD_AUTH_ERROR_MESSAGES = {
+  discord_state_invalid:
+    "Something went wrong linking your Discord account. Please try again.",
+  account_disabled: "This account has been disabled. Contact a guild officer.",
+  account_pending:
+    "Your registration is awaiting admin approval. Check back soon.",
+  discord_not_installed:
+    "Discord sign-in isn't set up yet. Contact a guild officer.",
+  discord_failed: "Could not sign in with Discord. Please try again.",
+};
+
+function LoginScreen({ onLogin, registerStep = "", authError = "" }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -316,6 +364,12 @@ function LoginScreen({ onLogin }) {
       setBusy(false);
     }
   }
+
+  if (registerStep === "complete") {
+    return <DiscordRegistrationCompleteScreen />;
+  }
+
+  const authErrorMessage = DISCORD_AUTH_ERROR_MESSAGES[authError] || null;
 
   return (
     <main className="login-page">
@@ -339,6 +393,11 @@ function LoginScreen({ onLogin }) {
           <p className="login-intro">
             Use your guild account to manage the roster, parties, and auctions.
           </p>
+          {authErrorMessage && (
+            <p className="form-error" role="alert" style={{ marginTop: 16 }}>
+              {authErrorMessage}
+            </p>
+          )}
           <form onSubmit={submit} className="login-form">
             <label>
               <span>Username</span>
@@ -370,6 +429,197 @@ function LoginScreen({ onLogin }) {
                 <Shield size={16} />
               )}
               Sign in
+            </button>
+          </form>
+          <div className="login-divider">
+            <span>or</span>
+          </div>
+          <div className="login-discord-links">
+            <a className="ghost-button" href="/api/auth/discord/start">
+              Continue with Discord
+            </a>
+          </div>
+        </section>
+      </section>
+    </main>
+  );
+}
+
+function DiscordRegistrationCompleteScreen() {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [charName, setCharName] = useState("");
+  const [charClass, setCharClass] = useState("");
+  const [classOptions, setClassOptions] = useState([]);
+  const [statsForm, setStatsForm] = useState({ video_link: "" });
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  function updateStat(key, value) {
+    setStatsForm((current) => ({ ...current, [key]: value }));
+  }
+
+  // This screen renders before any session exists, so it can't read the
+  // JobClassesContext — fetch the public bootstrap directly for its options.
+  useEffect(() => {
+    let cancelled = false;
+    api("/api/public/bootstrap")
+      .then((data) => {
+        if (cancelled) return;
+        const options = data.jobClasses || [];
+        setClassOptions(options);
+        setCharClass((current) => current || options[0]?.name || "");
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await api("/api/auth/discord/register", {
+        method: "POST",
+        body: JSON.stringify({ username, password, charName, charClass, stats: statsForm }),
+      });
+      // Registrations land as pending — no session is issued yet, so show a
+      // confirmation here instead of calling onRegistered() (which would just
+      // bounce back to the login screen since there's still no session cookie).
+      setSubmitted(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (submitted) {
+    return (
+      <main className="login-page">
+        <section className="login-shell" aria-labelledby="discord-register-pending-title">
+          <aside className="login-brand">
+            <div className="brand-mark">
+              <Shield size={28} />
+            </div>
+            <div>
+              <h1>ENCORE</h1>
+              <p>Ragnarok Origin Classic</p>
+              <p>Prontera 6</p>
+            </div>
+            <p className="login-brand-note">
+              Guild management and auction allocation.
+            </p>
+          </aside>
+          <section className="login-card">
+            <p className="login-kicker">Registration submitted</p>
+            <h2 id="discord-register-pending-title">Awaiting admin approval</h2>
+            <p className="login-intro">
+              Thanks, {username}! An officer needs to approve your registration
+              before you can sign in. Check back soon, or ask a guild officer to
+              approve you.
+            </p>
+            <div className="login-discord-links">
+              {/* Plain <a>, not <Link> — this needs a full page reload so the
+                  mount-only registerStep query-param read below resets; a
+                  client-side Link nav to the same "/" route would just leave
+                  this confirmation screen showing. */}
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- intentional full reload, see comment above */}
+              <a className="ghost-button" href="/">
+                Back to login
+              </a>
+            </div>
+          </section>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="login-page">
+      <section className="login-shell" aria-labelledby="discord-register-title">
+        <aside className="login-brand">
+          <div className="brand-mark">
+            <Shield size={28} />
+          </div>
+          <div>
+            <h1>ENCORE</h1>
+            <p>Ragnarok Origin Classic</p>
+            <p>Prontera 6</p>
+          </div>
+          <p className="login-brand-note">
+            Guild management and auction allocation.
+          </p>
+        </aside>
+        <section className="login-card">
+          <p className="login-kicker">Discord linked</p>
+          <h2 id="discord-register-title">Finish registration</h2>
+          <p className="login-intro">
+            Pick a local username and password, and tell us your character so
+            we can add you to the roster.
+          </p>
+          <form onSubmit={submit} className="login-form">
+            <label>
+              <span>Username</span>
+              <input
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                autoFocus
+                autoComplete="username"
+              />
+            </label>
+            <label>
+              <span>Password</span>
+              <input
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                type="password"
+                autoComplete="new-password"
+              />
+            </label>
+            <label>
+              <span>Character name</span>
+              <input
+                value={charName}
+                onChange={(event) => setCharName(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>Class</span>
+              <select
+                value={charClass}
+                onChange={(event) => setCharClass(event.target.value)}
+              >
+                {classOptions.map((cls) => (
+                  <option key={cls.name} value={cls.name}>
+                    {cls.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="wide">
+              <h3 className="form-subsection-title">Initial stats submission</h3>
+              <p className="field-note">
+                An initial stats snapshot is required to join the roster — the
+                officers use this to place you correctly in auctions.
+              </p>
+            </div>
+            <StatsFormFields form={statsForm} onChange={updateStat} />
+            {error && (
+              <p className="form-error" role="alert">
+                {error}
+              </p>
+            )}
+            <button className="primary-button full" disabled={busy}>
+              {busy ? (
+                <Loader2 className="spin" size={16} />
+              ) : (
+                <Check size={16} />
+              )}
+              Complete registration
             </button>
           </form>
         </section>
@@ -488,6 +738,585 @@ function ResetPasswordScreen({ username, onReset }) {
         </section>
       </section>
     </main>
+  );
+}
+
+function formatStatsTimestamp(value) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("en-PH", {
+    timeZone: PH_TIME_ZONE,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+// Rounding hides small differences that matter when comparing OLD vs UPDATED —
+// show the same precision the server stores instead.
+function formatStatDecimal(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num.toFixed(2) : "—";
+}
+
+// Field lists mirror app/api/member-stats/route.js's CORE_NUMERIC_FIELDS /
+// OPTIONAL_NUMERIC_FIELDS exactly — used by both the submission form and the
+// admin/member read-only history views. Labels use PDEF/MDEF/PDMG/MDMG
+// (uppercase, no periods) per the in-game stat naming convention.
+const STATS_CORE_FIELDS = [
+  { key: "hp", label: "HP" },
+  { key: "patk_matk", label: "P.Atk / M.Atk" },
+  { key: "pdef", label: "PDEF" },
+  { key: "mdef", label: "MDEF" },
+  { key: "equipment_pdef", label: "Equipment PDEF" },
+  { key: "equipment_mdef", label: "Equipment MDEF" },
+  { key: "equipment_pdef_pct", label: "Equipment PDEF %" },
+  { key: "equipment_mdef_pct", label: "Equipment MDEF %" },
+];
+
+// The subset of stats worth flagging when they change between the OLD and
+// UPDATED submissions — the rest are tracked but not important enough to
+// highlight (would be too noisy). All ten are "higher is better" stats, so
+// up = green (improved), down = red (regressed) holds consistently.
+const PRIORITY_STAT_KEYS = new Set([
+  "pdef",
+  "mdef",
+  "equipment_pdef",
+  "equipment_mdef",
+  "equipment_pdef_pct",
+  "equipment_mdef_pct",
+  "effective_pdef",
+  "effective_mdef",
+  "pdmg_reduction",
+  "mdmg_reduction",
+]);
+
+// Tiny diffs are float noise from the equipment-% formula, not a real change.
+function compareStatTrend(current, previous) {
+  const a = Number(current);
+  const b = Number(previous);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  const diff = a - b;
+  if (Math.abs(diff) < 0.005) return null;
+  return diff > 0 ? "up" : "down";
+}
+
+// One trend per priority field, computed once from the (newer, older) pair —
+// "up" means the newer submission is the bigger (better) number for that
+// stat. Shared by both history cards, which read it like a comparison chart:
+// whichever row actually holds the bigger number is the "winner" for that
+// field, regardless of which card (OLD or UPDATED) it happens to be in — see
+// StatTrendValue's `invert` handling.
+function buildStatTrends(newerRow, olderRow) {
+  const trends = {};
+  if (!newerRow || !olderRow) return trends;
+  for (const key of PRIORITY_STAT_KEYS) {
+    trends[key] = compareStatTrend(newerRow[key], olderRow[key]);
+  }
+  return trends;
+}
+
+function invertTrend(trend) {
+  if (trend === "up") return "down";
+  if (trend === "down") return "up";
+  return null;
+}
+
+const STATS_OPTIONAL_GROUPS = [
+  {
+    title: "Damage & reduction",
+    fields: [
+      { key: "pdmg_mdmg", label: "PDMG / MDMG" },
+      { key: "pdmg_reduction", label: "PDMG reduction" },
+      { key: "mdmg_reduction", label: "MDMG reduction" },
+      { key: "ignore_pdef", label: "Ignore PDEF" },
+      { key: "ignore_mdef", label: "Ignore MDEF" },
+    ],
+  },
+  {
+    title: "Healing & PvP",
+    fields: [
+      { key: "healing_done", label: "Healing done" },
+      { key: "healing_taken", label: "Healing taken" },
+      { key: "pvp_dmg_bonus", label: "PvP damage bonus" },
+      { key: "pvp_dmg_reduction", label: "PvP damage reduction" },
+    ],
+  },
+  {
+    title: "Crit",
+    fields: [
+      { key: "crit", label: "Crit" },
+      { key: "crit_dmg", label: "Crit damage" },
+      { key: "crit_res", label: "Crit resistance" },
+      { key: "crit_dmg_res", label: "Crit damage resistance" },
+    ],
+  },
+  {
+    title: "Race matchups",
+    fields: [
+      { key: "dmg_vs_small", label: "Dmg vs Small" },
+      { key: "dmg_reduction_vs_small", label: "Dmg reduction vs Small" },
+      { key: "dmg_vs_medium", label: "Dmg vs Medium" },
+      { key: "dmg_reduction_vs_medium", label: "Dmg reduction vs Medium" },
+      { key: "dmg_vs_large", label: "Dmg vs Large" },
+      { key: "dmg_reduction_vs_large", label: "Dmg reduction vs Large" },
+      { key: "dmg_vs_brute", label: "Dmg vs Brute" },
+      { key: "dmg_reduction_vs_brute", label: "Dmg reduction vs Brute" },
+      { key: "dmg_vs_demi_human", label: "Dmg vs Demi-Human" },
+      {
+        key: "dmg_reduction_vs_demi_human",
+        label: "Dmg reduction vs Demi-Human",
+      },
+    ],
+  },
+];
+
+// Mirrors the server-side formula in lib/memberStats.js's buildStatsRow — kept
+// in sync manually since this one runs client-side for a live preview only;
+// the server always recomputes and persists the authoritative value.
+function computeEffectiveDef(rawDef, pct) {
+  const def = Number(rawDef);
+  const pctNum = Number(pct);
+  if (!Number.isFinite(def) || !Number.isFinite(pctNum)) return null;
+  const denom = 100 + pctNum;
+  if (denom === 0) return null;
+  return (def * 100) / denom;
+}
+
+// Shared body of the stats form — the damage-type picker, the Core stats grid,
+// the STATS_OPTIONAL_GROUPS blocks, and the required proof-video input. Used
+// both by MemberStatsForm (the post-approval self-service modal) and
+// DiscordRegistrationCompleteScreen (the mandatory initial submission collected
+// during registration), so the ~38-field layout only exists once.
+function StatsFormFields({ form, onChange }) {
+  const effectivePdef = computeEffectiveDef(form.equipment_pdef, form.equipment_pdef_pct);
+  const effectiveMdef = computeEffectiveDef(form.equipment_mdef, form.equipment_mdef_pct);
+
+  return (
+    <>
+      <label>
+        <span>Damage type</span>
+        <select
+          value={form.damage_type || ""}
+          onChange={(event) => onChange("damage_type", event.target.value)}
+          required
+        >
+          <option value="" disabled>
+            Select physical or magic
+          </option>
+          <option value="physical">Physical</option>
+          <option value="magic">Magic</option>
+        </select>
+      </label>
+      <div className="wide">
+        <h3 className="form-subsection-title">Core stats</h3>
+        <div className="auction-form-items">
+          {STATS_CORE_FIELDS.map((field) => (
+            <label key={field.key}>
+              <span>{field.label}</span>
+              <input
+                type="number"
+                step="any"
+                value={form[field.key] ?? ""}
+                onChange={(event) => onChange(field.key, event.target.value)}
+                required
+              />
+            </label>
+          ))}
+        </div>
+        <p className="field-note">
+          Effective PDEF/MDEF are calculated automatically from the
+          equipment values above.
+        </p>
+        <div className="auction-form-items compact">
+          <div className="stats-history-field">
+            <span>Effective PDEF</span>
+            <strong>{effectivePdef === null ? "—" : formatStatDecimal(effectivePdef)}</strong>
+          </div>
+          <div className="stats-history-field">
+            <span>Effective MDEF</span>
+            <strong>{effectiveMdef === null ? "—" : formatStatDecimal(effectiveMdef)}</strong>
+          </div>
+        </div>
+      </div>
+      {STATS_OPTIONAL_GROUPS.map((group) => (
+        <div className="wide" key={group.title}>
+          <h3 className="form-subsection-title">{group.title}</h3>
+          <div className="auction-form-items">
+            {group.fields.map((field) => (
+              <label key={field.key}>
+                <span>{field.label}</span>
+                <input
+                  type="number"
+                  step="any"
+                  value={form[field.key] ?? ""}
+                  onChange={(event) => onChange(field.key, event.target.value)}
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+      ))}
+      <label className="wide">
+        <span>Proof video link</span>
+        <div className="stats-video-row">
+          <input
+            value={form.video_link}
+            onChange={(event) => onChange("video_link", event.target.value)}
+            placeholder="https://..."
+            required
+          />
+          <a
+            className="ghost-button"
+            href={ensureAbsoluteUrl(form.video_link) || undefined}
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-disabled={!form.video_link}
+            onClick={(event) => {
+              if (!form.video_link) event.preventDefault();
+            }}
+          >
+            <ExternalLink size={14} />
+            Open
+          </a>
+        </div>
+      </label>
+    </>
+  );
+}
+
+function MemberStatsForm({ charClass, onCancel, onSave, busy }) {
+  // AccountScreen (the only caller) renders for member-role sessions, which
+  // never load the admin bootstrap — so JobClassesContext is empty here.
+  // Fetch the public bootstrap directly for the class list instead, same as
+  // DiscordRegistrationCompleteScreen does pre-auth.
+  const [classOrder, setClassOrder] = useState([]);
+  const [form, setForm] = useState({ video_link: "", char_class: charClass || "" });
+
+  useEffect(() => {
+    let cancelled = false;
+    api("/api/public/bootstrap")
+      .then((data) => {
+        if (cancelled) return;
+        setClassOrder((data.jobClasses || []).map((cls) => cls.name));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function update(key, value) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function submit(event) {
+    event.preventDefault();
+    onSave(form);
+  }
+
+  return (
+    <form onSubmit={submit} className="form-grid">
+      <label>
+        <span>Class</span>
+        <select value={form.char_class} onChange={(event) => update("char_class", event.target.value)} required>
+          {/* Covers a class the account currently holds that isn't in the live list anymore
+              (e.g. renamed/removed), so the select never silently drops the current value. */}
+          {form.char_class && !classOrder.includes(form.char_class) && (
+            <option value={form.char_class}>{form.char_class}</option>
+          )}
+          {classOrder.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+        <p className="field-note">
+          Changing this updates your roster class immediately.
+        </p>
+      </label>
+      <StatsFormFields form={form} onChange={update} />
+      <div className="form-actions wide">
+        <button type="button" className="ghost-button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button className="primary-button" disabled={busy}>
+          {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
+          Submit stats
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// Renders one stat's value per the shared `trends` map (see buildStatTrends),
+// read like a comparison chart: the row with the bigger number is the
+// "winner" for that field and gets green + an up arrow, the smaller one is
+// the "loser" and gets red + a down arrow — on BOTH cards. `trends` is always
+// computed as (UPDATED, OLD), so the OLD card passes `invert` to flip that
+// into its own perspective instead of reusing UPDATED's direction verbatim.
+function StatTrendValue({ fieldKey, value, trends, invert }) {
+  const rawTrend = trends?.[fieldKey] || null;
+  const trend = invert ? invertTrend(rawTrend) : rawTrend;
+  if (!trend) return <strong>{value ?? "-"}</strong>;
+  return (
+    <strong className={`stat-trend stat-trend-${trend}`}>
+      {trend === "up" && <ArrowUp size={12} />}
+      {trend === "down" && <ArrowDown size={12} />}
+      {value ?? "-"}
+    </strong>
+  );
+}
+
+// label: "updated" for the most recent of the (up to 2) kept submissions, "old"
+// for the previous one — passed by the caller based on position in the
+// already-newest-first `stats` array, not derived here. `trends`, when given,
+// is the shared per-field up/down map (see buildStatTrends), always computed
+// as (UPDATED, OLD) — the OLD card passes `invert` so each priority stat is
+// colored from its own row's perspective (bigger number = green/winner,
+// smaller = red/loser), like a head-to-head comparison chart.
+function StatsHistoryCard({ row, label, trends }) {
+  const isOld = label !== "updated";
+  return (
+    <article className="stats-history-card">
+      <header>
+        <div className="stats-history-heading">
+          <span className={`history-badge ${label === "updated" ? "is-updated" : "is-old"}`}>
+            {label === "updated" ? "UPDATED" : "OLD"}
+          </span>
+          <strong>{formatStatsTimestamp(row.submitted_at)}</strong>
+        </div>
+        <div className="stats-history-meta">
+          <span className="field-note">
+            {row.damage_type === "magic" ? "Magic" : row.damage_type === "physical" ? "Physical" : "—"}
+          </span>
+          <a
+            className="ghost-button"
+            href={ensureAbsoluteUrl(row.video_link)}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            <ExternalLink size={13} />
+            Proof video
+          </a>
+        </div>
+      </header>
+      <div className="auction-form-items compact">
+        {STATS_CORE_FIELDS.map((field) => (
+          <div className="stats-history-field" key={field.key}>
+            <span>{field.label}</span>
+            <StatTrendValue fieldKey={field.key} value={row[field.key]} trends={trends} invert={isOld} />
+          </div>
+        ))}
+        <div className="stats-history-field">
+          <span>Effective PDEF</span>
+          <StatTrendValue
+            fieldKey="effective_pdef"
+            value={formatStatDecimal(row.effective_pdef)}
+            trends={trends}
+            invert={isOld}
+          />
+        </div>
+        <div className="stats-history-field">
+          <span>Effective MDEF</span>
+          <StatTrendValue
+            fieldKey="effective_mdef"
+            value={formatStatDecimal(row.effective_mdef)}
+            trends={trends}
+            invert={isOld}
+          />
+        </div>
+      </div>
+      {STATS_OPTIONAL_GROUPS.map((group) => (
+        <div key={group.title}>
+          <h4 className="form-subsection-title">{group.title}</h4>
+          <div className="auction-form-items compact">
+            {group.fields.map((field) => (
+              <div className="stats-history-field" key={field.key}>
+                <span>{field.label}</span>
+                <StatTrendValue fieldKey={field.key} value={row[field.key]} trends={trends} invert={isOld} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </article>
+  );
+}
+
+function AccountScreen() {
+  const [account, setAccount] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState([]);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  function loadAccount() {
+    return api("/api/account")
+      .then((data) => setAccount(data))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    loadAccount();
+  }, []);
+
+  function loadStats() {
+    setStatsLoading(true);
+    api("/api/member-stats")
+      .then((data) => setStats(data.stats || []))
+      .catch((err) => setStatsError(err.message))
+      .finally(() => setStatsLoading(false));
+  }
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  async function submitStats(payload) {
+    setSubmitting(true);
+    setStatsError("");
+    try {
+      await api("/api/member-stats", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setFormOpen(false);
+      loadStats();
+      // A submission can also change char_class — refresh so "Your account" reflects it.
+      loadAccount();
+    } catch (err) {
+      setStatsError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const statTrends = useMemo(() => buildStatTrends(stats[0], stats[1]), [stats]);
+
+  if (loading) {
+    return (
+      <div className="loading-panel">
+        <Loader2 className="spin" size={20} />
+        Loading account
+      </div>
+    );
+  }
+
+  if (error || !account) {
+    return (
+      <div className="alert-panel">
+        <AlertTriangle size={17} />
+        <span>{error || "Could not load your account."}</span>
+      </div>
+    );
+  }
+
+  const roleLabel =
+    account.role === "super_admin"
+      ? "super admin"
+      : account.role === "member"
+        ? "member"
+        : "admin";
+
+  return (
+    <>
+      <section className="audit-page">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">account</p>
+            <h2>Your account</h2>
+            <p>Identity and linked character details.</p>
+          </div>
+        </div>
+        <div className="form-grid">
+          <label>
+            <span>Username</span>
+            <input value={account.username} disabled />
+          </label>
+          <label>
+            <span>Role</span>
+            <input value={roleLabel} disabled />
+          </label>
+          {account.member ? (
+            <>
+              <label>
+                <span>Character name</span>
+                <input value={account.member.char_name} disabled />
+              </label>
+              <label>
+                <span>Class</span>
+                <input value={account.member.char_class} disabled />
+              </label>
+            </>
+          ) : (
+            <p>No character is linked to this account yet.</p>
+          )}
+        </div>
+      </section>
+      {account.member && (
+        <section className="content-section" aria-label="Your stats">
+          <div className="section-title-row">
+            <div>
+              <h2>Your stats</h2>
+              <p className="section-description">
+                Submit your weekly gear/combat stats. The last 2 submissions
+                are kept.
+              </p>
+            </div>
+            <div className="section-actions">
+              <button className="primary-button" onClick={() => setFormOpen(true)}>
+                <Plus size={16} />
+                Submit new stats
+              </button>
+            </div>
+          </div>
+          {statsError && (
+            <div className="alert-panel">
+              <AlertTriangle size={17} />
+              <span>{statsError}</span>
+              <button onClick={() => setStatsError("")}>Dismiss</button>
+            </div>
+          )}
+          {statsLoading ? (
+            <div className="loading-panel">
+              <Loader2 className="spin" size={20} />
+              Loading stats
+            </div>
+          ) : stats.length === 0 ? (
+            <div className="empty-panel">
+              You haven&apos;t submitted any stats yet.
+            </div>
+          ) : (
+            <div className="stats-history">
+              {stats.map((row, index) => (
+                <StatsHistoryCard
+                  row={row}
+                  label={index === 0 ? "updated" : "old"}
+                  trends={statTrends}
+                  key={row.id}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+      {formOpen && (
+        <Modal title="Submit new stats" onClose={() => setFormOpen(false)} size="lg">
+          <MemberStatsForm
+            charClass={account.member?.char_class}
+            onCancel={() => setFormOpen(false)}
+            onSave={submitStats}
+            busy={submitting}
+          />
+        </Modal>
+      )}
+    </>
   );
 }
 
@@ -685,6 +1514,7 @@ function MemberForm({
   onCatchUp,
   busy,
 }) {
+  const { classes } = useJobClasses();
   const joinedParts = toPhDateTimeParts(initial?.joined_at) || {};
   const cappedAuctionItems = auctionItems.filter(
     (item) => item.gates_round_completion,
@@ -904,10 +1734,10 @@ function GroupForm({ initial, onCancel, onSave, busy }) {
   );
 }
 
-function RosterLimitForm({ current, minimum, onCancel, onSave }) {
+function RosterLimitForm({ current, minimum, maximum, onCancel, onSave }) {
   const [value, setValue] = useState(String(current));
   const parsed = Number.parseInt(value, 10);
-  const valid = Number.isFinite(parsed) && parsed >= minimum;
+  const valid = Number.isFinite(parsed) && parsed >= minimum && parsed <= maximum;
 
   function submit(event) {
     event.preventDefault();
@@ -921,13 +1751,16 @@ function RosterLimitForm({ current, minimum, onCancel, onSave }) {
         <input
           type="number"
           min={minimum}
+          max={maximum}
           value={value}
           onChange={(event) => setValue(event.target.value)}
           autoFocus
         />
       </label>
       <p className="field-note">
-        The limit cannot be lower than the current roster count: {minimum}.
+        Must be between the current roster count ({minimum}) and the guild&apos;s hard
+        cap ({maximum}) — {maximum} is the max the game allows, so it can&apos;t be
+        raised any higher.
       </p>
       <div className="form-actions">
         <button type="button" className="ghost-button" onClick={onCancel}>
@@ -942,32 +1775,376 @@ function RosterLimitForm({ current, minimum, onCancel, onSave }) {
   );
 }
 
-function AdminSidebar({ activePage, memberCount, partyCount }) {
-  const navigation = [
-    {
-      href: "/",
-      label: "Master list",
-      shortLabel: "Members",
-      icon: List,
-      count: memberCount,
-      page: "members",
-    },
-    {
-      href: "/parties",
-      label: "Party list",
-      shortLabel: "Parties",
-      icon: LayoutGrid,
-      count: partyCount,
-      page: "parties",
-    },
-    {
-      href: "/auctions",
-      label: "Auction list",
-      shortLabel: "Auctions",
-      icon: Gavel,
-      page: "auctions",
-    },
-  ];
+function JobClassForm({ initial, colorOptions, onCancel, onSave, busy }) {
+  const [name, setName] = useState(initial?.name || "");
+  const [shortLabel, setShortLabel] = useState(initial?.short || "");
+  const [colorGroup, setColorGroup] = useState(
+    initial?.group || colorOptions[0] || "gray",
+  );
+  const [iconFile, setIconFile] = useState(null);
+  const [iconPreview, setIconPreview] = useState(initial?.icon || "");
+  const [removeIcon, setRemoveIcon] = useState(false);
+
+  function pickIcon(event) {
+    const file = event.target.files?.[0] || null;
+    setIconFile(file);
+    setRemoveIcon(false);
+    setIconPreview(file ? URL.createObjectURL(file) : initial?.icon || "");
+  }
+
+  function toggleRemoveIcon(event) {
+    const checked = event.target.checked;
+    setRemoveIcon(checked);
+    setIconPreview(checked ? "" : initial?.icon || "");
+  }
+
+  function submit(event) {
+    event.preventDefault();
+    const formData = new FormData();
+    formData.set("name", name);
+    formData.set("short_label", shortLabel);
+    formData.set("color_group", colorGroup);
+    if (iconFile) formData.set("icon", iconFile);
+    if (removeIcon) formData.set("remove_icon", "true");
+    onSave(formData);
+  }
+
+  return (
+    <form onSubmit={submit} className="form-grid">
+      <label>
+        <span>Class name</span>
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          required
+          autoFocus
+        />
+      </label>
+      <label>
+        <span>Short label</span>
+        <input
+          value={shortLabel}
+          onChange={(event) => setShortLabel(event.target.value)}
+          required
+        />
+      </label>
+      <label>
+        <span>Color group</span>
+        <select
+          value={colorGroup}
+          onChange={(event) => setColorGroup(event.target.value)}
+        >
+          {colorOptions.map((group) => (
+            <option key={group} value={group}>
+              {group}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="wide">
+        <span>Icon</span>
+        <div className="job-class-icon-picker">
+          {iconPreview ? (
+            <img src={iconPreview} alt="" width={40} height={40} />
+          ) : (
+            <span
+              className="class-icon-placeholder"
+              style={{ width: 40, height: 40 }}
+            />
+          )}
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={pickIcon}
+          />
+        </div>
+        {initial?.icon && !iconFile && (
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={removeIcon}
+              onChange={toggleRemoveIcon}
+            />
+            <span>Remove current icon</span>
+          </label>
+        )}
+        <p className="field-note">PNG, JPEG, or WebP, up to 2MB.</p>
+      </label>
+      <div className="form-actions wide">
+        <button type="button" className="ghost-button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button className="primary-button" disabled={busy}>
+          {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
+          Save class
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function JobClassesPanel({ jobClasses, onAdd, onEdit, onDelete, busy }) {
+  const ordered = useMemo(
+    () =>
+      [...jobClasses].sort(
+        (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
+      ),
+    [jobClasses],
+  );
+
+  return (
+    <section className="content-section" aria-label="Job classes">
+      <div className="section-title-row">
+        <div>
+          <h2>Job classes</h2>
+          <p className="section-description">
+            Manage the class list used across the roster, member forms, and
+            Discord registration.
+          </p>
+        </div>
+        <div className="section-actions">
+          <button className="primary-button" onClick={onAdd}>
+            <Plus size={16} />
+            Add class
+          </button>
+        </div>
+      </div>
+      {ordered.length === 0 ? (
+        <div className="empty-panel">No job classes yet.</div>
+      ) : (
+        <div className="pending-members-list">
+          {ordered.map((cls) => (
+            <div key={cls.id} className="pending-member-row">
+              <div className="pending-member-info">
+                <ClassIcon name={cls.name} size={32} />
+                <strong>{cls.name}</strong>
+                <span>{cls.short}</span>
+                <span>{cls.group}</span>
+              </div>
+              <div className="pending-member-actions">
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => onEdit(cls)}
+                >
+                  <Pencil size={14} />
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="icon-button danger"
+                  onClick={() => onDelete(cls)}
+                  aria-label={`Delete ${cls.name}`}
+                  disabled={busy}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MemberStatsAdminPanel({ summary, loading, onViewMember }) {
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLowerCase();
+  const filtered = normalizedQuery
+    ? summary.filter(
+        (row) =>
+          row.char_name.toLowerCase().includes(normalizedQuery) ||
+          row.char_class.toLowerCase().includes(normalizedQuery),
+      )
+    : summary;
+
+  return (
+    <section className="content-section" aria-label="Member stats">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">weekly submissions</p>
+          <h2>Member stats</h2>
+          <p>
+            Latest self-reported gear/combat stats per member — reference
+            only, not used by the auction system.
+          </p>
+        </div>
+        {summary.length > 5 && (
+          <label className="search-box">
+            <Search size={15} />
+            <input
+              aria-label="Search members"
+              placeholder="Search name or class"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+        )}
+      </div>
+      {loading ? (
+        <div className="loading-panel">
+          <Loader2 className="spin" size={20} />
+          Loading stats
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="empty-panel">
+          No members match &ldquo;{query}&rdquo;.
+        </div>
+      ) : (
+        <div
+          className="roster-table-wrap"
+          tabIndex={0}
+          role="region"
+          aria-label="Member stats table"
+        >
+          <table className="roster-table">
+            <thead>
+              <tr>
+                <th>Member</th>
+                <th>Class</th>
+                <th>Last submitted</th>
+                <th>Eff. PDEF</th>
+                <th>Eff. MDEF</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((row) => (
+                <tr key={row.member_id}>
+                  <td>
+                    <strong>{row.char_name}</strong>
+                  </td>
+                  <td>
+                    <span className="roster-class-label">
+                      <ClassIcon name={row.char_class} size={24} />
+                      {row.char_class}
+                    </span>
+                  </td>
+                  <td>
+                    {row.latest ? (
+                      formatStatsTimestamp(row.latest.submitted_at)
+                    ) : (
+                      <span className="table-secondary">No submissions</span>
+                    )}
+                  </td>
+                  <td>
+                    {row.latest ? formatStatDecimal(row.latest.effective_pdef) : "-"}
+                  </td>
+                  <td>
+                    {row.latest ? formatStatDecimal(row.latest.effective_mdef) : "-"}
+                  </td>
+                  <td>
+                    <button
+                      className="ghost-button"
+                      onClick={() => onViewMember(row.member_id)}
+                      disabled={!row.latest}
+                      title={
+                        row.latest ? "View history" : "No submissions yet"
+                      }
+                    >
+                      <History size={14} />
+                      History
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MemberStatsDetailView({ data, onClose }) {
+  const stats = data?.stats || [];
+  const trends = buildStatTrends(stats[0], stats[1]);
+  return (
+    <Modal
+      title={`${data?.member?.char_name || "Member"} stats history`}
+      onClose={onClose}
+      size="lg"
+    >
+      {stats.length === 0 ? (
+        <div className="empty-panel">No submissions yet.</div>
+      ) : (
+        <div className="stats-history">
+          {stats.map((row, index) => (
+            <StatsHistoryCard
+              row={row}
+              label={index === 0 ? "updated" : "old"}
+              trends={trends}
+              key={row.id}
+            />
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role }) {
+  // Account is reachable from the header (top right) on every page instead of
+  // living here too — keep this list to the role's core views only.
+  const navigation =
+    role === "member"
+      ? [
+          {
+            href: "/public",
+            label: "Auction view",
+            shortLabel: "Auction",
+            icon: Gavel,
+            page: "public",
+          },
+        ]
+      : [
+          {
+            href: "/",
+            label: "Master list",
+            shortLabel: "Members",
+            icon: List,
+            count: memberCount,
+            page: "members",
+          },
+          {
+            href: "/parties",
+            label: "Party list",
+            shortLabel: "Parties",
+            icon: LayoutGrid,
+            count: partyCount,
+            page: "parties",
+          },
+          {
+            href: "/auctions",
+            label: "Auction list",
+            shortLabel: "Auctions",
+            icon: Gavel,
+            page: "auctions",
+          },
+          {
+            href: "/pending",
+            label: "Pending approvals",
+            shortLabel: "Pending",
+            icon: Clock3,
+            count: pendingCount,
+            page: "pending",
+          },
+          {
+            href: "/member-stats",
+            label: "Member stats",
+            shortLabel: "Stats",
+            icon: BarChart3,
+            page: "member-stats",
+          },
+          {
+            href: "/job-classes",
+            label: "Job classes",
+            shortLabel: "Classes",
+            icon: Layers,
+            page: "job-classes",
+          },
+        ];
 
   return (
     <aside className="admin-sidebar">
@@ -1008,16 +2185,102 @@ function AdminSidebar({ activePage, memberCount, partyCount }) {
   );
 }
 
+// Discord self-registrations sit at status='pending' until an admin approves or
+// rejects them here — approving is the only place new Discord signups get
+// enrolled into the active auction round (see app/api/members/pending/[id]/route.js).
+function PendingMembersPanel({ pending, busyId, onApprove, onReject }) {
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLowerCase();
+  const filtered = normalizedQuery
+    ? pending.filter((account) => {
+        const charName = account.member?.char_name || "";
+        return (
+          account.username.toLowerCase().includes(normalizedQuery) ||
+          charName.toLowerCase().includes(normalizedQuery)
+        );
+      })
+    : pending;
+
+  return (
+    <section className="content-section pending-members-panel" aria-label="Pending registrations">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">discord registrations</p>
+          <h2>Pending approval</h2>
+          <p>
+            {pending.length
+              ? `${pending.length} account${pending.length === 1 ? "" : "s"} registered via Discord and waiting on approval before they can sign in.`
+              : "No Discord registrations waiting on approval."}
+          </p>
+        </div>
+        {pending.length > 5 && (
+          <label className="search-box">
+            <Search size={15} />
+            <input
+              aria-label="Search pending registrations"
+              placeholder="Search username or character"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+        )}
+      </div>
+      {pending.length > 0 && (
+        <div className="pending-members-list">
+          {filtered.length === 0 && (
+            <div className="empty-panel">No pending registrations match &ldquo;{query}&rdquo;.</div>
+          )}
+          {filtered.map((account) => (
+          <div key={account.id} className="pending-member-row">
+            <div className="pending-member-info">
+              <strong>{account.member?.char_name || "(no character)"}</strong>
+              <span>{account.member?.char_class}</span>
+              <span className="pending-member-username">@{account.username}</span>
+            </div>
+            <div className="pending-member-actions">
+              <button
+                type="button"
+                className="ghost-button"
+                disabled={busyId === account.id}
+                onClick={() => onApprove(account)}
+              >
+                {busyId === account.id ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
+                Approve
+              </button>
+              <button
+                type="button"
+                className="danger-button soft"
+                disabled={busyId === account.id}
+                onClick={() => onReject(account)}
+              >
+                <X size={15} />
+                Reject
+              </button>
+            </div>
+          </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function Header({
   username,
   role,
   onLogout,
   auditLogView = false,
+  accountView = false,
   publicView = false,
   publicGlAuction = null,
   compact = false,
+  viewerAuthenticated = false,
 }) {
-  const roleLabel = role === "super_admin" ? "super admin" : "admin";
+  const roleLabel =
+    role === "super_admin" ? "super admin" : role === "member" ? "member" : "admin";
+  // On the public board, a signed-in visitor (member or admin browsing /public)
+  // still gets identity + account/logout controls instead of the anonymous view.
+  const showAccountControls = !publicView || viewerAuthenticated;
   return (
     <header className="topbar">
       <div className={compact ? "topbar-inner compact" : "topbar-inner"}>
@@ -1040,24 +2303,32 @@ function Header({
         )}
         <div className="admin-row">
           <div className="signed-in">
-            <span>{publicView ? "view mode" : "signed in as"}</span>
+            <span>{showAccountControls ? "signed in as" : "view mode"}</span>
             <strong>
-              {publicView ? "public" : `${username || "admin"} · ${roleLabel}`}
+              {showAccountControls
+                ? `${username || "admin"} · ${roleLabel}`
+                : "public"}
             </strong>
           </div>
-          {!publicView && role === "super_admin" && !auditLogView && (
+          {!publicView && role === "super_admin" && !auditLogView && !accountView && (
             <a className="ghost-button" href="/audit-logs">
               <History size={15} />
               Logs
             </a>
           )}
-          {!publicView && auditLogView && (
+          {publicView && viewerAuthenticated && role !== "member" && (
             <Link className="ghost-button" href="/">
               <LayoutGrid size={15} />
               Dashboard
             </Link>
           )}
-          {!publicView && (
+          {showAccountControls && (
+            <Link className="ghost-button" href="/account">
+              <User size={15} />
+              Account
+            </Link>
+          )}
+          {showAccountControls && (
             <button className="ghost-button" onClick={onLogout}>
               <LogOut size={15} />
               Log out
@@ -1100,17 +2371,13 @@ function Stats({
   onEditLimit,
   readOnly = false,
 }) {
+  const { classOrder, classByName } = useJobClasses();
   const statItems = useMemo(() => {
     const counts = {};
     for (const member of members)
       counts[member.char_class] = (counts[member.char_class] || 0) + 1;
     return classOrder
-      .filter((name) => name !== "Dancer")
       .map((name) => {
-        if (name === "Bard") {
-          const count = (counts.Bard || 0) + (counts.Dancer || 0);
-          return { key: "Bard", label: "Bard / Dancer", short: "BD", count };
-        }
         const cls = classByName[name];
         return {
           key: name,
@@ -1120,7 +2387,7 @@ function Stats({
         };
       })
       .filter((item) => item.count > 0);
-  }, [members]);
+  }, [classByName, classOrder, members]);
 
   return (
     <section className="stats-row">
@@ -1140,9 +2407,7 @@ function Stats({
       <div className="class-strip">
         <span className="strip-label">by class</span>
         {statItems.map((item) => {
-          const active =
-            activeClass === item.key ||
-            (item.key === "Bard" && activeClass === "Dancer");
+          const active = activeClass === item.key;
           return (
             <button
               className={active ? "class-chip active" : "class-chip"}
@@ -1180,6 +2445,7 @@ function MembersSection({
   memberLimit,
   readOnly = false,
 }) {
+  const { classes, classOrder } = useJobClasses();
   const [query, setQuery] = useState("");
   const [viewMode, setViewMode] = useState("list");
   const [collapsed, setCollapsed] = useState(false);
@@ -1198,10 +2464,7 @@ function MembersSection({
         member.char_name.toLowerCase().includes(q) ||
         member.char_class.toLowerCase().includes(q) ||
         groupsById[member.group_id]?.name?.toLowerCase().includes(q);
-      const matchesClass =
-        !classFilter ||
-        member.char_class === classFilter ||
-        (classFilter === "Bard" && member.char_class === "Dancer");
+      const matchesClass = !classFilter || member.char_class === classFilter;
       return matchesQuery && matchesClass;
     });
   }, [classFilter, groupsById, members, query]);
@@ -1213,29 +2476,23 @@ function MembersSection({
       if (classDelta) return classDelta;
       return a.char_name.localeCompare(b.char_name);
     });
-  }, [filteredMembers]);
+  }, [classOrder, filteredMembers]);
 
   const columns = useMemo(() => {
     const byClass = {};
     for (const member of orderedMembers) {
-      const key =
-        member.char_class === "Bard" || member.char_class === "Dancer"
-          ? "Bard / Dancer"
-          : member.char_class;
-      byClass[key] ||= [];
-      byClass[key].push(member);
+      byClass[member.char_class] ||= [];
+      byClass[member.char_class].push(member);
     }
 
     const ordered = [];
     for (const name of classOrder) {
-      if (name === "Dancer") continue;
-      const key = name === "Bard" ? "Bard / Dancer" : name;
-      if (byClass[key]?.length && !ordered.some((col) => col.key === key)) {
-        ordered.push({ key, icon: name, members: byClass[key] });
+      if (byClass[name]?.length) {
+        ordered.push({ key: name, icon: name, members: byClass[name] });
       }
     }
     return ordered;
-  }, [orderedMembers]);
+  }, [classOrder, orderedMembers]);
 
   return (
     <section className="content-section">
@@ -3870,8 +5127,10 @@ function AuctionFoundation({
 export default function DashboardApp({
   publicView = false,
   auditLogView = false,
+  accountView = false,
   adminPage = "members",
 }) {
+  const router = useRouter();
   const cacheKey = dashboardCacheKey(publicView);
   const cachedDashboardData = dashboardDataCache[cacheKey]?.data || null;
   const [session, setSession] = useState({
@@ -3881,10 +5140,16 @@ export default function DashboardApp({
     role: publicView ? "" : adminSessionCache?.role || "",
     mustResetPassword: Boolean(adminSessionCache?.mustResetPassword),
   });
+  // On the public board, `session` above stays forced-authenticated so anonymous
+  // visitors keep browsing (and realtime updates keep working) regardless of login.
+  // `viewer` separately tracks whether there's a *real* signed-in member/admin
+  // behind that, so the header can offer them Account/Log out instead of hiding them.
+  const [viewer, setViewer] = useState({ authenticated: false, username: "", role: "" });
   const [members, setMembers] = useState(cachedDashboardData?.members || []);
   const [groups, setGroups] = useState(cachedDashboardData?.groups || []);
   const [auctionItems, setAuctionItems] = useState(cachedDashboardData?.auctionItems || []);
   const [auctionState, setAuctionState] = useState(cachedDashboardData?.auctionState || null);
+  const [jobClasses, setJobClasses] = useState(cachedDashboardData?.jobClasses || []);
   const [loading, setLoading] = useState(publicView && !cachedDashboardData);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
@@ -3899,9 +5164,16 @@ export default function DashboardApp({
   const [finalizePreview, setFinalizePreview] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditLogsLoading, setAuditLogsLoading] = useState(false);
+  const [pendingAccounts, setPendingAccounts] = useState([]);
+  const [pendingActionId, setPendingActionId] = useState(null);
+  const [jobClassModal, setJobClassModal] = useState(null);
+  const [memberStatsSummary, setMemberStatsSummary] = useState([]);
+  const [memberStatsSummaryLoading, setMemberStatsSummaryLoading] = useState(false);
+  const [memberStatsDetail, setMemberStatsDetail] = useState(null);
   const [saving, setSaving] = useState(false);
   const [classFilter, setClassFilter] = useState("");
   const [memberLimit, setMemberLimit] = useState(null);
+  const [authQuery, setAuthQuery] = useState({ registerStep: "", authError: "" });
   const realtimeTimerRef = useRef(null);
   const realtimeLoadingRef = useRef(false);
   const scrollRestoreRef = useRef(null);
@@ -3912,9 +5184,14 @@ export default function DashboardApp({
     () => Object.fromEntries(groups.map((group) => [group.id, group])),
     [groups],
   );
-  const effectiveMemberLimit = Math.max(
-    memberLimit || DEFAULT_GUILD_MEMBER_LIMIT,
-    members.length,
+  const jobClassesContextValue = useMemo(() => {
+    const classOrder = jobClasses.map((cls) => cls.name);
+    const classByName = Object.fromEntries(jobClasses.map((cls) => [cls.name, cls]));
+    return { jobClasses, classes: jobClasses, classOrder, classByName };
+  }, [jobClasses]);
+  const effectiveMemberLimit = Math.min(
+    Math.max(memberLimit || DEFAULT_GUILD_MEMBER_LIMIT, members.length),
+    GUILD_MEMBER_LIMIT,
   );
   const unassignedMembers = members.filter((member) => !member.group_id);
   const publicGlAuction = publicView
@@ -3959,6 +5236,7 @@ export default function DashboardApp({
         setGroups(cached.data.groups || []);
         setAuctionItems(cached.data.auctionItems || []);
         setAuctionState(cached.data.auctionState || null);
+        setJobClasses(cached.data.jobClasses || []);
         if (!silent && cacheIsFresh) return;
       }
       realtimeLoadingRef.current = true;
@@ -3975,6 +5253,7 @@ export default function DashboardApp({
         setGroups(data.groups || []);
         setAuctionItems(data.auctionItems || []);
         setAuctionState(data.auctionState || null);
+        setJobClasses(data.jobClasses || []);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -3995,6 +5274,12 @@ export default function DashboardApp({
         role: "",
         mustResetPassword: false,
       });
+      const data = await api("/api/auth/session");
+      setViewer({
+        authenticated: Boolean(data.authenticated),
+        username: data.username || "",
+        role: data.role || "",
+      });
       loadData();
       return;
     }
@@ -4012,8 +5297,16 @@ export default function DashboardApp({
     if (data.authenticated && !data.mustResetPassword) {
       if (auditLogView) {
         if (data.role === "super_admin") loadAuditLogs();
+      } else if (accountView) {
+        // AccountScreen fetches its own data via /api/account.
+      } else if (data.role === "member") {
+        // Member accounts have no business on admin pages — send them straight
+        // to their Account page instead of showing the "not permitted" gate.
+        router.replace("/account");
       } else {
         loadData();
+        loadPendingAccounts();
+        loadMemberStatsSummary();
       }
     }
   }
@@ -4032,19 +5325,29 @@ export default function DashboardApp({
   }, [loadData, publicView]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    setAuthQuery({
+      registerStep: params.get("registerStep") || "",
+      authError: params.get("authError") || "",
+    });
+  }, []);
+
+  useEffect(() => {
     if (!hasDashboardDataRef.current) return;
     if (skipCacheSyncRef.current) {
       skipCacheSyncRef.current = false;
       return;
     }
     dashboardDataCache[cacheKey] = {
-      data: { members, groups, auctionItems, auctionState },
+      data: { members, groups, auctionItems, auctionState, jobClasses },
       loadedAt: Date.now(),
     };
-  }, [auctionItems, auctionState, cacheKey, groups, members]);
+  }, [auctionItems, auctionState, cacheKey, groups, jobClasses, members]);
 
   useEffect(() => {
     if (!session.authenticated) return undefined;
+    if (!publicView && session.role === "member") return undefined;
     const supabase = getSupabaseBrowser();
     if (!supabase) return undefined;
 
@@ -4072,7 +5375,7 @@ export default function DashboardApp({
       window.clearTimeout(realtimeTimerRef.current);
       supabase.removeChannel(channel);
     };
-  }, [loadData, publicView, session.authenticated]);
+  }, [loadData, publicView, session.authenticated, session.role]);
 
   useEffect(() => {
     if (!members.length || memberLimit !== null) return;
@@ -4144,6 +5447,12 @@ export default function DashboardApp({
     await api("/api/auth/logout", { method: "POST" });
     adminSessionCache = null;
     dashboardDataCache.admin = null;
+    if (publicView) {
+      // The public board stays visible for anonymous visitors after logging out —
+      // just drop the real viewer identity, don't wipe the board itself.
+      setViewer({ authenticated: false, username: "", role: "" });
+      return;
+    }
     setSession({
       loading: false,
       authenticated: false,
@@ -4155,6 +5464,7 @@ export default function DashboardApp({
     setGroups([]);
     setAuctionItems([]);
     setAuctionState(null);
+    setJobClasses([]);
   }
 
   async function loadAuditLogs() {
@@ -4169,10 +5479,42 @@ export default function DashboardApp({
     }
   }
 
+  async function loadPendingAccounts() {
+    try {
+      const data = await api("/api/members/pending");
+      setPendingAccounts(data.pending || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function respondToPending(account, action) {
+    setPendingActionId(account.id);
+    try {
+      await api(`/api/members/pending/${account.id}`, {
+        method: "POST",
+        body: JSON.stringify({ action }),
+      });
+      setToast(
+        action === "approve"
+          ? `Approved ${account.member?.char_name || account.username}`
+          : `Rejected ${account.member?.char_name || account.username}`,
+      );
+      await loadPendingAccounts();
+      if (action === "approve") loadData();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setPendingActionId(null);
+    }
+  }
+
   async function saveMember(payload) {
     if (!memberModal?.id && members.length >= effectiveMemberLimit) {
       setError(
-        `Roster is at the guild limit: ${members.length}/${effectiveMemberLimit}. Increase the limit before adding another member.`,
+        effectiveMemberLimit >= GUILD_MEMBER_LIMIT
+          ? `Roster is full at the guild's hard cap: ${members.length}/${GUILD_MEMBER_LIMIT}. Remove a member before adding another.`
+          : `Roster is at the guild limit: ${members.length}/${effectiveMemberLimit}. Increase the limit before adding another member.`,
       );
       return;
     }
@@ -4576,6 +5918,77 @@ export default function DashboardApp({
     });
   }
 
+  async function saveJobClass(formData) {
+    setSaving(true);
+    try {
+      const editing = Boolean(jobClassModal?.id);
+      const data = await apiForm(
+        editing ? `/api/job-classes/${jobClassModal.id}` : "/api/job-classes",
+        {
+          method: editing ? "PATCH" : "POST",
+          body: formData,
+        },
+      );
+      setJobClasses((current) =>
+        editing
+          ? current.map((cls) => (cls.id === data.jobClass.id ? data.jobClass : cls))
+          : [...current, data.jobClass].sort(
+              (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
+            ),
+      );
+      if (editing && data.membersUpdated > 0) {
+        setMembers((current) =>
+          current.map((member) =>
+            member.char_class === jobClassModal.name
+              ? { ...member, char_class: data.jobClass.name }
+              : member,
+          ),
+        );
+      }
+      setJobClassModal(null);
+      setToast(editing ? "Job class updated" : "Job class created");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteJobClass(cls) {
+    setConfirmAction({
+      title: "Delete job class",
+      body: `Delete ${cls.name}? This only works if no members currently use this class.`,
+      confirmLabel: "Delete class",
+      tone: "danger",
+      run: async () => {
+        await api(`/api/job-classes/${cls.id}`, { method: "DELETE" });
+        setJobClasses((current) => current.filter((item) => item.id !== cls.id));
+        setToast("Job class deleted");
+      },
+    });
+  }
+
+  async function loadMemberStatsSummary() {
+    setMemberStatsSummaryLoading(true);
+    try {
+      const data = await api("/api/member-stats");
+      setMemberStatsSummary(data.stats || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setMemberStatsSummaryLoading(false);
+    }
+  }
+
+  async function viewMemberStats(memberId) {
+    try {
+      const data = await api(`/api/member-stats/${memberId}`);
+      setMemberStatsDetail(data);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   function requestUnassign(member, group) {
     setConfirmAction({
       title: "Remove from party",
@@ -4822,7 +6235,13 @@ export default function DashboardApp({
   }
 
   if (!publicView && !session.authenticated) {
-    return <LoginScreen onLogin={checkSession} />;
+    return (
+      <LoginScreen
+        onLogin={checkSession}
+        registerStep={authQuery.registerStep}
+        authError={authQuery.authError}
+      />
+    );
   }
 
   if (!publicView && session.mustResetPassword) {
@@ -4832,6 +6251,7 @@ export default function DashboardApp({
   }
 
   return (
+    <JobClassesContext.Provider value={jobClassesContextValue}>
     <div
       className={
         publicView
@@ -4844,20 +6264,40 @@ export default function DashboardApp({
           activePage={adminPage}
           memberCount={members.length}
           partyCount={groups.length}
+          pendingCount={pendingAccounts.length}
+          role={session.role}
         />
       )}
       <div className={publicView ? "public-workspace" : "admin-workspace"}>
         <Header
-          username={session.username}
-          role={session.role}
+          username={publicView ? viewer.username : session.username}
+          role={publicView ? viewer.role : session.role}
           onLogout={logout}
           auditLogView={auditLogView}
+          accountView={accountView}
           publicView={publicView}
           publicGlAuction={publicGlAuction}
           compact={!publicView}
+          viewerAuthenticated={publicView ? viewer.authenticated : true}
         />
         <main className="dashboard">
-          {auditLogView ? (
+          {accountView ? (
+            <AccountScreen />
+          ) : !publicView && session.role === "member" ? (
+            <div className="alert-panel">
+              <AlertTriangle size={17} />
+              <span>
+                Member accounts can only view the public auction board and
+                their account page.
+              </span>
+              <Link className="ghost-button" href="/public">
+                Auction view
+              </Link>
+              <Link className="ghost-button" href="/account">
+                Account
+              </Link>
+            </div>
+          ) : auditLogView ? (
             <>
               {session.role !== "super_admin" ? (
                 <div className="alert-panel">
@@ -5020,6 +6460,32 @@ export default function DashboardApp({
                           readOnly={false}
                         />
                       )}
+                      {adminPage === "pending" && (
+                        <PendingMembersPanel
+                          pending={pendingAccounts}
+                          busyId={pendingActionId}
+                          onApprove={(account) => respondToPending(account, "approve")}
+                          onReject={(account) => respondToPending(account, "reject")}
+                        />
+                      )}
+
+                      {adminPage === "member-stats" && (
+                        <MemberStatsAdminPanel
+                          summary={memberStatsSummary}
+                          loading={memberStatsSummaryLoading}
+                          onViewMember={viewMemberStats}
+                        />
+                      )}
+
+                      {adminPage === "job-classes" && (
+                        <JobClassesPanel
+                          jobClasses={jobClasses}
+                          onAdd={() => setJobClassModal({})}
+                          onEdit={(cls) => setJobClassModal(cls)}
+                          onDelete={deleteJobClass}
+                          busy={saving}
+                        />
+                      )}
                     </>
                   )}
                 </>
@@ -5061,11 +6527,34 @@ export default function DashboardApp({
         </Modal>
       )}
 
+      {jobClassModal && (
+        <Modal
+          title={jobClassModal.id ? "Edit job class" : "Add job class"}
+          onClose={() => setJobClassModal(null)}
+        >
+          <JobClassForm
+            initial={jobClassModal.id ? jobClassModal : null}
+            colorOptions={Object.keys(colorGroups)}
+            onCancel={() => setJobClassModal(null)}
+            onSave={saveJobClass}
+            busy={saving}
+          />
+        </Modal>
+      )}
+
+      {memberStatsDetail && (
+        <MemberStatsDetailView
+          data={memberStatsDetail}
+          onClose={() => setMemberStatsDetail(null)}
+        />
+      )}
+
       {limitModalOpen && (
         <Modal title="Roster limit" onClose={() => setLimitModalOpen(false)}>
           <RosterLimitForm
             current={effectiveMemberLimit}
             minimum={members.length}
+            maximum={GUILD_MEMBER_LIMIT}
             onCancel={() => setLimitModalOpen(false)}
             onSave={saveMemberLimit}
           />
@@ -5171,6 +6660,7 @@ export default function DashboardApp({
         </div>
       )}
     </div>
+    </JobClassesContext.Provider>
   );
 }
 

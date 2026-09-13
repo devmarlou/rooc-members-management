@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
+import { handleApiError, requireAdmin, unauthorized } from "@/lib/api";
 import { fetchBootstrapData } from "@/lib/bootstrapData";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request) {
-  if (!requireAuth(request)) return unauthorized();
+  if (!requireAdmin(request)) return unauthorized();
 
   try {
     const supabase = getSupabaseAdmin();

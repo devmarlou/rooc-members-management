@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
+import { handleApiError, requireAdmin, unauthorized } from "@/lib/api";
 import { writeAuditLog } from "@/lib/auditLog";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -11,7 +11,7 @@ function isMissingPartySlotError(error) {
 }
 
 export async function PATCH(request, { params }) {
-  if (!requireAuth(request)) return unauthorized();
+  if (!requireAdmin(request)) return unauthorized();
 
   try {
     const { id: groupId } = await params;
