@@ -286,6 +286,10 @@
 .guild-console .party-slot .icon-button { min-width: 28px; padding: 4px; }
 .guild-console .progress-status.priority { background: #203a5d; border-color: #4d6f9b; color: #bfd9ff; }
 .guild-console .form-grid label > span { color: #d8e4f4; }
+.guild-console .field-with-action { display: flex; align-items: center; gap: 6px; }
+.guild-console .field-with-action input { flex: 1; min-width: 0; }
+.guild-console .field-with-action .icon-button { min-width: 32px; padding: 4px; flex-shrink: 0; }
+.guild-console .field-error { display: block; margin-top: 6px; color: #fca5a5; font-size: 12px; font-weight: 700; }
 .guild-console .form-actions { border-top: 1px solid var(--line); padding-top: 16px; }
 .guild-console .footer-strip { background: #141e2c; border-color: var(--line); color: var(--muted); }
 .guild-console .toast { background: #20334a; border-color: #689bda; color: var(--text); }
