@@ -2052,16 +2052,25 @@ function MemberForm({
   const cappedAuctionItems = auctionItems.filter(
     (item) => item.gates_round_completion,
   );
-  const savedMemberCaps = auctionState?.memberCapOverrides?.[initial?.id] || {};
   const sharedCaps = auctionState?.itemCaps || {};
-  const initialMemberCapOverrides = Object.fromEntries(
-    cappedAuctionItems.map((item) => [
-      item.item_key,
-      savedMemberCaps[item.item_key] === undefined
-        ? ""
-        : String(savedMemberCaps[item.item_key]),
-    ]),
-  );
+  // Frozen at mount (not recomputed from the live auctionState prop on every
+  // render) so a background dashboard refresh while this modal is open can't
+  // make memberCapOverridesChanged below look true just because auctionState
+  // changed out from under it. That false "changed" reading was sending a
+  // memberCapOverrides payload on every edit (even ones that only touched
+  // unrelated fields like joined date), which 400'd with "Create an auction
+  // lineup..." whenever the round had since ended.
+  const [initialMemberCapOverrides] = useState(() => {
+    const savedMemberCaps = auctionState?.memberCapOverrides?.[initial?.id] || {};
+    return Object.fromEntries(
+      cappedAuctionItems.map((item) => [
+        item.item_key,
+        savedMemberCaps[item.item_key] === undefined
+          ? ""
+          : String(savedMemberCaps[item.item_key]),
+      ]),
+    );
+  });
   const [form, setForm] = useState(() => ({
     ...emptyMember,
     ...initial,
