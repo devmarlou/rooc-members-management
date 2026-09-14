@@ -6628,6 +6628,13 @@ export default function DashboardApp({
       }
       setMemberModal(null);
       setToast(editing ? "Member updated" : "Member added");
+      // The member record above already saved successfully. Auction cap
+      // overrides are a separate, optional step, and the API reports a
+      // failure there without failing the whole request, so surface it as its
+      // own warning instead of implying the member edit itself didn't save.
+      if (data.capOverridesError) {
+        setError(`Member saved, but auction limits were not updated: ${data.capOverridesError}`);
+      }
     } catch (err) {
       setError(err.message);
     } finally {

@@ -79,18 +79,29 @@ export async function PATCH(request, { params }) {
 
     if (error) throw error;
 
-    const auctionState = Object.prototype.hasOwnProperty.call(payload || {}, "memberCapOverrides")
-      ? await updateMemberCapOverrides(supabase, id, payload.memberCapOverrides)
-      : null;
+    // The member row above is already saved at this point. Auction cap overrides
+    // are a separate, optional follow-up (e.g. no active round to attach them
+    // to) — if that step fails, it shouldn't make an already-successful member
+    // update look like a total failure. Its error is carried separately instead
+    // of thrown, so the response below still reports the save that did happen.
+    let auctionState = null;
+    let capOverridesError = null;
+    if (Object.prototype.hasOwnProperty.call(payload || {}, "memberCapOverrides")) {
+      try {
+        auctionState = await updateMemberCapOverrides(supabase, id, payload.memberCapOverrides);
+      } catch (capError) {
+        capOverridesError = capError.message || "Failed to update auction limits.";
+      }
+    }
 
     await writeAuditLog(supabase, request, {
       action: "member.updated",
       targetType: "member",
       targetId: data.id,
       summary: `Updated member ${data.char_name}`,
-      metadata: { before: beforeResult.data || null, after: data, memberCapOverrides: payload.memberCapOverrides || null }
+      metadata: { before: beforeResult.data || null, after: data, memberCapOverrides: payload.memberCapOverrides || null, capOverridesError }
     });
-    return NextResponse.json({ member: data, auctionState });
+    return NextResponse.json({ member: data, auctionState, capOverridesError });
   } catch (error) {
     return handleApiError(error);
   }
