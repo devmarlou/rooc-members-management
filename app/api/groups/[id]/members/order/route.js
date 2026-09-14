@@ -55,11 +55,14 @@ export async function PATCH(request, { params }) {
       ...remainingMembers
     ].slice(0, 5);
 
-    for (const [index, member] of normalizedMembers.entries()) {
-      const { error } = await supabase
-        .from("members")
-        .update({ party_slot: index + 1 })
-        .eq("id", member.id);
+    // Batch the per-member slot assignment into one upsert instead of one
+    // round trip per member (up to 5 sequential updates). Each row spreads the
+    // member's already-fetched full record (MEMBER_SELECT) so NOT NULL columns
+    // like char_name/char_class are satisfied on upsert's insert path — only
+    // party_slot actually changes.
+    if (normalizedMembers.length) {
+      const memberRows = normalizedMembers.map((member, index) => ({ ...member, party_slot: index + 1 }));
+      const { error } = await supabase.from("members").upsert(memberRows);
       if (error) throw error;
     }
 

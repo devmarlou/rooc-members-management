@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { handleApiError, requireAdmin, unauthorized } from "@/lib/api";
 import { writeAuditLog } from "@/lib/auditLog";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
@@ -42,14 +42,6 @@ export async function PATCH(request, { params }) {
 
     const supabase = getSupabaseAdmin();
 
-    const beforeResult = await supabase
-      .from("job_classes")
-      .select(JOB_CLASS_SELECT)
-      .eq("id", id)
-      .maybeSingle();
-    if (beforeResult.error) throw beforeResult.error;
-    if (!beforeResult.data) return NextResponse.json({ error: "Job class not found." }, { status: 404 });
-
     const newIconUrl = hasIcon ? await uploadJobClassIcon(supabase, icon) : null;
 
     const { data: rpcResult, error: rpcError } = await supabase.rpc("update_job_class", {
@@ -60,14 +52,24 @@ export async function PATCH(request, { params }) {
       p_icon_url: newIconUrl,
       p_clear_icon: clearIcon
     });
-    if (rpcError) throw rpcError;
+    if (rpcError) {
+      // The RPC itself raises this when p_id doesn't match a row (see
+      // .codex/JOB_CLASSES_RUNBOOK.md) — map it to the same 404 a separate
+      // pre-fetch used to produce, without spending an extra round trip on
+      // every PATCH just to check existence.
+      if (String(rpcError.message || "").includes("job_class_not_found")) {
+        return NextResponse.json({ error: "Job class not found." }, { status: 404 });
+      }
+      throw rpcError;
+    }
 
     const { before, after, membersUpdated } = rpcResult;
 
-    // Replacing/removing an icon orphans the old Storage object — clean it up
-    // once the row itself has switched over successfully.
+    // Replacing/removing an icon orphans the old Storage object — best-effort
+    // cleanup, never fatal to the caller, so it's deferred via after() rather
+    // than making the response wait on it.
     if ((hasIcon || clearIcon) && before?.icon_url) {
-      await deleteJobClassIconIfOwned(supabase, before.icon_url);
+      after(() => deleteJobClassIconIfOwned(supabase, before.icon_url));
     }
 
     await writeAuditLog(supabase, request, {
@@ -117,7 +119,9 @@ export async function DELETE(request, { params }) {
     const { error } = await supabase.from("job_classes").delete().eq("id", id);
     if (error) throw error;
 
-    await deleteJobClassIconIfOwned(supabase, beforeResult.data.icon_url);
+    // Best-effort cleanup, never fatal to the caller — deferred so the
+    // response doesn't wait on it.
+    after(() => deleteJobClassIconIfOwned(supabase, beforeResult.data.icon_url));
 
     await writeAuditLog(supabase, request, {
       action: "job_class.deleted",

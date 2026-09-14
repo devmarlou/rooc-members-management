@@ -116,23 +116,18 @@ export async function POST(request, { params }) {
     const { id } = await params;
     const supabase = getSupabaseAdmin();
 
-    const openAuction = await supabase
-      .from("auctions")
-      .select("id")
-      .in("status", OPEN_AUCTION_STATUSES)
-      .limit(1)
-      .maybeSingle();
+    // Both are independent guard checks (neither reads the other's data) — run
+    // concurrently instead of as two sequential round trips. The open-auction
+    // check still takes precedence below, matching the original order.
+    const [openAuction, activeRoundResult] = await Promise.all([
+      supabase.from("auctions").select("id").in("status", OPEN_AUCTION_STATUSES).limit(1).maybeSingle(),
+      supabase.from("rounds").select("id,round_number,status,started_at,completed_at").eq("status", "active").limit(1).maybeSingle()
+    ]);
     if (openAuction.error) throw openAuction.error;
     if (openAuction.data) {
       return NextResponse.json({ error: "Finish or cancel the open auction before catching up member cycles." }, { status: 400 });
     }
 
-    const activeRoundResult = await supabase
-      .from("rounds")
-      .select("id,round_number,status,started_at,completed_at")
-      .eq("status", "active")
-      .limit(1)
-      .maybeSingle();
     if (activeRoundResult.error) throw activeRoundResult.error;
     if (!activeRoundResult.data) {
       return NextResponse.json({ error: "Create an auction lineup before catching up member cycles." }, { status: 400 });

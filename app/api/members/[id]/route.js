@@ -53,19 +53,16 @@ export async function PATCH(request, { params }) {
     }
 
     const supabase = getSupabaseAdmin();
-    const beforeResult = await supabase
-      .from("members")
-      .select(MEMBER_SELECT)
-      .eq("id", id)
-      .maybeSingle();
+    // beforeResult (used only for the audit-log snapshot below) and the update
+    // don't depend on each other — both only need `id`/`body`, already known —
+    // so they run concurrently instead of as two sequential round trips.
+    const [beforeResult, updateResult] = await Promise.all([
+      supabase.from("members").select(MEMBER_SELECT).eq("id", id).maybeSingle(),
+      supabase.from("members").update(body).eq("id", id).select(MEMBER_SELECT).single()
+    ]);
     if (beforeResult.error && !isMissingPartySlotError(beforeResult.error)) throw beforeResult.error;
 
-    let { data, error } = await supabase
-      .from("members")
-      .update(body)
-      .eq("id", id)
-      .select(MEMBER_SELECT)
-      .single();
+    let { data, error } = updateResult;
 
     if (isMissingPartySlotError(error)) {
       const fallbackResult = await supabase
@@ -105,20 +102,13 @@ export async function DELETE(request, { params }) {
     const supabase = getSupabaseAdmin();
     // account_id isn't part of the shared MEMBER_SELECT (PATCH's response shape
     // stays unchanged) — pulled in here only so we know whether to cascade the
-    // account delete below.
-    const beforeResult = await supabase
-      .from("members")
-      .select(`${MEMBER_SELECT},account_id`)
-      .eq("id", id)
-      .maybeSingle();
+    // account delete below. Neither this nor the open-auction guard check depend
+    // on the other's result, so they run concurrently.
+    const [beforeResult, openAuctionResult] = await Promise.all([
+      supabase.from("members").select(`${MEMBER_SELECT},account_id`).eq("id", id).maybeSingle(),
+      supabase.from("auctions").select("id,name,status").in("status", ["active", "locked"]).limit(1).maybeSingle()
+    ]);
     if (beforeResult.error && !isMissingPartySlotError(beforeResult.error)) throw beforeResult.error;
-
-    const openAuctionResult = await supabase
-      .from("auctions")
-      .select("id,name,status")
-      .in("status", ["active", "locked"])
-      .limit(1)
-      .maybeSingle();
     if (openAuctionResult.error) throw openAuctionResult.error;
 
     if (openAuctionResult.data) {

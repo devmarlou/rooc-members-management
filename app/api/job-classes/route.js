@@ -27,11 +27,13 @@ export async function POST(request) {
     }
 
     const supabase = getSupabaseAdmin();
-    const iconUrl = hasIcon ? await uploadJobClassIcon(supabase, icon) : null;
-
-    const { count } = await supabase
-      .from("job_classes")
-      .select("id", { count: "exact", head: true });
+    // The icon upload and the row count (used only to compute sort_order below)
+    // don't depend on each other — run concurrently instead of sequentially.
+    const [iconUrl, countResult] = await Promise.all([
+      hasIcon ? uploadJobClassIcon(supabase, icon) : Promise.resolve(null),
+      supabase.from("job_classes").select("id", { count: "exact", head: true })
+    ]);
+    const { count } = countResult;
 
     const { data, error } = await supabase
       .from("job_classes")
