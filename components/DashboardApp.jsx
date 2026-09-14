@@ -1426,33 +1426,39 @@ function StatsHistoryCard({ row, label, trends, onEdit }) {
   return (
     <article className={`stats-history-card ${isOld ? "" : "is-updated"}`}>
       <header>
-        <div className="stats-history-heading">
-          <span className={`history-badge ${label === "updated" ? "is-updated" : "is-old"}`}>
-            {label === "updated" ? "UPDATED" : "OLD"}
-          </span>
-          <strong>{formatStatsTimestamp(row.submitted_at)}</strong>
+        <div className="stats-history-top">
+          <div className="stats-history-heading">
+            <span className={`history-badge ${label === "updated" ? "is-updated" : "is-old"}`}>
+              {label === "updated" ? "UPDATED" : "OLD"}
+            </span>
+            <strong>{formatStatsTimestamp(row.submitted_at)}</strong>
+          </div>
+          <div className="stats-history-actions">
+            <a
+              className="ghost-button stats-video-button"
+              href={ensureAbsoluteUrl(row.video_link)}
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              <ExternalLink size={13} />
+              Video Proof
+            </a>
+            {/* Only the UPDATED (latest) row is ever editable — OLD is kept
+                strictly for reference/comparison, so it gets no edit affordance.
+                Its own accent color keeps it from being mistaken for the
+                Video Proof link at a glance. */}
+            {!isOld && onEdit && (
+              <button type="button" className="ghost-button stats-edit-button" onClick={onEdit}>
+                <Pencil size={13} />
+                Edit
+              </button>
+            )}
+          </div>
         </div>
         <div className="stats-history-meta">
           <span className="field-note">
             {row.damage_type === "magic" ? "Magic" : row.damage_type === "physical" ? "Physical" : "-"}
           </span>
-          <a
-            className="ghost-button"
-            href={ensureAbsoluteUrl(row.video_link)}
-            target="_blank"
-            rel="noreferrer noopener"
-          >
-            <ExternalLink size={13} />
-            Proof video
-          </a>
-          {/* Only the UPDATED (latest) row is ever editable — OLD is kept
-              strictly for reference/comparison, so it gets no edit affordance. */}
-          {!isOld && onEdit && (
-            <button type="button" className="ghost-button" onClick={onEdit}>
-              <Pencil size={13} />
-              Edit
-            </button>
-          )}
         </div>
       </header>
       <div className="auction-form-items compact">

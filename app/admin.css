@@ -361,11 +361,20 @@
    too wide for a single auto-fit grid cell, so it spans every column instead
    of squeezing next to the OLD card. */
 .guild-console .stats-history-edit { grid-column: 1 / -1; background: #121d2b; border: 1px solid var(--line); padding: 12px; }
-/* Always two fixed rows (badge+timestamp, then damage type+proof link) so the
+/* Always two fixed rows (badge+timestamp+actions, then damage type) so the
    header lines up the same way regardless of card width or content length. */
 .guild-console .stats-history-card > header { display: flex; flex-direction: column; gap: 6px; }
 .guild-console .stats-history-heading { display: flex; align-items: center; gap: 8px; }
-.guild-console .stats-history-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* Badge/timestamp on the left, Video Proof + Edit grouped together in the
+   top-right corner — both actions live in one place instead of Edit sitting
+   apart from Video Proof. */
+.guild-console .stats-history-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.guild-console .stats-history-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.guild-console .stats-history-meta { display: flex; align-items: center; gap: 8px; }
+/* Edit gets its own accent color so it doesn't read as another link-style
+   action next to Video Proof. */
+.guild-console .stats-edit-button { background: rgba(71, 139, 235, 0.16); border-color: #478beb; color: #9dc0f7; }
+.guild-console .stats-edit-button:hover:not(:disabled) { background: rgba(71, 139, 235, 0.28); border-color: #6fa0ee; color: #d7e6fb; }
 .guild-console .stats-history-card h4.form-subsection-title { margin-top: 4px; font-size: 12px; }
 .guild-console .stats-history-field { display: flex; flex-direction: column; gap: 1px; }
 .guild-console .stats-history-field span { color: var(--muted); font-size: 11px; }
