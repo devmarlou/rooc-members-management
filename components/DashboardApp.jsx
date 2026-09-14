@@ -504,8 +504,12 @@ function DiscordRegistrationCompleteScreen() {
 
   async function submit(event) {
     event.preventDefault();
-    setBusy(true);
     setError("");
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+    setBusy(true);
     try {
       await api("/api/auth/discord/register", {
         method: "POST",
@@ -594,6 +598,7 @@ function DiscordRegistrationCompleteScreen() {
                 onChange={(event) => setUsername(event.target.value)}
                 autoFocus
                 autoComplete="username"
+                maxLength={32}
               />
             </label>
             <label>
@@ -603,6 +608,7 @@ function DiscordRegistrationCompleteScreen() {
                 onChange={(event) => setPassword(event.target.value)}
                 type="password"
                 autoComplete="new-password"
+                minLength={8}
               />
             </label>
             <label>
@@ -610,6 +616,7 @@ function DiscordRegistrationCompleteScreen() {
               <input
                 value={charName}
                 onChange={(event) => setCharName(event.target.value)}
+                maxLength={24}
               />
             </label>
             <label>
@@ -692,8 +699,12 @@ function LocalRegistrationCompleteScreen({ onBack }) {
 
   async function submit(event) {
     event.preventDefault();
-    setBusy(true);
     setError("");
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+    setBusy(true);
     try {
       await api("/api/auth/register", {
         method: "POST",
@@ -777,6 +788,7 @@ function LocalRegistrationCompleteScreen({ onBack }) {
                 onChange={(event) => setUsername(event.target.value)}
                 autoFocus
                 autoComplete="username"
+                maxLength={32}
               />
             </label>
             <label>
@@ -786,6 +798,7 @@ function LocalRegistrationCompleteScreen({ onBack }) {
                 onChange={(event) => setPassword(event.target.value)}
                 type="password"
                 autoComplete="new-password"
+                minLength={8}
               />
             </label>
             <label>
@@ -793,6 +806,7 @@ function LocalRegistrationCompleteScreen({ onBack }) {
               <input
                 value={charName}
                 onChange={(event) => setCharName(event.target.value)}
+                maxLength={24}
               />
             </label>
             <label>
@@ -918,6 +932,7 @@ function ResetPasswordScreen({ username, onReset }) {
                 onChange={(event) => setNewPassword(event.target.value)}
                 type="password"
                 autoComplete="new-password"
+                minLength={8}
               />
             </label>
             <label>
@@ -1618,6 +1633,7 @@ function AccountScreen() {
                       if (event.key === "Escape") cancelEditingName();
                     }}
                     autoFocus={nameEditing}
+                    maxLength={24}
                   />
                   {nameEditing ? (
                     <>
@@ -1992,6 +2008,7 @@ function MemberForm({
           value={form.char_name}
           onChange={(event) => update("char_name", event.target.value)}
           required
+          maxLength={24}
         />
       </label>
       <label>

@@ -2,6 +2,7 @@ import { NextResponse, after } from "next/server";
 import { PENDING_REGISTRATION_COOKIE, verifyPendingRegistrationToken } from "@/lib/discordOAuth";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { buildStatsRow } from "@/lib/memberStats";
+import { charClassExists, validateCharClass, validateCharName, validatePassword, validateUsername } from "@/lib/validation";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { GUILD_MEMBER_LIMIT } from "@/lib/constants";
 
@@ -44,14 +45,15 @@ export async function POST(request) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const username = String(body.username || "").trim();
-  const password = String(body.password || "");
-  const charName = String(body.charName || "").trim();
-  const charClass = String(body.charClass || "").trim();
 
-  if (!username || !password || !charName || !charClass) {
-    return NextResponse.json({ error: "All fields are required." }, { status: 400 });
-  }
+  const { error: usernameError, value: username } = validateUsername(body.username);
+  if (usernameError) return NextResponse.json({ error: usernameError }, { status: 400 });
+  const { error: passwordError, value: password } = validatePassword(body.password);
+  if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 });
+  const { error: charNameError, value: charName } = validateCharName(body.charName);
+  if (charNameError) return NextResponse.json({ error: charNameError }, { status: 400 });
+  const { error: charClassError, value: charClass } = validateCharClass(body.charClass);
+  if (charClassError) return NextResponse.json({ error: charClassError }, { status: 400 });
 
   // Initial stats are required as part of registration — validate the payload
   // before register_member_account runs so an invalid/missing submission blocks
@@ -59,6 +61,13 @@ export async function POST(request) {
   const { error: statsValidationError, row: statsRow } = buildStatsRow(body.stats);
   if (statsValidationError) {
     return NextResponse.json({ error: statsValidationError }, { status: 400 });
+  }
+
+  // Registration never checked charClass against the real job_classes table
+  // before — the client is untrusted, so confirm it's a real, currently
+  // configured class rather than letting a bogus string create an account.
+  if (!(await charClassExists(supabase, charClass))) {
+    return NextResponse.json({ error: "Invalid class selected." }, { status: 400 });
   }
 
   // register_member_account inserts the members row immediately (it just sits
