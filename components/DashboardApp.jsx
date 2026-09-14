@@ -45,6 +45,7 @@ import {
   BarChart3,
   Layers,
   ExternalLink,
+  Users,
 } from "lucide-react";
 import { colorGroups } from "@/components/data";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
@@ -144,6 +145,7 @@ const dashboardDataCache = { admin: null, public: null };
 // every single navigation instead of only when their cache goes stale.
 let pendingAccountsCache = null; // { data, loadedAt }
 let memberStatsSummaryCache = null; // { data, loadedAt }
+let publicStatsBoardCache = null; // { data, loadedAt } — owned by PublicStatsBoardScreen
 
 function dashboardCacheKey(publicView) {
   return publicView ? "public" : "admin";
@@ -1379,6 +1381,7 @@ function AccountScreen() {
   const [nameValue, setNameValue] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
   const [nameError, setNameError] = useState("");
+  const [visibilitySaving, setVisibilitySaving] = useState(false);
 
   function loadAccount() {
     return api("/api/account")
@@ -1483,6 +1486,21 @@ function AccountScreen() {
       setNameError(err.message);
     } finally {
       setNameSaving(false);
+    }
+  }
+
+  async function toggleShowStatsPublicly(checked) {
+    setVisibilitySaving(true);
+    try {
+      const data = await api("/api/account", {
+        method: "PATCH",
+        body: JSON.stringify({ showStatsPublicly: checked }),
+      });
+      setAccount((current) => ({ ...current, member: { ...current.member, ...data.member } }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setVisibilitySaving(false);
     }
   }
 
@@ -1599,6 +1617,18 @@ function AccountScreen() {
               <label>
                 <span>Class</span>
                 <input value={account.member.char_class} disabled />
+              </label>
+              <label className="checkbox-row wide">
+                <input
+                  type="checkbox"
+                  checked={Boolean(account.member.show_stats_publicly)}
+                  disabled={visibilitySaving}
+                  onChange={(event) => toggleShowStatsPublicly(event.target.checked)}
+                />
+                <span>
+                  Show in Public Stats board — lets other logged-in members see your
+                  latest submitted stats at /public-stats
+                </span>
               </label>
             </>
           ) : (
@@ -2295,7 +2325,14 @@ function JobClassesPanel({ jobClasses, onAdd, onEdit, onDelete, busy }) {
   );
 }
 
-function MemberStatsAdminPanel({ summary, loading, onViewMember }) {
+function MemberStatsAdminPanel({
+  summary,
+  loading,
+  onViewMember,
+  eyebrow = "weekly submissions",
+  title = "Member stats",
+  description = "Latest self-reported gear/combat stats per member — reference only, not used by the auction system.",
+}) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState("all");
   const normalizedQuery = query.trim().toLowerCase();
@@ -2308,15 +2345,12 @@ function MemberStatsAdminPanel({ summary, loading, onViewMember }) {
     : summary;
 
   return (
-    <section className="content-section" aria-label="Member stats">
+    <section className="content-section" aria-label={title}>
       <div className="section-heading">
         <div>
-          <p className="eyebrow">weekly submissions</p>
-          <h2>Member stats</h2>
-          <p>
-            Latest self-reported gear/combat stats per member — reference
-            only, not used by the auction system.
-          </p>
+          <p className="eyebrow">{eyebrow}</p>
+          <h2>{title}</h2>
+          <p>{description}</p>
         </div>
         <div className="section-actions">
           <div className="view-toggle" aria-label="Stats table view">
@@ -2550,6 +2584,62 @@ function MemberStatsDetailView({ data, onClose }) {
   );
 }
 
+// A self-contained peer view of member_stats — mirrors AccountScreen's pattern
+// (own fetch, own state) rather than plugging into the main dashboard's
+// members/groups/session-gated load flow, since it's reachable by both member
+// and admin roles and only ever needs one thing: the opted-in board list.
+function PublicStatsBoardScreen() {
+  const [board, setBoard] = useState(() => publicStatsBoardCache?.data || []);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [detail, setDetail] = useState(null);
+
+  useEffect(() => {
+    const cached = publicStatsBoardCache;
+    const cacheIsFresh = cached && Date.now() - cached.loadedAt < DASHBOARD_CACHE_MAX_AGE_MS;
+    if (cached) setBoard(cached.data);
+    if (cacheIsFresh) return;
+    if (!cached) setLoading(true);
+    api("/api/member-stats/board")
+      .then((data) => {
+        publicStatsBoardCache = { data: data.board || [], loadedAt: Date.now() };
+        setBoard(publicStatsBoardCache.data);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function viewMember(memberId) {
+    try {
+      const data = await api(`/api/member-stats/board/${memberId}`);
+      setDetail(data);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <>
+      {error && (
+        <div className="alert-panel">
+          <AlertTriangle size={17} />
+          <span>{error}</span>
+          <button onClick={() => setError("")}>Dismiss</button>
+        </div>
+      )}
+      <MemberStatsAdminPanel
+        summary={board}
+        loading={loading}
+        onViewMember={viewMember}
+        eyebrow="guild board"
+        title="Public stats"
+        description="Stats from members who've opted in to share with the rest of the guild — check the box on your Account page to join this list."
+      />
+      {detail && <MemberStatsDetailView data={detail} onClose={() => setDetail(null)} />}
+    </>
+  );
+}
+
 function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role }) {
   // Account is reachable from the header (top right) on every page instead of
   // living here too — keep this list to the role's core views only.
@@ -2562,6 +2652,13 @@ function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role 
             shortLabel: "Auction",
             icon: Gavel,
             page: "public",
+          },
+          {
+            href: "/public-stats",
+            label: "Public stats",
+            shortLabel: "Stats",
+            icon: Users,
+            page: "public-stats",
           },
         ]
       : [
@@ -2602,6 +2699,13 @@ function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role 
             shortLabel: "Stats",
             icon: BarChart3,
             page: "member-stats",
+          },
+          {
+            href: "/public-stats",
+            label: "Public stats",
+            shortLabel: "Public",
+            icon: Users,
+            page: "public-stats",
           },
           {
             href: "/job-classes",
@@ -5607,6 +5711,7 @@ export default function DashboardApp({
   publicView = false,
   auditLogView = false,
   accountView = false,
+  publicStatsView = false,
   adminPage = "members",
 }) {
   const router = useRouter();
@@ -5776,8 +5881,9 @@ export default function DashboardApp({
     if (data.authenticated && !data.mustResetPassword) {
       if (auditLogView) {
         if (data.role === "super_admin") loadAuditLogs();
-      } else if (accountView) {
-        // AccountScreen fetches its own data via /api/account.
+      } else if (accountView || publicStatsView) {
+        // AccountScreen / PublicStatsBoardScreen fetch their own data —
+        // reachable by every role, so nothing here to gate or preload.
       } else if (data.role === "member") {
         // Member accounts have no business on admin pages — send them straight
         // to their Account page instead of showing the "not permitted" gate.
@@ -6779,15 +6885,20 @@ export default function DashboardApp({
         <main className="dashboard">
           {accountView ? (
             <AccountScreen />
+          ) : publicStatsView ? (
+            <PublicStatsBoardScreen />
           ) : !publicView && session.role === "member" ? (
             <div className="alert-panel">
               <AlertTriangle size={17} />
               <span>
-                Member accounts can only view the public auction board and
-                their account page.
+                Member accounts can only view the public auction board, the
+                public stats board, and their account page.
               </span>
               <Link className="ghost-button" href="/public">
                 Auction view
+              </Link>
+              <Link className="ghost-button" href="/public-stats">
+                Public stats
               </Link>
               <Link className="ghost-button" href="/account">
                 Account
