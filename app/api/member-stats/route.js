@@ -65,9 +65,19 @@ export async function GET(request) {
 
     const pendingAccountIds = new Set((pendingAccountsResult.data || []).map((account) => account.id));
 
+    // Retention keeps at most 2 rows per member, and statsResult is already
+    // ordered newest-first across the whole roster, so the first row seen per
+    // member_id is "latest" (UPDATED) and the second is "previous" (OLD) —
+    // needed so the CSV export can offer either snapshot without a second
+    // per-member fetch.
     const latestByMember = new Map();
+    const previousByMember = new Map();
     for (const row of statsResult.data || []) {
-      if (!latestByMember.has(row.member_id)) latestByMember.set(row.member_id, row);
+      if (!latestByMember.has(row.member_id)) {
+        latestByMember.set(row.member_id, row);
+      } else if (!previousByMember.has(row.member_id)) {
+        previousByMember.set(row.member_id, row);
+      }
     }
 
     const summary = (membersResult.data || [])
@@ -76,7 +86,8 @@ export async function GET(request) {
         member_id: member.id,
         char_name: member.char_name,
         char_class: member.char_class,
-        latest: latestByMember.get(member.id) || null
+        latest: latestByMember.get(member.id) || null,
+        previous: previousByMember.get(member.id) || null
       }));
 
     return NextResponse.json({ stats: summary });
