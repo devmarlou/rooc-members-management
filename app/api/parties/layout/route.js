@@ -131,12 +131,19 @@ export async function PATCH(request) {
       }
     }
 
-    for (const [memberId, target] of memberTargets.entries()) {
-      const { member_id, ...updateBody } = target;
-      const { error } = await supabase
-        .from("members")
-        .update(updateBody)
-        .eq("id", memberId);
+    // Batch every touched member's group/slot change into one upsert instead of
+    // one round trip per member. Each row spreads the member's already-fetched
+    // full record (currentMembers, MEMBER_SELECT) so NOT NULL columns like
+    // char_name/char_class are satisfied on upsert's insert path — only
+    // group_id/party_slot actually change.
+    if (memberTargets.size) {
+      const currentById = new Map((currentMembers || []).map((member) => [member.id, member]));
+      const memberRows = [...memberTargets.values()].map((target) => ({
+        ...currentById.get(target.member_id),
+        group_id: target.group_id,
+        party_slot: target.party_slot
+      }));
+      const { error } = await supabase.from("members").upsert(memberRows);
       if (error) throw error;
     }
 

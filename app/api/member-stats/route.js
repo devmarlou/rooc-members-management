@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
 import { writeAuditLog } from "@/lib/auditLog";
 import { enforceMemberStatsRetention } from "@/lib/memberStatsRetention";
@@ -121,7 +121,15 @@ export async function POST(request) {
       .single();
     if (error) throw error;
 
-    await enforceMemberStatsRetention(supabase, member.id);
+    // Best-effort trim of older submissions — doesn't affect the response, so
+    // it's deferred to run after the client already has its result.
+    after(async () => {
+      try {
+        await enforceMemberStatsRetention(supabase, member.id);
+      } catch (retentionError) {
+        console.error("enforceMemberStatsRetention failed:", retentionError);
+      }
+    });
 
     if (effectiveClass !== member.char_class) {
       const { error: classUpdateError } = await supabase

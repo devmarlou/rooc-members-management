@@ -13,20 +13,13 @@ export async function PATCH(request, { params }) {
     if (!name) return NextResponse.json({ error: "Group name is required." }, { status: 400 });
 
     const supabase = getSupabaseAdmin();
-    const beforeResult = await supabase
-      .from("groups")
-      .select("id,name,sort_order,created_at")
-      .eq("id", id)
-      .maybeSingle();
+    // beforeResult (used only for the audit-log snapshot) and the update don't
+    // depend on each other — both only need `id`/`name` — so run concurrently.
+    const [beforeResult, { data, error }] = await Promise.all([
+      supabase.from("groups").select("id,name,sort_order,created_at").eq("id", id).maybeSingle(),
+      supabase.from("groups").update({ name }).eq("id", id).select("id,name,sort_order,created_at").single()
+    ]);
     if (beforeResult.error) throw beforeResult.error;
-
-    const { data, error } = await supabase
-      .from("groups")
-      .update({ name })
-      .eq("id", id)
-      .select("id,name,sort_order,created_at")
-      .single();
-
     if (error) throw error;
     await writeAuditLog(supabase, request, {
       action: "group.updated",
@@ -47,18 +40,13 @@ export async function DELETE(request, { params }) {
   try {
     const { id } = await params;
     const supabase = getSupabaseAdmin();
-    const beforeResult = await supabase
-      .from("groups")
-      .select("id,name,sort_order,created_at")
-      .eq("id", id)
-      .maybeSingle();
+    // beforeResult (used only for the audit-log summary) and the delete don't
+    // depend on each other — both only need `id` — so run concurrently.
+    const [beforeResult, { error }] = await Promise.all([
+      supabase.from("groups").select("id,name,sort_order,created_at").eq("id", id).maybeSingle(),
+      supabase.from("groups").delete().eq("id", id)
+    ]);
     if (beforeResult.error) throw beforeResult.error;
-
-    const { error } = await supabase
-      .from("groups")
-      .delete()
-      .eq("id", id);
-
     if (error) throw error;
     await writeAuditLog(supabase, request, {
       action: "group.deleted",

@@ -33,17 +33,13 @@ export async function POST(request, { params }) {
     }
 
     if (action === "approve") {
-      const { error: updateError } = await supabase
-        .from("app_users")
-        .update({ status: "active" })
-        .eq("id", id);
+      // The status update and the member lookup both only need `id` (already
+      // known) — neither depends on the other's result, so run concurrently.
+      const [{ error: updateError }, { data: memberRow, error: memberError }] = await Promise.all([
+        supabase.from("app_users").update({ status: "active" }).eq("id", id),
+        supabase.from("members").select("id").eq("account_id", id).maybeSingle()
+      ]);
       if (updateError) throw updateError;
-
-      const { data: memberRow, error: memberError } = await supabase
-        .from("members")
-        .select("id")
-        .eq("account_id", id)
-        .maybeSingle();
       if (memberError) throw memberError;
       if (memberRow) await enrollMemberInActiveRound(supabase, memberRow.id);
 
