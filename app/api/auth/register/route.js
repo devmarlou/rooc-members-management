@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { buildStatsRow } from "@/lib/memberStats";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
@@ -102,54 +102,62 @@ export async function POST(request) {
     // New accounts land as status='pending' (set inside register_local_account) —
     // no session cookie yet and no active-round enrollment yet. Both happen only
     // once an admin approves the account (see app/api/members/pending/[id]/route.js).
-    const { error: auditError } = await supabase.from("audit_logs").insert({
-      actor_user_id: user.id,
-      actor_username: user.username,
-      actor_role: user.role,
-      action: "account.registered_local",
-      target_type: "app_user",
-      target_id: user.id,
-      summary: `Registered new member account ${user.username} (pending approval)`,
-      metadata: {}
-    });
-    if (auditError) console.error("[auth/register] audit log insert failed:", auditError);
+    //
+    // None of this follow-up (audit log, best-effort stats insert + its own audit
+    // log) is needed to answer the request — the account is already created by
+    // register_local_account above — so it's deferred via after() to run once the
+    // response has been sent instead of making the submitter wait through 4 more
+    // sequential round trips for a form that already succeeded.
+    after(async () => {
+      const { error: auditError } = await supabase.from("audit_logs").insert({
+        actor_user_id: user.id,
+        actor_username: user.username,
+        actor_role: user.role,
+        action: "account.registered_local",
+        target_type: "app_user",
+        target_id: user.id,
+        summary: `Registered new member account ${user.username} (pending approval)`,
+        metadata: {}
+      });
+      if (auditError) console.error("[auth/register] audit log insert failed:", auditError);
 
-    // Best-effort follow-up, mirroring app/api/auth/discord/register/route.js: the
-    // atomic boundary is register_local_account above, so a failure here logs
-    // loudly but does not fail the overall registration response.
-    try {
-      const { data: memberRow, error: memberLookupError } = await supabase
-        .from("members")
-        .select("id")
-        .eq("account_id", user.id)
-        .maybeSingle();
-      if (memberLookupError) throw memberLookupError;
+      // Best-effort follow-up, mirroring app/api/auth/discord/register/route.js: the
+      // atomic boundary is register_local_account above, so a failure here logs
+      // loudly but does not fail the overall registration response.
+      try {
+        const { data: memberRow, error: memberLookupError } = await supabase
+          .from("members")
+          .select("id")
+          .eq("account_id", user.id)
+          .maybeSingle();
+        if (memberLookupError) throw memberLookupError;
 
-      if (memberRow) {
-        const { data: statsData, error: statsInsertError } = await supabase
-          .from("member_stats")
-          .insert({ member_id: memberRow.id, class: charClass, ...statsRow })
-          .select("id,submitted_at")
-          .single();
-        if (statsInsertError) throw statsInsertError;
+        if (memberRow) {
+          const { data: statsData, error: statsInsertError } = await supabase
+            .from("member_stats")
+            .insert({ member_id: memberRow.id, class: charClass, ...statsRow })
+            .select("id,submitted_at")
+            .single();
+          if (statsInsertError) throw statsInsertError;
 
-        const { error: statsAuditError } = await supabase.from("audit_logs").insert({
-          actor_user_id: user.id,
-          actor_username: user.username,
-          actor_role: user.role,
-          action: "member_stats.submitted",
-          target_type: "member_stats",
-          target_id: statsData.id,
-          summary: `Submitted initial stats for ${charName} during registration`,
-          metadata: { member_id: memberRow.id, submitted_at: statsData.submitted_at }
-        });
-        if (statsAuditError) console.error("[auth/register] stats audit log insert failed:", statsAuditError);
-      } else {
-        console.error("[auth/register] stats insert failed: no members row found for account", user.id);
+          const { error: statsAuditError } = await supabase.from("audit_logs").insert({
+            actor_user_id: user.id,
+            actor_username: user.username,
+            actor_role: user.role,
+            action: "member_stats.submitted",
+            target_type: "member_stats",
+            target_id: statsData.id,
+            summary: `Submitted initial stats for ${charName} during registration`,
+            metadata: { member_id: memberRow.id, submitted_at: statsData.submitted_at }
+          });
+          if (statsAuditError) console.error("[auth/register] stats audit log insert failed:", statsAuditError);
+        } else {
+          console.error("[auth/register] stats insert failed: no members row found for account", user.id);
+        }
+      } catch (statsError) {
+        console.error("[auth/register] stats insert failed:", statsError);
       }
-    } catch (statsError) {
-      console.error("[auth/register] stats insert failed:", statsError);
-    }
+    });
 
     return NextResponse.json({
       ok: true,
