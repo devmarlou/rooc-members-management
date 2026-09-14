@@ -17,7 +17,7 @@ export async function GET(request) {
         .eq("account_id", session.userId)
         .maybeSingle(),
       // Session tokens don't carry discord_user_id (lib/session.js only signs
-      // identity + reset flag) — look it up fresh so "Connect Discord" can hide
+      // identity + reset flag). Look it up fresh so "Connect Discord" can hide
       // itself once already linked.
       supabase
         .from("app_users")
@@ -41,11 +41,12 @@ export async function GET(request) {
 }
 
 // Self-service edits to the caller's own character: renaming, and toggling
-// whether their stats appear on the public stats board. Every other roster
-// field (class, group, party slot, officer flag, etc.) stays admin-only via
-// PATCH /api/members/[id]. Both fields are optional in the body and applied
-// independently so the same endpoint serves both the name editor and the
-// board opt-in checkbox without either one needing to resend the other.
+// whether their stats appear on the public stats board. POV links have no
+// opt-in (they're always public at /pov-list). Every other roster field
+// (class, group, party slot, officer flag, etc.) stays admin-only via PATCH
+// /api/members/[id]. Fields are optional in the body and applied
+// independently so the same endpoint serves the name editor and the opt-in
+// checkbox without needing to resend the other.
 export async function PATCH(request) {
   const session = requireAuth(request);
   if (!session) return unauthorized();
@@ -81,7 +82,7 @@ export async function PATCH(request) {
       charName = validatedCharName;
       if (charName !== member.char_name) {
         // Same case-insensitive uniqueness check register_local_account/
-        // register_member_account run at the DB level — done in JS here since
+        // register_member_account run at the DB level. Done in JS here since
         // there's no RPC for a plain rename, and the roster is small enough
         // (GUILD_MEMBER_LIMIT) that fetching char_name once is cheap.
         const { data: roster, error: rosterError } = await supabase
