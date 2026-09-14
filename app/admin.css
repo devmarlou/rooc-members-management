@@ -542,6 +542,12 @@
 .login-divider::before, .login-divider::after { content: ""; flex: 1; height: 1px; background: #344459; }
 .login-discord-links { display: flex; flex-direction: column; gap: 10px; }
 .login-discord-links .ghost-button { justify-content: center; min-height: 42px; border-radius: 0; }
+/* Matches .login-form's margin-top so the "awaiting approval" screens (intro
+   text directly followed by a single button, no form in between) get the same
+   text-to-action spacing as every other login-card layout. Scoped to this
+   adjacency only so it doesn't stack with .login-divider's own margin on the
+   main sign-in screen's Discord button. */
+.login-intro + .login-discord-links { margin-top: 24px; }
 .login-card .link-button {
   display: block;
   width: 100%;

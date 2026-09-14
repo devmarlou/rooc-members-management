@@ -391,11 +391,10 @@ function LoginScreen({ onLogin, registerStep = "", authError = "" }) {
             <p>Prontera 6</p>
           </div>
           <p className="login-brand-note">
-            Guild management and auction allocation.
+            Guild management.
           </p>
         </aside>
         <section className="login-card">
-          <p className="login-kicker">Guild administration</p>
           <h2 id="login-title">Sign in</h2>
           <p className="login-intro">
             Use your guild account to manage the roster, parties, and auctions.
@@ -521,7 +520,7 @@ function DiscordRegistrationCompleteScreen() {
               <p>Prontera 6</p>
             </div>
             <p className="login-brand-note">
-              Guild management and auction allocation.
+              Guild management.
             </p>
           </aside>
           <section className="login-card">
@@ -561,7 +560,7 @@ function DiscordRegistrationCompleteScreen() {
             <p>Prontera 6</p>
           </div>
           <p className="login-brand-note">
-            Guild management and auction allocation.
+            Guild management.
           </p>
         </aside>
         <section className="login-card">
@@ -708,7 +707,7 @@ function LocalRegistrationCompleteScreen({ onBack }) {
               <p>Prontera 6</p>
             </div>
             <p className="login-brand-note">
-              Guild management and auction allocation.
+              Guild management.
             </p>
           </aside>
           <section className="login-card">
@@ -743,7 +742,7 @@ function LocalRegistrationCompleteScreen({ onBack }) {
             <p>Prontera 6</p>
           </div>
           <p className="login-brand-note">
-            Guild management and auction allocation.
+            Guild management.
           </p>
         </aside>
         <section className="login-card">
@@ -872,7 +871,7 @@ function ResetPasswordScreen({ username, onReset }) {
             <p>Prontera 6</p>
           </div>
           <p className="login-brand-note">
-            Guild management and auction allocation.
+            Guild management.
           </p>
         </aside>
         <section className="login-card">
@@ -2615,7 +2614,7 @@ function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role 
         </span>
         <span>
           <strong>ENCORE</strong>
-          <em>Guild administration</em>
+          <em>Guild management</em>
         </span>
       </Link>
       <nav className="admin-navigation" aria-label="Admin navigation">
@@ -2762,7 +2761,7 @@ function Header({
             </div>
             <div>
               <p className="eyebrow">
-                {publicView ? "Guild dashboard" : "Guild administration"}
+                {publicView ? "Guild dashboard" : "Guild management"}
               </p>
               <h1>ENCORE</h1>
               <div className="brand-meta">
