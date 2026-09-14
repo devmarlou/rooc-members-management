@@ -347,7 +347,7 @@ function ClassIcon({ name, size = 34, glow = true }) {
       className={glow ? "class-icon" : "class-icon no-glow"}
       style={{ width: size, height: size, "--class-color": color }}
     >
-      <img src={cls.icon} alt={name} width={size} height={size} />
+      <img src={cls.icon} alt={name} width={size} height={size} draggable={false} />
     </span>
   );
 }

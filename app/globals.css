@@ -2587,6 +2587,12 @@ button.party-slot.empty:hover:not(:disabled) {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  /* Images are natively draggable by default. Left unset, starting a drag
+     directly on the icon inside a party slot can make the browser treat the
+     raw image as the drag source instead of the slot's own drag data
+     (components/DashboardApp.jsx's draggable={false} covers modern browsers;
+     -webkit-user-drag is the older Safari-specific equivalent). */
+  -webkit-user-drag: none;
 }
 
 .modal-card .class-icon,
