@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
 import { writeAuditLog } from "@/lib/auditLog";
+import { validateCharName } from "@/lib/validation";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function GET(request) {
@@ -73,10 +74,11 @@ export async function PATCH(request) {
     let charName = member.char_name;
 
     if (hasCharName) {
-      charName = String(body.charName || "").trim();
-      if (!charName) {
-        return NextResponse.json({ error: "Character name is required." }, { status: 400 });
+      const { error: charNameError, value: validatedCharName } = validateCharName(body.charName);
+      if (charNameError) {
+        return NextResponse.json({ error: charNameError }, { status: 400 });
       }
+      charName = validatedCharName;
       if (charName !== member.char_name) {
         // Same case-insensitive uniqueness check register_local_account/
         // register_member_account run at the DB level — done in JS here since

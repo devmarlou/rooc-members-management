@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { handleApiError, requireAuth, unauthorized } from "@/lib/api";
 import { createSessionToken, sessionDurationSeconds, SESSION_COOKIE } from "@/lib/session";
+import { validatePassword } from "@/lib/validation";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function POST(request) {
@@ -12,8 +13,9 @@ export async function POST(request) {
     const currentPassword = String(body.currentPassword || "");
     const newPassword = String(body.newPassword || "");
 
-    if (newPassword.length < 8) {
-      return NextResponse.json({ error: "New password must be at least 8 characters." }, { status: 400 });
+    const { error: passwordError } = validatePassword(newPassword);
+    if (passwordError) {
+      return NextResponse.json({ error: passwordError }, { status: 400 });
     }
     if (newPassword === currentPassword) {
       return NextResponse.json({ error: "New password must be different from the current password." }, { status: 400 });

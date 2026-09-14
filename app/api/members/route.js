@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { handleApiError, requireAdmin, unauthorized } from "@/lib/api";
 import { writeAuditLog } from "@/lib/auditLog";
 import { enrollMemberInActiveRound } from "@/lib/memberRoundEnrollment";
+import { validateCharClass, validateCharName } from "@/lib/validation";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { GUILD_MEMBER_LIMIT } from "@/lib/constants";
 
@@ -47,9 +48,10 @@ export async function POST(request) {
 
   try {
     const body = cleanMemberPayload(await request.json());
-    if (!body.char_name || !body.char_class) {
-      return NextResponse.json({ error: "Character name and class are required." }, { status: 400 });
-    }
+    const { error: charNameError } = validateCharName(body.char_name);
+    if (charNameError) return NextResponse.json({ error: charNameError }, { status: 400 });
+    const { error: charClassError } = validateCharClass(body.char_class);
+    if (charClassError) return NextResponse.json({ error: charClassError }, { status: 400 });
 
     const supabase = getSupabaseAdmin();
 

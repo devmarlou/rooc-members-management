@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { handleApiError, requireAdmin, unauthorized } from "@/lib/api";
 import { writeAuditLog } from "@/lib/auditLog";
 import { updateMemberCapOverrides } from "@/lib/auctionEngine";
+import { validateCharClass, validateCharName } from "@/lib/validation";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 const MEMBER_SELECT = "id,char_name,char_class,group_id,party_slot,is_officer,auction_priority_override,joined_at,notes,created_at,updated_at";
@@ -48,9 +49,10 @@ export async function PATCH(request, { params }) {
     const { id } = await params;
     const payload = await request.json();
     const body = cleanMemberPayload(payload);
-    if (!body.char_name || !body.char_class) {
-      return NextResponse.json({ error: "Character name and class are required." }, { status: 400 });
-    }
+    const { error: charNameError } = validateCharName(body.char_name);
+    if (charNameError) return NextResponse.json({ error: charNameError }, { status: 400 });
+    const { error: charClassError } = validateCharClass(body.char_class);
+    if (charClassError) return NextResponse.json({ error: charClassError }, { status: 400 });
 
     const supabase = getSupabaseAdmin();
     // beforeResult (used only for the audit-log snapshot below) and the update
