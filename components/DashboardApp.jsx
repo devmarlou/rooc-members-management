@@ -6131,6 +6131,10 @@ export default function DashboardApp({
     setAuctionItems([]);
     setAuctionState(null);
     setJobClasses([]);
+    // Every route renders the login screen in place when unauthenticated, so
+    // this isn't required to show it — but without it the URL stays on
+    // whatever page you logged out from (e.g. /member-stats) instead of "/".
+    router.replace("/");
   }
 
   async function loadAuditLogs({ force = false } = {}) {
