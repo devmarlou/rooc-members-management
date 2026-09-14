@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   createContext,
@@ -3916,7 +3917,10 @@ function ItemIcon({ itemKey, label = "Item" }) {
         aria-hidden="true"
       />
     );
-  return <img className="item-icon" src={src} alt="" title={label} />;
+  // Display size is fully controlled by the .item-icon CSS rules (16-22px per
+  // context, object-fit: contain) — width/height here just give next/image the
+  // source aspect ratio, they don't set the on-screen size.
+  return <Image className="item-icon" src={src} alt="" title={label} width={64} height={64} />;
 }
 
 function auctionPageItemOptions(auction, auctionItems) {
