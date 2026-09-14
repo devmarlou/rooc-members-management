@@ -44,27 +44,40 @@ export async function GET(request) {
     // members who haven't submitted anything yet. Selects every stats column
     // (not just the simplified table's few fields) so the admin UI's "all
     // stats" table view can render the full sheet without a second fetch.
-    const [membersResult, statsResult] = await Promise.all([
-      supabase.from("members").select("id,char_name,char_class").order("char_name", { ascending: true }),
+    //
+    // A registration's `members` row exists (and counts against the roster
+    // cap) as soon as it's submitted — it only sits at status='pending' on
+    // its linked app_users row until an admin approves it (see
+    // app/api/members/pending/[id]/route.js). This list should only surface
+    // a member once they're actually on the roster, so pending accounts are
+    // excluded the same way app/api/members/pending/route.js identifies them.
+    const [membersResult, pendingAccountsResult, statsResult] = await Promise.all([
+      supabase.from("members").select("id,char_name,char_class,account_id").order("char_name", { ascending: true }),
+      supabase.from("app_users").select("id").eq("status", "pending"),
       supabase
         .from("member_stats")
         .select(STATS_SELECT)
         .order("submitted_at", { ascending: false })
     ]);
     if (membersResult.error) throw membersResult.error;
+    if (pendingAccountsResult.error) throw pendingAccountsResult.error;
     if (statsResult.error) throw statsResult.error;
+
+    const pendingAccountIds = new Set((pendingAccountsResult.data || []).map((account) => account.id));
 
     const latestByMember = new Map();
     for (const row of statsResult.data || []) {
       if (!latestByMember.has(row.member_id)) latestByMember.set(row.member_id, row);
     }
 
-    const summary = (membersResult.data || []).map((member) => ({
-      member_id: member.id,
-      char_name: member.char_name,
-      char_class: member.char_class,
-      latest: latestByMember.get(member.id) || null
-    }));
+    const summary = (membersResult.data || [])
+      .filter((member) => !member.account_id || !pendingAccountIds.has(member.account_id))
+      .map((member) => ({
+        member_id: member.id,
+        char_name: member.char_name,
+        char_class: member.char_class,
+        latest: latestByMember.get(member.id) || null
+      }));
 
     return NextResponse.json({ stats: summary });
   } catch (error) {
