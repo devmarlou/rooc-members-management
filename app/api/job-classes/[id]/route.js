@@ -111,7 +111,7 @@ export async function DELETE(request, { params }) {
 
     if ((count || 0) > 0) {
       return NextResponse.json(
-        { error: `${count} member${count === 1 ? "" : "s"} use this class — reassign them first.` },
+        { error: `${count} member${count === 1 ? "" : "s"} use this class. Reassign them first.` },
         { status: 409 }
       );
     }
