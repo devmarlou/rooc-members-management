@@ -6335,7 +6335,15 @@ export default function DashboardApp({
       mustResetPassword: Boolean(data.mustResetPassword),
     };
     adminSessionCache = nextSession;
-    if (!nextSession.authenticated) dashboardDataCache.admin = null;
+    if (!nextSession.authenticated) {
+      dashboardDataCache.admin = null;
+      // accountCache/accountStatsCache are keyed by nothing but "whoever's
+      // logged in" — without this, logging out of one account and into
+      // another in the same tab briefly paints the previous account's cached
+      // profile/stats on /account until its own fetch resolves.
+      accountCache = null;
+      accountStatsCache = null;
+    }
     setSession(nextSession);
     if (data.authenticated && !data.mustResetPassword) {
       if (auditLogView) {
@@ -6509,6 +6517,11 @@ export default function DashboardApp({
     await api("/api/auth/logout", { method: "POST" });
     adminSessionCache = null;
     dashboardDataCache.admin = null;
+    // Same reasoning as checkSession's unauthenticated branch above: these are
+    // the logged-in user's own profile/stats, not shared data, so they must
+    // not survive into whichever account logs in next.
+    accountCache = null;
+    accountStatsCache = null;
     if (publicView) {
       // The public board stays visible for anonymous visitors after logging out —
       // just drop the real viewer identity, don't wipe the board itself.
