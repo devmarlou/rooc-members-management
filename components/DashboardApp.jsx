@@ -46,6 +46,8 @@ import {
   Layers,
   ExternalLink,
   Users,
+  Video,
+  Download,
 } from "lucide-react";
 import { colorGroups } from "@/components/data";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
@@ -146,6 +148,7 @@ const dashboardDataCache = { admin: null, public: null };
 let pendingAccountsCache = null; // { data, loadedAt }
 let memberStatsSummaryCache = null; // { data, loadedAt }
 let publicStatsBoardCache = null; // { data, loadedAt } — owned by PublicStatsBoardScreen
+let povLinksCache = null; // { data, loadedAt } — owned by PovListScreen
 let accountCache = null; // { data, loadedAt } — owned by AccountScreen
 let accountStatsCache = null; // { data, loadedAt } — owned by AccountScreen
 let auditLogsCache = null; // { data, loadedAt }
@@ -635,7 +638,7 @@ function DiscordRegistrationCompleteScreen() {
             <div className="wide">
               <h3 className="form-subsection-title">Initial stats submission</h3>
               <p className="field-note">
-                An initial stats snapshot is required to join the roster — the
+                An initial stats snapshot is required to join the roster. The
                 officers use this to place you correctly in auctions.
               </p>
             </div>
@@ -777,7 +780,7 @@ function LocalRegistrationCompleteScreen({ onBack }) {
           <h2 id="local-register-title">Create your account</h2>
           <p className="login-intro">
             Pick a username and password, and tell us your character so we can
-            add you to the roster. No Discord account is required — you can
+            add you to the roster. No Discord account is required. You can
             connect one later from your account page if you want to.
           </p>
           <form onSubmit={submit} className="login-form">
@@ -825,7 +828,7 @@ function LocalRegistrationCompleteScreen({ onBack }) {
             <div className="wide">
               <h3 className="form-subsection-title">Initial stats submission</h3>
               <p className="field-note">
-                An initial stats snapshot is required to join the roster — the
+                An initial stats snapshot is required to join the roster. The
                 officers use this to place you correctly in auctions.
               </p>
             </div>
@@ -979,11 +982,22 @@ function formatStatsTimestamp(value) {
   }).format(new Date(value));
 }
 
+// member_pov_links.recorded_date is a plain DATE column ("YYYY-MM-DD", no time
+// or timezone) — re-slicing the string avoids the off-by-one-day bug that
+// routing it through `new Date()`/Intl (like formatStatsTimestamp does) would
+// risk in a viewer whose local timezone is behind UTC.
+function formatDateOnly(value) {
+  if (!value) return "";
+  const [year, month, day] = String(value).split("-");
+  if (!year || !month || !day) return "";
+  return `${month}-${day}-${year}`;
+}
+
 // Rounding hides small differences that matter when comparing OLD vs UPDATED —
 // show the same precision the server stores instead.
 function formatStatDecimal(value) {
   const num = Number(value);
-  return Number.isFinite(num) ? num.toFixed(2) : "—";
+  return Number.isFinite(num) ? num.toFixed(2) : "-";
 }
 
 // Field lists mirror app/api/member-stats/route.js's CORE_NUMERIC_FIELDS /
@@ -1117,6 +1131,76 @@ const STATS_ALL_TABLE_GROUPS = [
 ];
 const STATS_ALL_TABLE_FIELDS = STATS_ALL_TABLE_GROUPS.flatMap((group) => group.fields);
 
+function csvCell(value) {
+  const str = String(value ?? "");
+  return /[",\r\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+}
+
+// Snapshot rows to include per member for a given export mode. "both" emits
+// two labeled rows per member (Updated, then Old) rather than doubling every
+// column, since each snapshot already carries its own timestamp/damage type.
+function statsSnapshotsForMode(row, mode) {
+  if (mode === "both") return [["Updated", row.latest], ["Old", row.previous]];
+  if (mode === "previous") return [["Old", row.previous]];
+  return [["Updated", row.latest]];
+}
+
+function statsCsvRow(charName, charClass, snapshotLabel, stats, includeSnapshotColumn) {
+  const damageType = stats?.damage_type === "magic" ? "Magic" : stats?.damage_type === "physical" ? "Physical" : "";
+  return [
+    charName,
+    charClass,
+    ...(includeSnapshotColumn ? [snapshotLabel] : []),
+    damageType,
+    stats ? formatStatsTimestamp(stats.submitted_at) : "",
+    ...STATS_ALL_TABLE_FIELDS.map((field) => {
+      if (!stats) return "";
+      if (field.key === "effective_pdef" || field.key === "effective_mdef") {
+        return formatStatDecimal(stats[field.key]);
+      }
+      return stats[field.key] ?? "";
+    }),
+    stats?.video_link || "",
+  ];
+}
+
+// Always exports the full roster passed in (not just a search-filtered
+// subset) so the file matches what's actually on the live sheet. `mode` is
+// "latest" (Updated only), "previous" (Old only), or "both" (Updated + Old,
+// two rows per member).
+function buildStatsCsv(summary, mode) {
+  const includeSnapshotColumn = mode === "both";
+  const header = [
+    "Member",
+    "Class",
+    ...(includeSnapshotColumn ? ["Submission"] : []),
+    "Damage type",
+    "Last submitted",
+    ...STATS_ALL_TABLE_FIELDS.map((field) => field.label),
+    "Proof video link",
+  ];
+  const rows = summary.flatMap((row) =>
+    statsSnapshotsForMode(row, mode).map(([label, stats]) =>
+      statsCsvRow(row.char_name, row.char_class, label, stats, includeSnapshotColumn),
+    ),
+  );
+  return [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
+}
+
+function downloadCsv(filename, csvContent) {
+  // Leading BOM so Excel (the primary target here) doesn't guess the wrong
+  // encoding and mangle anything non-ASCII.
+  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 // Mirrors the server-side formula in lib/memberStats.js's buildStatsRow — kept
 // in sync manually since this one runs client-side for a live preview only;
 // the server always recomputes and persists the authoritative value.
@@ -1163,6 +1247,7 @@ function StatsFormFields({ form, onChange }) {
               <input
                 type="number"
                 step="any"
+                inputMode="decimal"
                 value={form[field.key] ?? ""}
                 onChange={(event) => onChange(field.key, event.target.value)}
                 required
@@ -1177,11 +1262,11 @@ function StatsFormFields({ form, onChange }) {
         <div className="auction-form-items compact">
           <div className="stats-history-field">
             <span>Effective PDEF</span>
-            <strong>{effectivePdef === null ? "—" : formatStatDecimal(effectivePdef)}</strong>
+            <strong>{effectivePdef === null ? "-" : formatStatDecimal(effectivePdef)}</strong>
           </div>
           <div className="stats-history-field">
             <span>Effective MDEF</span>
-            <strong>{effectiveMdef === null ? "—" : formatStatDecimal(effectiveMdef)}</strong>
+            <strong>{effectiveMdef === null ? "-" : formatStatDecimal(effectiveMdef)}</strong>
           </div>
         </div>
       </div>
@@ -1195,6 +1280,7 @@ function StatsFormFields({ form, onChange }) {
                 <input
                   type="number"
                   step="any"
+                  inputMode="decimal"
                   value={form[field.key] ?? ""}
                   onChange={(event) => onChange(field.key, event.target.value)}
                 />
@@ -1231,7 +1317,11 @@ function StatsFormFields({ form, onChange }) {
   );
 }
 
-function MemberStatsForm({ charClass, onCancel, onSave, busy }) {
+// Inline on AccountScreen (not a modal) so it's as easy to find as the POV
+// submission form on PovListScreen. onSave should resolve to true on a
+// successful submit, false on failure, matching PovLinkSubmitForm's contract
+// so the form only clears itself once the submission actually went through.
+function MemberStatsForm({ charClass, onSave, busy }) {
   // AccountScreen (the only caller) renders for member-role sessions, which
   // never load the admin bootstrap — so JobClassesContext is empty here.
   // Fetch the public bootstrap directly for the class list instead, same as
@@ -1256,9 +1346,10 @@ function MemberStatsForm({ charClass, onCancel, onSave, busy }) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault();
-    onSave(form);
+    const ok = await onSave(form);
+    if (ok) setForm({ video_link: "", char_class: charClass || "" });
   }
 
   return (
@@ -1283,9 +1374,6 @@ function MemberStatsForm({ charClass, onCancel, onSave, busy }) {
       </label>
       <StatsFormFields form={form} onChange={update} />
       <div className="form-actions wide">
-        <button type="button" className="ghost-button" onClick={onCancel}>
-          Cancel
-        </button>
         <button className="primary-button" disabled={busy}>
           {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
           Submit stats
@@ -1334,7 +1422,7 @@ function StatsHistoryCard({ row, label, trends }) {
         </div>
         <div className="stats-history-meta">
           <span className="field-note">
-            {row.damage_type === "magic" ? "Magic" : row.damage_type === "physical" ? "Physical" : "—"}
+            {row.damage_type === "magic" ? "Magic" : row.damage_type === "physical" ? "Physical" : "-"}
           </span>
           <a
             className="ghost-button"
@@ -1396,8 +1484,8 @@ function AccountScreen() {
   const [loading, setLoading] = useState(!accountCache);
   const [stats, setStats] = useState(() => accountStatsCache?.data || []);
   const [statsLoading, setStatsLoading] = useState(!accountStatsCache);
-  const [statsError, setStatsError] = useState("");
-  const [formOpen, setFormOpen] = useState(false);
+  const [statsNotice, setStatsNotice] = useState(null);
+  const [statsFormCollapsed, setStatsFormCollapsed] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [linkNotice, setLinkNotice] = useState(null);
   const [nameEditing, setNameEditing] = useState(false);
@@ -1464,7 +1552,7 @@ function AccountScreen() {
         accountStatsCache = { data: data.stats || [], loadedAt: Date.now() };
         setStats(accountStatsCache.data);
       })
-      .catch((err) => setStatsError(err.message))
+      .catch((err) => setStatsNotice({ type: "error", message: err.message }))
       .finally(() => setStatsLoading(false));
   }
 
@@ -1474,13 +1562,13 @@ function AccountScreen() {
 
   async function submitStats(payload) {
     setSubmitting(true);
-    setStatsError("");
+    setStatsNotice(null);
     try {
       await api("/api/member-stats", {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      setFormOpen(false);
+      setStatsNotice({ type: "success", message: "Stats submitted." });
       // Data just changed server-side — invalidate the caches so loadStats/
       // loadAccount actually refetch instead of re-serving a still-fresh
       // pre-submission snapshot.
@@ -1489,8 +1577,10 @@ function AccountScreen() {
       loadStats();
       // A submission can also change char_class — refresh so "Your account" reflects it.
       loadAccount();
+      return true;
     } catch (err) {
-      setStatsError(err.message);
+      setStatsNotice({ type: "error", message: err.message });
+      return false;
     } finally {
       setSubmitting(false);
     }
@@ -1681,8 +1771,8 @@ function AccountScreen() {
                   onChange={(event) => toggleShowStatsPublicly(event.target.checked)}
                 />
                 <span>
-                  Show in Public Stats board — lets other logged-in members see your
-                  latest submitted stats at /public-stats
+                  Show in Public Stats board. Lets other logged-in members see
+                  your latest submitted stats at /public-stats.
                 </span>
               </label>
             </>
@@ -1692,61 +1782,72 @@ function AccountScreen() {
         </div>
       </section>
       {account.member && (
-        <section className="content-section" aria-label="Your stats">
-          <div className="section-title-row">
-            <div>
-              <h2>Your stats</h2>
-              <p className="section-description">
-                Submit your weekly gear/combat stats. The last 2 submissions
-                are kept.
-              </p>
-            </div>
-            <div className="section-actions">
-              <button className="primary-button" onClick={() => setFormOpen(true)}>
-                <Plus size={16} />
-                Submit new stats
-              </button>
-            </div>
-          </div>
-          {statsError && (
-            <div className="alert-panel">
-              <AlertTriangle size={17} />
-              <span>{statsError}</span>
-              <button onClick={() => setStatsError("")}>Dismiss</button>
-            </div>
-          )}
-          {statsLoading ? (
-            <div className="loading-panel">
-              <Loader2 className="spin" size={20} />
-              Loading stats
-            </div>
-          ) : stats.length === 0 ? (
-            <div className="empty-panel">
-              You haven&apos;t submitted any stats yet.
-            </div>
-          ) : (
-            <div className="stats-history">
-              {stats.map((row, index) => (
-                <StatsHistoryCard
-                  row={row}
-                  label={index === 0 ? "updated" : "old"}
-                  trends={statTrends}
-                  key={row.id}
+        <>
+          <section className="content-section stats-submit-panel" aria-label="Submit new stats">
+            <button
+              type="button"
+              className="stats-submit-toggle"
+              onClick={() => setStatsFormCollapsed((current) => !current)}
+              aria-expanded={!statsFormCollapsed}
+            >
+              <span className="stats-submit-toggle-heading">
+                <p className="eyebrow">weekly stats</p>
+                <h2>Submit new stats</h2>
+                <p>Your last 2 submissions are kept.</p>
+              </span>
+              <span className="ghost-button stats-submit-toggle-button">
+                {statsFormCollapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+                {statsFormCollapsed ? "Update stats" : "Collapse"}
+              </span>
+            </button>
+            {!statsFormCollapsed && (
+              <>
+                {statsNotice && (
+                  <div className={statsNotice.type === "error" ? "alert-panel" : "success-panel"}>
+                    {statsNotice.type === "error" ? <AlertTriangle size={17} /> : <Check size={17} />}
+                    <span>{statsNotice.message}</span>
+                    <button onClick={() => setStatsNotice(null)}>Dismiss</button>
+                  </div>
+                )}
+                <MemberStatsForm
+                  charClass={account.member.char_class}
+                  onSave={submitStats}
+                  busy={submitting}
                 />
-              ))}
+              </>
+            )}
+          </section>
+          <section className="content-section" aria-label="Your stats">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">history</p>
+                <h2>Your stats</h2>
+                <p>Your last 2 submissions.</p>
+              </div>
             </div>
-          )}
-        </section>
-      )}
-      {formOpen && (
-        <Modal title="Submit new stats" onClose={() => setFormOpen(false)} size="lg">
-          <MemberStatsForm
-            charClass={account.member?.char_class}
-            onCancel={() => setFormOpen(false)}
-            onSave={submitStats}
-            busy={submitting}
-          />
-        </Modal>
+            {statsLoading ? (
+              <div className="loading-panel">
+                <Loader2 className="spin" size={20} />
+                Loading stats
+              </div>
+            ) : stats.length === 0 ? (
+              <div className="empty-panel">
+                You haven&apos;t submitted any stats yet.
+              </div>
+            ) : (
+              <div className="stats-history">
+                {stats.map((row, index) => (
+                  <StatsHistoryCard
+                    row={row}
+                    label={index === 0 ? "updated" : "old"}
+                    trends={statTrends}
+                    key={row.id}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        </>
       )}
     </>
   );
@@ -2055,7 +2156,7 @@ function MemberForm({
             update("auction_priority_override", event.target.checked)
           }
         />
-        <span>Feather priority — receives L&D and T&S in every auction</span>
+        <span>Feather priority. Receives L&D and T&S in every auction.</span>
       </label>
       {initial?.id &&
         auctionState?.activeRound &&
@@ -2192,7 +2293,7 @@ function RosterLimitForm({ current, minimum, maximum, onCancel, onSave }) {
       </label>
       <p className="field-note">
         Must be between the current roster count ({minimum}) and the guild&apos;s hard
-        cap ({maximum}) — {maximum} is the max the game allows, so it can&apos;t be
+        cap ({maximum}). {maximum} is the max the game allows, so it can&apos;t be
         raised any higher.
       </p>
       <div className="form-actions">
@@ -2387,10 +2488,13 @@ function MemberStatsAdminPanel({
   onViewMember,
   eyebrow = "weekly submissions",
   title = "Member stats",
-  description = "Latest self-reported gear/combat stats per member — reference only, not used by the auction system.",
+  description = "Latest self-reported gear/combat stats per member. Reference only, not used by the auction system.",
+  allowExport = false,
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState("all");
+  const [exportMode, setExportMode] = useState("both");
+  const [hoveredField, setHoveredField] = useState(null);
   const normalizedQuery = query.trim().toLowerCase();
   const filtered = normalizedQuery
     ? summary.filter(
@@ -2400,6 +2504,14 @@ function MemberStatsAdminPanel({
       )
     : summary;
 
+  function handleExport() {
+    // Always exports the full roster, ignoring any active search filter, so
+    // the file always reflects everyone (up to the guild's member cap).
+    const csv = buildStatsCsv(summary, exportMode);
+    const modeLabel = exportMode === "both" ? "updated-and-old" : exportMode === "previous" ? "old" : "updated";
+    downloadCsv(`member-stats-${modeLabel}-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+  }
+
   return (
     <section className="content-section" aria-label={title}>
       <div className="section-heading">
@@ -2408,38 +2520,58 @@ function MemberStatsAdminPanel({
           <h2>{title}</h2>
           <p>{description}</p>
         </div>
-        <div className="section-actions">
-          <div className="view-toggle" aria-label="Stats table view">
-            <button
-              type="button"
-              className={view === "simplified" ? "active" : ""}
-              onClick={() => setView("simplified")}
-              aria-pressed={view === "simplified"}
-            >
-              <List size={15} />
-              Simplified
-            </button>
-            <button
-              type="button"
-              className={view === "all" ? "active" : ""}
-              onClick={() => setView("all")}
-              aria-pressed={view === "all"}
-            >
-              <Table2 size={15} />
-              All stats
-            </button>
-          </div>
-          {summary.length > 5 && (
-            <label className="search-box">
-              <Search size={15} />
-              <input
-                aria-label="Search members"
-                placeholder="Search name or class"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </label>
+        <div className="stats-panel-actions">
+          {allowExport && (
+            <div className="export-controls">
+              <span className="field-note">Exports all {summary.length} members</span>
+              <select
+                aria-label="What to include in the export"
+                value={exportMode}
+                onChange={(event) => setExportMode(event.target.value)}
+              >
+                <option value="both">Updated + Old</option>
+                <option value="latest">Updated only</option>
+                <option value="previous">Old only</option>
+              </select>
+              <button type="button" className="ghost-button" onClick={handleExport} disabled={summary.length === 0}>
+                <Download size={15} />
+                Export CSV
+              </button>
+            </div>
           )}
+          <div className="section-actions">
+            <div className="view-toggle" aria-label="Stats table view">
+              <button
+                type="button"
+                className={view === "simplified" ? "active" : ""}
+                onClick={() => setView("simplified")}
+                aria-pressed={view === "simplified"}
+              >
+                <List size={15} />
+                Simplified
+              </button>
+              <button
+                type="button"
+                className={view === "all" ? "active" : ""}
+                onClick={() => setView("all")}
+                aria-pressed={view === "all"}
+              >
+                <Table2 size={15} />
+                All stats
+              </button>
+            </div>
+            {summary.length > 5 && (
+              <label className="search-box">
+                <Search size={15} />
+                <input
+                  aria-label="Search members"
+                  placeholder="Search name or class"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </label>
+            )}
+          </div>
         </div>
       </div>
       {loading ? (
@@ -2463,7 +2595,6 @@ function MemberStatsAdminPanel({
               <tr>
                 <th rowSpan={2} className="stats-sticky-col">Member</th>
                 <th rowSpan={2}>Class</th>
-                <th rowSpan={2}>Damage type</th>
                 <th rowSpan={2}>Last submitted</th>
                 {STATS_ALL_TABLE_GROUPS.map((group) => (
                   <th key={group.title} colSpan={group.fields.length} className="stats-group-header">
@@ -2475,7 +2606,14 @@ function MemberStatsAdminPanel({
               </tr>
               <tr>
                 {STATS_ALL_TABLE_FIELDS.map((field) => (
-                  <th key={field.key}>{field.label}</th>
+                  <th
+                    key={field.key}
+                    className={hoveredField === field.key ? "stats-col-hover" : ""}
+                    onMouseEnter={() => setHoveredField(field.key)}
+                    onMouseLeave={() => setHoveredField(null)}
+                  >
+                    {field.label}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -2485,19 +2623,7 @@ function MemberStatsAdminPanel({
                   <td className="stats-sticky-col">
                     <strong>{row.char_name}</strong>
                   </td>
-                  <td>
-                    <span className="roster-class-label">
-                      <ClassIcon name={row.char_class} size={24} />
-                      {row.char_class}
-                    </span>
-                  </td>
-                  <td>
-                    {row.latest ? (
-                      row.latest.damage_type === "magic" ? "Magic" : row.latest.damage_type === "physical" ? "Physical" : "—"
-                    ) : (
-                      <span className="table-secondary">No submissions</span>
-                    )}
-                  </td>
+                  <td>{row.char_class}</td>
                   <td>
                     {row.latest ? (
                       formatStatsTimestamp(row.latest.submitted_at)
@@ -2506,7 +2632,12 @@ function MemberStatsAdminPanel({
                     )}
                   </td>
                   {STATS_ALL_TABLE_FIELDS.map((field) => (
-                    <td key={field.key}>
+                    <td
+                      key={field.key}
+                      className={hoveredField === field.key ? "stats-col-hover" : ""}
+                      onMouseEnter={() => setHoveredField(field.key)}
+                      onMouseLeave={() => setHoveredField(null)}
+                    >
                       {!row.latest
                         ? "-"
                         : field.key === "effective_pdef" || field.key === "effective_mdef"
@@ -2526,7 +2657,7 @@ function MemberStatsAdminPanel({
                         View
                       </a>
                     ) : (
-                      <span className="table-secondary">—</span>
+                      <span className="table-secondary">-</span>
                     )}
                   </td>
                   <td>
@@ -2562,6 +2693,7 @@ function MemberStatsAdminPanel({
                 <th>Last submitted</th>
                 <th>Eff. PDEF</th>
                 <th>Eff. MDEF</th>
+                <th>Proof</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -2589,6 +2721,21 @@ function MemberStatsAdminPanel({
                   </td>
                   <td>
                     {row.latest ? formatStatDecimal(row.latest.effective_mdef) : "-"}
+                  </td>
+                  <td>
+                    {row.latest?.video_link ? (
+                      <a
+                        className="ghost-button"
+                        href={ensureAbsoluteUrl(row.latest.video_link)}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                      >
+                        <ExternalLink size={13} />
+                        View
+                      </a>
+                    ) : (
+                      <span className="table-secondary">-</span>
+                    )}
                   </td>
                   <td>
                     <button
@@ -2689,9 +2836,233 @@ function PublicStatsBoardScreen() {
         onViewMember={viewMember}
         eyebrow="guild board"
         title="Public stats"
-        description="Stats from members who've opted in to share with the rest of the guild — check the box on your Account page to join this list."
+        description="Stats from members who've opted in to share with the rest of the guild. Check the box on your Account page to join this list."
       />
       {detail && <MemberStatsDetailView data={detail} onClose={() => setDetail(null)} />}
+    </>
+  );
+}
+
+// Read-only table used by PovListScreen. No simplified/all toggle or
+// per-member history drill-down like MemberStatsAdminPanel has, since a POV
+// entry is just link/title/date, not a set of comparable numeric stats.
+function PovListPanel({ list, loading }) {
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLowerCase();
+  const filtered = normalizedQuery
+    ? list.filter(
+        (row) =>
+          row.char_name.toLowerCase().includes(normalizedQuery) ||
+          row.char_class.toLowerCase().includes(normalizedQuery),
+      )
+    : list;
+
+  return (
+    <section className="content-section" aria-label="POV List">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">guild pov list</p>
+          <h2>POV List</h2>
+          <p>Every member&apos;s latest POV recording link.</p>
+        </div>
+        {list.length > 5 && (
+          <div className="section-actions">
+            <label className="search-box">
+              <Search size={15} />
+              <input
+                aria-label="Search members"
+                placeholder="Search name or class"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </label>
+          </div>
+        )}
+      </div>
+      {loading ? (
+        <div className="loading-panel">
+          <Loader2 className="spin" size={20} />
+          Loading POV links
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="empty-panel">
+          {query ? <>No members match &ldquo;{query}&rdquo;.</> : "No POV links submitted yet."}
+        </div>
+      ) : (
+        <div className="roster-table-wrap" tabIndex={0} role="region" aria-label="POV links table">
+          <table className="roster-table">
+            <thead>
+              <tr>
+                <th>Member</th>
+                <th>Class</th>
+                <th>Title</th>
+                <th>Date recorded</th>
+                <th>Link</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((row) => (
+                <tr key={row.member_id}>
+                  <td>
+                    <strong>{row.char_name}</strong>
+                  </td>
+                  <td>
+                    <span className="roster-class-label">
+                      <ClassIcon name={row.char_class} size={24} />
+                      {row.char_class}
+                    </span>
+                  </td>
+                  <td>{row.latest ? row.latest.title : <span className="table-secondary">No submissions</span>}</td>
+                  <td>
+                    {row.latest ? (
+                      formatDateOnly(row.latest.recorded_date)
+                    ) : (
+                      <span className="table-secondary">No submissions</span>
+                    )}
+                  </td>
+                  <td>
+                    {row.latest ? (
+                      <a className="ghost-button" href={row.latest.link} target="_blank" rel="noreferrer noopener">
+                        <ExternalLink size={13} />
+                        View
+                      </a>
+                    ) : (
+                      <span className="table-secondary">-</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// Self-service submit form for the caller's own POV link — add-only by
+// design (no edit/delete UI): a new submission naturally rolls the oldest of
+// the kept 2 rows off via enforceLatestNRows, same as member_stats.
+function PovLinkSubmitForm({ onSave, busy }) {
+  const [form, setForm] = useState({ title: "", link: "", recorded_date: "" });
+
+  function update(key, value) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    const ok = await onSave(form);
+    if (ok) setForm({ title: "", link: "", recorded_date: "" });
+  }
+
+  return (
+    <form onSubmit={submit} className="form-grid">
+      <label>
+        <span>Title</span>
+        <input value={form.title} onChange={(event) => update("title", event.target.value)} maxLength={80} required />
+      </label>
+      <label>
+        <span>Link</span>
+        <input
+          value={form.link}
+          onChange={(event) => update("link", event.target.value)}
+          placeholder="https://..."
+          required
+        />
+      </label>
+      <label>
+        <span>Date recorded</span>
+        <input
+          type="date"
+          value={form.recorded_date}
+          onChange={(event) => update("recorded_date", event.target.value)}
+          required
+        />
+      </label>
+      <div className="form-actions wide">
+        <button className="primary-button" disabled={busy}>
+          {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
+          Submit POV link
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// Self-contained peer view, same shape as AccountScreen/PublicStatsBoardScreen.
+// Own fetch, own state, reachable by every role (checkSession lets the member
+// role in without the usual /account redirect). POV is always public within
+// the app, so this shows everyone's latest entry, no opt-in.
+function PovListScreen() {
+  const [list, setList] = useState(() => povLinksCache?.data || []);
+  const [loading, setLoading] = useState(!povLinksCache);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  function refresh() {
+    return api("/api/pov-links")
+      .then((data) => {
+        povLinksCache = { data: data.links || [], loadedAt: Date.now() };
+        setList(povLinksCache.data);
+      })
+      .catch((err) => setError(err.message));
+  }
+
+  useEffect(() => {
+    const cached = povLinksCache;
+    const cacheIsFresh = cached && Date.now() - cached.loadedAt < DASHBOARD_CACHE_MAX_AGE_MS;
+    if (cached) setList(cached.data);
+    if (cacheIsFresh) return;
+    if (!cached) setLoading(true);
+    refresh().finally(() => setLoading(false));
+  }, []);
+
+  async function submit(form) {
+    setSaving(true);
+    setNotice(null);
+    try {
+      await api("/api/pov-links", { method: "POST", body: JSON.stringify(form) });
+      setNotice({ type: "success", message: "POV link submitted." });
+      povLinksCache = null;
+      await refresh();
+      return true;
+    } catch (err) {
+      setNotice({ type: "error", message: err.message });
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      {error && (
+        <div className="alert-panel">
+          <AlertTriangle size={17} />
+          <span>{error}</span>
+          <button onClick={() => setError("")}>Dismiss</button>
+        </div>
+      )}
+      <section className="content-section" aria-label="Submit a POV link">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">share your pov</p>
+            <h2>Submit a POV link</h2>
+            <p>Link, title, and the date it was recorded. Your last 2 submissions are kept.</p>
+          </div>
+        </div>
+        {notice && (
+          <div className={notice.type === "error" ? "alert-panel" : "success-panel"}>
+            {notice.type === "error" ? <AlertTriangle size={17} /> : <Check size={17} />}
+            <span>{notice.message}</span>
+            <button onClick={() => setNotice(null)}>Dismiss</button>
+          </div>
+        )}
+        <PovLinkSubmitForm onSave={submit} busy={saving} />
+      </section>
+      <PovListPanel list={list} loading={loading} />
     </>
   );
 }
@@ -2715,6 +3086,13 @@ function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role 
             shortLabel: "Stats",
             icon: Users,
             page: "public-stats",
+          },
+          {
+            href: "/pov-list",
+            label: "POV List",
+            shortLabel: "POV",
+            icon: Video,
+            page: "pov-list",
           },
         ]
       : [
@@ -2762,6 +3140,13 @@ function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role 
             shortLabel: "Public",
             icon: Users,
             page: "public-stats",
+          },
+          {
+            href: "/pov-list",
+            label: "POV List",
+            shortLabel: "POV",
+            icon: Video,
+            page: "pov-list",
           },
           {
             href: "/job-classes",
@@ -5768,6 +6153,7 @@ export default function DashboardApp({
   auditLogView = false,
   accountView = false,
   publicStatsView = false,
+  povListView = false,
   adminPage = "members",
 }) {
   const router = useRouter();
@@ -5945,14 +6331,15 @@ export default function DashboardApp({
     if (data.authenticated && !data.mustResetPassword) {
       if (auditLogView) {
         if (data.role === "super_admin") loadAuditLogs();
-      } else if (accountView || publicStatsView) {
-        // AccountScreen / PublicStatsBoardScreen fetch their own data —
-        // reachable by every role, so nothing here to gate or preload. Job
-        // classes are the exception: both render <ClassIcon>, which reads
-        // JobClassesContext (fed by the `jobClasses` state below), and that
-        // state only ever gets populated by loadData() — skipped for these
-        // two views — so without this, icons silently render blank for any
-        // member who never loads an admin/public bootstrap page.
+      } else if (accountView || publicStatsView || povListView) {
+        // AccountScreen / PublicStatsBoardScreen / PovListScreen all fetch
+        // their own data. Reachable by every role, so nothing here to gate
+        // or preload. Job classes are the exception: all of them render
+        // <ClassIcon>, which reads JobClassesContext (fed by the
+        // `jobClasses` state below), and that state only ever gets
+        // populated by loadData(), skipped for these views. Without this,
+        // icons silently render blank for any member who never loads an
+        // admin/public bootstrap page.
         const cachedJobClasses = jobClassesCache;
         const jobClassesFresh =
           cachedJobClasses && Date.now() - cachedJobClasses.loadedAt < DASHBOARD_CACHE_MAX_AGE_MS;
@@ -6977,18 +7364,23 @@ export default function DashboardApp({
             <AccountScreen />
           ) : publicStatsView ? (
             <PublicStatsBoardScreen />
+          ) : povListView ? (
+            <PovListScreen />
           ) : !publicView && session.role === "member" ? (
             <div className="alert-panel">
               <AlertTriangle size={17} />
               <span>
                 Member accounts can only view the public auction board, the
-                public stats board, and their account page.
+                public stats board, the POV list, and their account page.
               </span>
               <Link className="ghost-button" href="/public">
                 Auction view
               </Link>
               <Link className="ghost-button" href="/public-stats">
                 Public stats
+              </Link>
+              <Link className="ghost-button" href="/pov-list">
+                POV List
               </Link>
               <Link className="ghost-button" href="/account">
                 Account
@@ -7172,6 +7564,7 @@ export default function DashboardApp({
                           summary={memberStatsSummary}
                           loading={memberStatsSummaryLoading}
                           onViewMember={viewMemberStats}
+                          allowExport
                         />
                       )}
 

@@ -73,7 +73,11 @@
 .guild-console .topbar { background: #141e2c; border-color: var(--line); backdrop-filter: none; }
 .guild-console .topbar::before { background: #478beb; height: 3px; }
 .guild-console .topbar-announcement { background: #202e40; border-color: var(--line); color: var(--acc-400); }
-.guild-console :is(.topbar-inner, .dashboard) { width: min(1600px, calc(100% - 64px)); }
+/* Fills wide/ultrawide monitors instead of capping at a fixed page width —
+   tables (which benefit most from the extra room) size off this container.
+   Kept a soft ceiling so lines don't run edge-to-edge on super-ultrawide
+   (32:9) displays; raise it further if that still feels capped. */
+.guild-console :is(.topbar-inner, .dashboard) { width: min(2400px, calc(100% - 64px)); }
 .guild-console .topbar-inner { min-height: 76px; }
 .guild-console .brand-mark { background: #253e61; color: #a9ceff; border: 1px solid #41628d; box-shadow: none; }
 .guild-console .brand-meta { margin-top: 2px; gap: 10px; }
@@ -197,13 +201,16 @@
 .guild-console .roster-table.stats-all-table { width: max-content; min-width: 100%; }
 .guild-console .roster-table th { position: sticky; top: 0; z-index: 1; background: #223148; color: #cedcee; }
 .guild-console .roster-table :is(th, td) { padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-/* Two-row grouped header (see STATS_ALL_TABLE_GROUPS) doesn't stack cleanly
-   with a single shared `top: 0` — vertical header-pinning wasn't the actual
-   ask here, so it's dropped for this table; only the Member column pins
-   (horizontally) so a row stays identifiable while scrolling through ~35
-   stat columns. */
-.guild-console .stats-all-table thead th { position: static; }
+/* Two-row grouped header (see STATS_ALL_TABLE_GROUPS): both rows pin
+   vertically so the header stays visible while scrolling through up to 80
+   rows. Row 1 (group titles + the rowSpan'd Member/Class/etc. cells) sticks
+   at top:0; row 2 (per-field labels) sticks right below it, offset by row
+   1's fixed height so the two rows stack instead of overlapping. */
+.guild-console .stats-all-table thead th { position: sticky; z-index: 2; background: #223148; }
+.guild-console .stats-all-table thead tr:first-child th { top: 0; }
+.guild-console .stats-all-table thead tr:last-child th { top: 27px; }
 .guild-console .stats-all-table .stats-group-header {
+  height: 27px;
   background: #1b2940;
   color: #9fc1f2;
   font-size: 11px !important;
@@ -223,6 +230,53 @@
 .guild-console .stats-all-table thead th.stats-sticky-col { background: #223148; z-index: 3; }
 .guild-console .stats-all-table tbody tr:nth-child(even) td.stats-sticky-col { background: #1e2937; }
 .guild-console .stats-all-table tbody tr:hover td.stats-sticky-col { background: #1d2e44; }
+/* Tighter padding/font than the default roster table so ~35 columns need less
+   horizontal scrolling to read as one screen. */
+.guild-console .stats-all-table :is(th, td) { padding: 6px 9px; font-size: 12px !important; }
+.guild-console .stats-all-table .roster-class-label { gap: 5px; }
+.guild-console .stats-all-table .table-secondary { font-size: 12px !important; }
+/* Hovering a stat cell (or its header) highlights every cell in that column,
+   alongside the existing full-row hover highlight. */
+.guild-console .stats-all-table .stats-col-hover { background: rgba(71, 139, 235, 0.22) !important; }
+.guild-console .export-controls { display: flex; align-items: center; gap: 8px; }
+.guild-console .export-controls select { min-height: 34px; }
+.guild-console .export-controls button { white-space: nowrap; }
+.guild-console .stats-panel-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+/* Stats-submission CTA on the Account page: an amber-tinted border/glow so
+   it reads as "the button to update stats" at a glance, collapsed by
+   default so it doesn't compete with the stats history below it. The whole
+   header is one <button> (not just an icon) so the entire row is clickable,
+   not just a small toggle in the corner. */
+.guild-console .stats-submit-panel {
+  border-color: rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.06);
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.12);
+}
+.guild-console .stats-submit-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.guild-console .stats-submit-toggle-heading { display: block; }
+.guild-console .stats-submit-toggle-button {
+  flex: 0 0 auto;
+  border-color: rgba(245, 158, 11, 0.55);
+  color: var(--amber-2);
+}
+.guild-console .stats-submit-toggle:hover .stats-submit-toggle-button {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(245, 158, 11, 0.75);
+}
 .guild-console .roster-table tbody tr:hover { background: #1d2e44; }
 .guild-console .roster-class-label { display: flex; align-items: center; gap: 8px; }
 .guild-console .roster-table .table-secondary { color: var(--muted); font-size: 14px !important; }
@@ -382,7 +436,7 @@
 .sidebar-note { margin: auto 8px 4px; color: var(--muted); font-size: 14px !important; line-height: 1.55; }
 .admin-workspace .topbar { position: sticky; top: 0; z-index: 5; }
 .admin-workspace .topbar-inner.compact { min-height: 64px; justify-content: flex-end; }
-.admin-workspace .dashboard { width: min(1600px, calc(100% - 64px)); }
+.admin-workspace .dashboard { width: min(2400px, calc(100% - 64px)); }
 .admin-workspace .footer-strip { width: 100%; }
 
 @media (max-width: 1100px) {
@@ -424,6 +478,11 @@
   .guild-console .dashboard > .content-section:first-child { margin-top: 0; }
   .guild-console .section-title-row { flex-wrap: wrap; gap: 12px; }
   .guild-console .section-actions { justify-content: flex-start; }
+  .guild-console .stats-panel-actions { align-items: stretch; width: 100%; }
+  /* Stack (rather than wrap) so the button never breaks across 2 lines --
+     each control gets its own full-width row instead. */
+  .guild-console .export-controls { flex-direction: column; align-items: stretch; }
+  .guild-console .export-controls button { width: 100%; justify-content: center; }
   .guild-console .party-grid { grid-template-columns: 1fr; }
   .guild-console .toolbar { flex-wrap: wrap; }
   .guild-console .toolbar .search-box { flex-basis: 100%; }
