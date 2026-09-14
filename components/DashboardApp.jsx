@@ -138,6 +138,12 @@ const AUCTION_PAGE_ITEM_ORDER = {
 const SHARED_FEATHER_PAGE_KEYS = new Set(["feather_ld", "feather_ts"]);
 let adminSessionCache = null;
 const dashboardDataCache = { admin: null, public: null };
+// Module-level (not React state) so pending approvals / member stats survive
+// a route change — every app/**/page.js mounts a fresh DashboardApp instance,
+// and without this, navigating between admin pages re-fetched both lists on
+// every single navigation instead of only when their cache goes stale.
+let pendingAccountsCache = null; // { data, loadedAt }
+let memberStatsSummaryCache = null; // { data, loadedAt }
 
 function dashboardCacheKey(publicView) {
   return publicView ? "public" : "admin";
@@ -5637,10 +5643,10 @@ export default function DashboardApp({
   const [finalizePreview, setFinalizePreview] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditLogsLoading, setAuditLogsLoading] = useState(false);
-  const [pendingAccounts, setPendingAccounts] = useState([]);
+  const [pendingAccounts, setPendingAccounts] = useState(() => pendingAccountsCache?.data || []);
   const [pendingActionId, setPendingActionId] = useState(null);
   const [jobClassModal, setJobClassModal] = useState(null);
-  const [memberStatsSummary, setMemberStatsSummary] = useState([]);
+  const [memberStatsSummary, setMemberStatsSummary] = useState(() => memberStatsSummaryCache?.data || []);
   const [memberStatsSummaryLoading, setMemberStatsSummaryLoading] = useState(false);
   const [memberStatsDetail, setMemberStatsDetail] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -5952,10 +5958,15 @@ export default function DashboardApp({
     }
   }
 
-  async function loadPendingAccounts() {
+  async function loadPendingAccounts({ force = false } = {}) {
+    const cached = pendingAccountsCache;
+    const cacheIsFresh = cached && Date.now() - cached.loadedAt < DASHBOARD_CACHE_MAX_AGE_MS;
+    if (cached) setPendingAccounts(cached.data);
+    if (!force && cacheIsFresh) return;
     try {
       const data = await api("/api/members/pending");
-      setPendingAccounts(data.pending || []);
+      pendingAccountsCache = { data: data.pending || [], loadedAt: Date.now() };
+      setPendingAccounts(pendingAccountsCache.data);
     } catch (err) {
       setError(err.message);
     }
@@ -5973,8 +5984,13 @@ export default function DashboardApp({
           ? `Approved ${account.member?.char_name || account.username}`
           : `Rejected ${account.member?.char_name || account.username}`,
       );
-      await loadPendingAccounts();
-      if (action === "approve") loadData();
+      await loadPendingAccounts({ force: true });
+      if (action === "approve") {
+        loadData();
+        // Approval moves a member off the pending list and onto the roster,
+        // which changes membership in the stats summary's excluded set.
+        loadMemberStatsSummary({ force: true });
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -6441,11 +6457,18 @@ export default function DashboardApp({
     });
   }
 
-  async function loadMemberStatsSummary() {
-    setMemberStatsSummaryLoading(true);
+  async function loadMemberStatsSummary({ force = false } = {}) {
+    const cached = memberStatsSummaryCache;
+    const cacheIsFresh = cached && Date.now() - cached.loadedAt < DASHBOARD_CACHE_MAX_AGE_MS;
+    if (cached) setMemberStatsSummary(cached.data);
+    if (!force && cacheIsFresh) return;
+    // Only show the loading state on an actual network fetch — not when
+    // serving cached data on a route remount (avoids a visible reload flash).
+    if (!cached) setMemberStatsSummaryLoading(true);
     try {
       const data = await api("/api/member-stats");
-      setMemberStatsSummary(data.stats || []);
+      memberStatsSummaryCache = { data: data.stats || [], loadedAt: Date.now() };
+      setMemberStatsSummary(memberStatsSummaryCache.data);
     } catch (err) {
       setError(err.message);
     } finally {
