@@ -146,6 +146,14 @@ const dashboardDataCache = { admin: null, public: null };
 let pendingAccountsCache = null; // { data, loadedAt }
 let memberStatsSummaryCache = null; // { data, loadedAt }
 let publicStatsBoardCache = null; // { data, loadedAt } — owned by PublicStatsBoardScreen
+let accountCache = null; // { data, loadedAt } — owned by AccountScreen
+let accountStatsCache = null; // { data, loadedAt } — owned by AccountScreen
+let auditLogsCache = null; // { data, loadedAt }
+// /account and /public-stats skip loadData() entirely (see checkSession), so
+// JobClassesContext would otherwise stay empty for them and ClassIcon would
+// render blank placeholders — this keeps just the job class list available
+// without pulling in the rest of the admin/public bootstrap.
+let jobClassesCache = null; // { data, loadedAt }
 
 function dashboardCacheKey(publicView) {
   return publicView ? "public" : "admin";
@@ -1368,11 +1376,11 @@ function StatsHistoryCard({ row, label, trends }) {
 }
 
 function AccountScreen() {
-  const [account, setAccount] = useState(null);
+  const [account, setAccount] = useState(() => accountCache?.data || null);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState([]);
-  const [statsLoading, setStatsLoading] = useState(true);
+  const [loading, setLoading] = useState(!accountCache);
+  const [stats, setStats] = useState(() => accountStatsCache?.data || []);
+  const [statsLoading, setStatsLoading] = useState(!accountStatsCache);
   const [statsError, setStatsError] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -1383,9 +1391,20 @@ function AccountScreen() {
   const [nameError, setNameError] = useState("");
   const [visibilitySaving, setVisibilitySaving] = useState(false);
 
+  // Same cache-then-refresh-if-stale pattern as PublicStatsBoardScreen — a
+  // member bouncing between pages (account -> stats -> account) shouldn't
+  // re-fetch their own profile every single time.
   function loadAccount() {
+    const cached = accountCache;
+    const cacheIsFresh = cached && Date.now() - cached.loadedAt < DASHBOARD_CACHE_MAX_AGE_MS;
+    if (cached) setAccount(cached.data);
+    if (cacheIsFresh) return Promise.resolve();
+    if (!cached) setLoading(true);
     return api("/api/account")
-      .then((data) => setAccount(data))
+      .then((data) => {
+        accountCache = { data, loadedAt: Date.now() };
+        setAccount(data);
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }
@@ -1420,9 +1439,16 @@ function AccountScreen() {
   }, []);
 
   function loadStats() {
-    setStatsLoading(true);
-    api("/api/member-stats")
-      .then((data) => setStats(data.stats || []))
+    const cached = accountStatsCache;
+    const cacheIsFresh = cached && Date.now() - cached.loadedAt < DASHBOARD_CACHE_MAX_AGE_MS;
+    if (cached) setStats(cached.data);
+    if (cacheIsFresh) return Promise.resolve();
+    if (!cached) setStatsLoading(true);
+    return api("/api/member-stats")
+      .then((data) => {
+        accountStatsCache = { data: data.stats || [], loadedAt: Date.now() };
+        setStats(accountStatsCache.data);
+      })
       .catch((err) => setStatsError(err.message))
       .finally(() => setStatsLoading(false));
   }
@@ -1440,6 +1466,11 @@ function AccountScreen() {
         body: JSON.stringify(payload),
       });
       setFormOpen(false);
+      // Data just changed server-side — invalidate the caches so loadStats/
+      // loadAccount actually refetch instead of re-serving a still-fresh
+      // pre-submission snapshot.
+      accountStatsCache = null;
+      accountCache = null;
       loadStats();
       // A submission can also change char_class — refresh so "Your account" reflects it.
       loadAccount();
@@ -1480,7 +1511,11 @@ function AccountScreen() {
         method: "PATCH",
         body: JSON.stringify({ charName: trimmed }),
       });
-      setAccount((current) => ({ ...current, member: { ...current.member, ...data.member } }));
+      setAccount((current) => {
+        const next = { ...current, member: { ...current.member, ...data.member } };
+        accountCache = { data: next, loadedAt: Date.now() };
+        return next;
+      });
       setNameEditing(false);
     } catch (err) {
       setNameError(err.message);
@@ -1496,7 +1531,11 @@ function AccountScreen() {
         method: "PATCH",
         body: JSON.stringify({ showStatsPublicly: checked }),
       });
-      setAccount((current) => ({ ...current, member: { ...current.member, ...data.member } }));
+      setAccount((current) => {
+        const next = { ...current, member: { ...current.member, ...data.member } };
+        accountCache = { data: next, loadedAt: Date.now() };
+        return next;
+      });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -5733,8 +5772,16 @@ export default function DashboardApp({
   const [groups, setGroups] = useState(cachedDashboardData?.groups || []);
   const [auctionItems, setAuctionItems] = useState(cachedDashboardData?.auctionItems || []);
   const [auctionState, setAuctionState] = useState(cachedDashboardData?.auctionState || null);
-  const [jobClasses, setJobClasses] = useState(cachedDashboardData?.jobClasses || []);
-  const [loading, setLoading] = useState(publicView && !cachedDashboardData);
+  const [jobClasses, setJobClasses] = useState(
+    () => cachedDashboardData?.jobClasses || jobClassesCache?.data || [],
+  );
+  // Was `publicView && !cachedDashboardData` — always false on admin pages
+  // regardless of cache state, so a stale/missing dashboard cache (e.g. the
+  // first visit to /auctions in a tab that's already signed in, so
+  // session.loading is already false) rendered the dashboard shell with
+  // auctionState still null/empty before loadData() had actually run,
+  // flashing an incorrect "no auction running" empty state.
+  const [loading, setLoading] = useState(!cachedDashboardData);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [memberModal, setMemberModal] = useState(null);
@@ -5746,7 +5793,7 @@ export default function DashboardApp({
   const [partyPickerGroup, setPartyPickerGroup] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
   const [finalizePreview, setFinalizePreview] = useState(null);
-  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditLogs, setAuditLogs] = useState(() => auditLogsCache?.data || []);
   const [auditLogsLoading, setAuditLogsLoading] = useState(false);
   const [pendingAccounts, setPendingAccounts] = useState(() => pendingAccountsCache?.data || []);
   const [pendingActionId, setPendingActionId] = useState(null);
@@ -5883,7 +5930,24 @@ export default function DashboardApp({
         if (data.role === "super_admin") loadAuditLogs();
       } else if (accountView || publicStatsView) {
         // AccountScreen / PublicStatsBoardScreen fetch their own data —
-        // reachable by every role, so nothing here to gate or preload.
+        // reachable by every role, so nothing here to gate or preload. Job
+        // classes are the exception: both render <ClassIcon>, which reads
+        // JobClassesContext (fed by the `jobClasses` state below), and that
+        // state only ever gets populated by loadData() — skipped for these
+        // two views — so without this, icons silently render blank for any
+        // member who never loads an admin/public bootstrap page.
+        const cachedJobClasses = jobClassesCache;
+        const jobClassesFresh =
+          cachedJobClasses && Date.now() - cachedJobClasses.loadedAt < DASHBOARD_CACHE_MAX_AGE_MS;
+        if (cachedJobClasses) setJobClasses(cachedJobClasses.data);
+        if (!jobClassesFresh) {
+          api("/api/public/bootstrap")
+            .then((bootstrapData) => {
+              jobClassesCache = { data: bootstrapData.jobClasses || [], loadedAt: Date.now() };
+              setJobClasses(jobClassesCache.data);
+            })
+            .catch(() => {});
+        }
       } else if (data.role === "member") {
         // Member accounts have no business on admin pages — send them straight
         // to their Account page instead of showing the "not permitted" gate.
@@ -6052,11 +6116,16 @@ export default function DashboardApp({
     setJobClasses([]);
   }
 
-  async function loadAuditLogs() {
+  async function loadAuditLogs({ force = false } = {}) {
+    const cached = auditLogsCache;
+    const cacheIsFresh = cached && Date.now() - cached.loadedAt < DASHBOARD_CACHE_MAX_AGE_MS;
+    if (cached) setAuditLogs(cached.data);
+    if (!force && cacheIsFresh) return;
     setAuditLogsLoading(true);
     try {
       const data = await api("/api/audit-logs");
-      setAuditLogs(data.logs || []);
+      auditLogsCache = { data: data.logs || [], loadedAt: Date.now() };
+      setAuditLogs(auditLogsCache.data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -6924,7 +6993,7 @@ export default function DashboardApp({
                     </div>
                     <button
                       className="ghost-button"
-                      onClick={loadAuditLogs}
+                      onClick={() => loadAuditLogs({ force: true })}
                       disabled={auditLogsLoading}
                     >
                       {auditLogsLoading ? (
