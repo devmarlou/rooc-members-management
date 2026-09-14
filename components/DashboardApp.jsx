@@ -1614,11 +1614,23 @@ function AccountScreen() {
     setSubmitting(true);
     setStatsNotice(null);
     try {
-      await api("/api/member-stats", {
+      const data = await api("/api/member-stats", {
         method: "PATCH",
         body: JSON.stringify(payload),
       });
       setStatsNotice({ type: "success", message: "Stats updated." });
+      // Splice the server's saved row straight into local state instead of
+      // waiting on a refetch — the OLD/UPDATED comparison (statTrends below)
+      // is keyed off `stats`, so this guarantees it's diffing the actual
+      // saved values the instant the form closes, with no window where a
+      // stale pre-edit row could still be what's being compared against OLD.
+      setStats((current) => {
+        const next = [...current];
+        next[0] = data.stats;
+        return next;
+      });
+      // Still invalidate + refetch in the background to reconcile with the
+      // server as source of truth (e.g. picks up a char_class change).
       accountStatsCache = null;
       accountCache = null;
       loadStats();
