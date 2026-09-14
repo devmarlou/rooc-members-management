@@ -19,6 +19,36 @@ async function findOwnMember(supabase, session) {
   return data || null;
 }
 
+// Shared by POST (initial submission) and PATCH (editing the latest one) —
+// both can carry a reclass alongside stats, and both need it validated
+// against the live job_classes list the same way.
+async function resolveEffectiveClass(supabase, member, requestedClass) {
+  const trimmed = String(requestedClass || "").trim();
+  if (!trimmed || trimmed === member.char_class) return { class: member.char_class };
+  const { data: classRow, error } = await supabase
+    .from("job_classes")
+    .select("name")
+    .eq("name", trimmed)
+    .maybeSingle();
+  if (error) throw error;
+  if (!classRow) return { error: "Invalid class selected." };
+  return { class: trimmed };
+}
+
+async function applyClassChangeIfNeeded(supabase, request, member, effectiveClass) {
+  if (effectiveClass === member.char_class) return;
+  const { error } = await supabase.from("members").update({ char_class: effectiveClass }).eq("id", member.id);
+  if (error) throw error;
+
+  await writeAuditLog(supabase, request, {
+    action: "member.updated",
+    targetType: "member",
+    targetId: member.id,
+    summary: `${member.char_name} changed class from ${member.char_class} to ${effectiveClass} via stats submission`,
+    metadata: { before: { char_class: member.char_class }, after: { char_class: effectiveClass } }
+  });
+}
+
 export async function GET(request) {
   const session = requireAuth(request);
   if (!session) return unauthorized();
@@ -115,22 +145,8 @@ export async function POST(request) {
       return NextResponse.json({ error: validationError }, { status: 400 });
     }
 
-    // A stats submission can also change the member's roster class (e.g. a
-    // reclass) — validate against the live job_classes list before trusting it.
-    const requestedClass = String(payload.char_class || "").trim();
-    let effectiveClass = member.char_class;
-    if (requestedClass && requestedClass !== member.char_class) {
-      const { data: classRow, error: classError } = await supabase
-        .from("job_classes")
-        .select("name")
-        .eq("name", requestedClass)
-        .maybeSingle();
-      if (classError) throw classError;
-      if (!classRow) {
-        return NextResponse.json({ error: "Invalid class selected." }, { status: 400 });
-      }
-      effectiveClass = requestedClass;
-    }
+    const { error: classError, class: effectiveClass } = await resolveEffectiveClass(supabase, member, payload.char_class);
+    if (classError) return NextResponse.json({ error: classError }, { status: 400 });
 
     const row = {
       member_id: member.id,
@@ -155,21 +171,7 @@ export async function POST(request) {
       }
     });
 
-    if (effectiveClass !== member.char_class) {
-      const { error: classUpdateError } = await supabase
-        .from("members")
-        .update({ char_class: effectiveClass })
-        .eq("id", member.id);
-      if (classUpdateError) throw classUpdateError;
-
-      await writeAuditLog(supabase, request, {
-        action: "member.updated",
-        targetType: "member",
-        targetId: member.id,
-        summary: `${member.char_name} changed class from ${member.char_class} to ${effectiveClass} via stats submission`,
-        metadata: { before: { char_class: member.char_class }, after: { char_class: effectiveClass } }
-      });
-    }
+    await applyClassChangeIfNeeded(supabase, request, member, effectiveClass);
 
     await writeAuditLog(supabase, request, {
       action: "member_stats.submitted",
@@ -180,6 +182,66 @@ export async function POST(request) {
     });
 
     return NextResponse.json({ stats: data }, { status: 201 });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+// Lets a member correct a mistake in their own most recent submission —
+// the older kept row (see STATS_SELECT retention: latest 2 per member) is
+// reference/comparison only and is never a target here, regardless of what
+// the client sends, since "latest" is always resolved server-side.
+export async function PATCH(request) {
+  const session = requireAuth(request);
+  if (!session) return unauthorized();
+  if (isAdminRole(session.role)) {
+    return NextResponse.json({ error: "Only a member's own account can edit their stats." }, { status: 403 });
+  }
+
+  try {
+    const supabase = getSupabaseAdmin();
+    const member = await findOwnMember(supabase, session);
+    if (!member) return NextResponse.json({ error: "No linked character found for this account." }, { status: 404 });
+
+    const { data: latest, error: latestError } = await supabase
+      .from("member_stats")
+      .select(STATS_SELECT)
+      .eq("member_id", member.id)
+      .order("submitted_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (latestError) throw latestError;
+    if (!latest) return NextResponse.json({ error: "No stats submitted yet." }, { status: 404 });
+
+    const payload = await request.json().catch(() => ({}));
+
+    const { error: validationError, row: statsRow } = buildStatsRow(payload);
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 });
+    }
+
+    const { error: classError, class: effectiveClass } = await resolveEffectiveClass(supabase, member, payload.char_class);
+    if (classError) return NextResponse.json({ error: classError }, { status: 400 });
+
+    const { data, error } = await supabase
+      .from("member_stats")
+      .update({ class: effectiveClass, ...statsRow })
+      .eq("id", latest.id)
+      .select(STATS_SELECT)
+      .single();
+    if (error) throw error;
+
+    await applyClassChangeIfNeeded(supabase, request, member, effectiveClass);
+
+    await writeAuditLog(supabase, request, {
+      action: "member_stats.updated",
+      targetType: "member_stats",
+      targetId: data.id,
+      summary: `Edited stats for ${member.char_name}`,
+      metadata: { member_id: member.id, before: latest, after: data }
+    });
+
+    return NextResponse.json({ stats: data });
   } catch (error) {
     return handleApiError(error);
   }

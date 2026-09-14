@@ -1321,13 +1321,20 @@ function StatsFormFields({ form, onChange }) {
 // submission form on PovListScreen. onSave should resolve to true on a
 // successful submit, false on failure, matching PovLinkSubmitForm's contract
 // so the form only clears itself once the submission actually went through.
-function MemberStatsForm({ charClass, onSave, busy }) {
+//
+// `initial`, when given (editing the UPDATED row — see StatsHistoryCard's
+// onEdit), prefills every field from that row instead of starting blank, and
+// the form isn't reset back to empty after a successful save (there's nothing
+// to "clear" when editing an existing entry, unlike a fresh submission).
+function MemberStatsForm({ charClass, onSave, busy, initial, submitLabel = "Submit stats", onCancel }) {
   // AccountScreen (the only caller) renders for member-role sessions, which
   // never load the admin bootstrap — so JobClassesContext is empty here.
   // Fetch the public bootstrap directly for the class list instead, same as
   // DiscordRegistrationCompleteScreen does pre-auth.
   const [classOrder, setClassOrder] = useState([]);
-  const [form, setForm] = useState({ video_link: "", char_class: charClass || "" });
+  const [form, setForm] = useState(() =>
+    initial ? { ...initial, char_class: initial.char_class || charClass || "" } : { video_link: "", char_class: charClass || "" },
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -1349,7 +1356,7 @@ function MemberStatsForm({ charClass, onSave, busy }) {
   async function submit(event) {
     event.preventDefault();
     const ok = await onSave(form);
-    if (ok) setForm({ video_link: "", char_class: charClass || "" });
+    if (ok && !initial) setForm({ video_link: "", char_class: charClass || "" });
   }
 
   return (
@@ -1376,8 +1383,13 @@ function MemberStatsForm({ charClass, onSave, busy }) {
       <div className="form-actions wide">
         <button className="primary-button" disabled={busy}>
           {busy ? <Loader2 className="spin" size={15} /> : <Check size={15} />}
-          Submit stats
+          {submitLabel}
         </button>
+        {onCancel && (
+          <button type="button" className="ghost-button" onClick={onCancel} disabled={busy}>
+            Cancel
+          </button>
+        )}
       </div>
     </form>
   );
@@ -1409,7 +1421,7 @@ function StatTrendValue({ fieldKey, value, trends, invert }) {
 // as (UPDATED, OLD) — the OLD card passes `invert` so each priority stat is
 // colored from its own row's perspective (bigger number = green/winner,
 // smaller = red/loser), like a head-to-head comparison chart.
-function StatsHistoryCard({ row, label, trends }) {
+function StatsHistoryCard({ row, label, trends, onEdit }) {
   const isOld = label !== "updated";
   return (
     <article className={`stats-history-card ${isOld ? "" : "is-updated"}`}>
@@ -1433,6 +1445,14 @@ function StatsHistoryCard({ row, label, trends }) {
             <ExternalLink size={13} />
             Proof video
           </a>
+          {/* Only the UPDATED (latest) row is ever editable — OLD is kept
+              strictly for reference/comparison, so it gets no edit affordance. */}
+          {!isOld && onEdit && (
+            <button type="button" className="ghost-button" onClick={onEdit}>
+              <Pencil size={13} />
+              Edit
+            </button>
+          )}
         </div>
       </header>
       <div className="auction-form-items compact">
@@ -1486,6 +1506,7 @@ function AccountScreen() {
   const [statsLoading, setStatsLoading] = useState(!accountStatsCache);
   const [statsNotice, setStatsNotice] = useState(null);
   const [statsFormCollapsed, setStatsFormCollapsed] = useState(true);
+  const [editingStats, setEditingStats] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [linkNotice, setLinkNotice] = useState(null);
   const [nameEditing, setNameEditing] = useState(false);
@@ -1577,6 +1598,32 @@ function AccountScreen() {
       loadStats();
       // A submission can also change char_class — refresh so "Your account" reflects it.
       loadAccount();
+      return true;
+    } catch (err) {
+      setStatsNotice({ type: "error", message: err.message });
+      return false;
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // Corrects the UPDATED row in place (see StatsHistoryCard's onEdit) rather
+  // than adding a new submission — OLD is left untouched either way, since
+  // the API always resolves "latest" itself and never targets anything else.
+  async function updateStats(payload) {
+    setSubmitting(true);
+    setStatsNotice(null);
+    try {
+      await api("/api/member-stats", {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      setStatsNotice({ type: "success", message: "Stats updated." });
+      accountStatsCache = null;
+      accountCache = null;
+      loadStats();
+      loadAccount();
+      setEditingStats(false);
       return true;
     } catch (err) {
       setStatsNotice({ type: "error", message: err.message });
@@ -1836,14 +1883,35 @@ function AccountScreen() {
               </div>
             ) : (
               <div className="stats-history">
-                {stats.map((row, index) => (
-                  <StatsHistoryCard
-                    row={row}
-                    label={index === 0 ? "updated" : "old"}
-                    trends={statTrends}
-                    key={row.id}
-                  />
-                ))}
+                {stats.map((row, index) =>
+                  index === 0 && editingStats ? (
+                    <div className="stats-history-edit" key={row.id}>
+                      {statsNotice && (
+                        <div className={statsNotice.type === "error" ? "alert-panel" : "success-panel"}>
+                          {statsNotice.type === "error" ? <AlertTriangle size={17} /> : <Check size={17} />}
+                          <span>{statsNotice.message}</span>
+                          <button onClick={() => setStatsNotice(null)}>Dismiss</button>
+                        </div>
+                      )}
+                      <MemberStatsForm
+                        charClass={account.member.char_class}
+                        initial={row}
+                        submitLabel="Save changes"
+                        onSave={updateStats}
+                        onCancel={() => setEditingStats(false)}
+                        busy={submitting}
+                      />
+                    </div>
+                  ) : (
+                    <StatsHistoryCard
+                      row={row}
+                      label={index === 0 ? "updated" : "old"}
+                      trends={statTrends}
+                      onEdit={index === 0 ? () => setEditingStats(true) : undefined}
+                      key={row.id}
+                    />
+                  ),
+                )}
               </div>
             )}
           </section>

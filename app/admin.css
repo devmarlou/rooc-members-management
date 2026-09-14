@@ -357,6 +357,10 @@
    accent border makes that identifiable at a glance without relying on the
    OLD/UPDATED text badge alone. */
 .guild-console .stats-history-card.is-updated { border-color: #34d399; }
+/* Editing the UPDATED row swaps its card for the full ~38-field stats form —
+   too wide for a single auto-fit grid cell, so it spans every column instead
+   of squeezing next to the OLD card. */
+.guild-console .stats-history-edit { grid-column: 1 / -1; background: #121d2b; border: 1px solid var(--line); padding: 12px; }
 /* Always two fixed rows (badge+timestamp, then damage type+proof link) so the
    header lines up the same way regardless of card width or content length. */
 .guild-console .stats-history-card > header { display: flex; flex-direction: column; gap: 6px; }
