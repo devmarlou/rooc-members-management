@@ -113,6 +113,7 @@ export async function POST(request) {
           title: data.title,
           link: data.link,
           recordedDate: data.recorded_date,
+          fieldType: data.field_type,
           submittedAt: data.submitted_at
         });
       } catch (sheetsError) {

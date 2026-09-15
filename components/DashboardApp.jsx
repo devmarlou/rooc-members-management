@@ -999,6 +999,14 @@ function formatDateOnly(value) {
   return `${month}-${day}-${year}`;
 }
 
+// member_pov_links.field_type is stored as "main"/"sub" — displayed as the
+// full label everywhere it's shown to a member.
+function formatFieldType(value) {
+  if (value === "sub") return "Sub Field";
+  if (value === "main") return "Main Field";
+  return "";
+}
+
 // Rounding hides small differences that matter when comparing OLD vs UPDATED —
 // show the same precision the server stores instead.
 function formatStatDecimal(value) {
@@ -2980,6 +2988,7 @@ function PovListPanel({ list, loading }) {
           row.char_class,
           row.latest?.title,
           row.latest ? formatDateOnly(row.latest.recorded_date) : "",
+          row.latest ? formatFieldType(row.latest.field_type) : "",
           row.latest?.link
         ]
           .filter(Boolean)
@@ -3005,7 +3014,7 @@ function PovListPanel({ list, loading }) {
           <Search size={15} />
           <input
             aria-label="Search POV links"
-            placeholder="Search name, class, title, or date"
+            placeholder="Search name, class, title, date, or field"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -3029,6 +3038,7 @@ function PovListPanel({ list, loading }) {
                 <th>Class</th>
                 <th>Title</th>
                 <th>Date recorded</th>
+                <th>Field</th>
                 <th>Link</th>
               </tr>
             </thead>
@@ -3051,6 +3061,9 @@ function PovListPanel({ list, loading }) {
                     ) : (
                       <span className="table-secondary">No submissions</span>
                     )}
+                  </td>
+                  <td>
+                    {row.latest ? formatFieldType(row.latest.field_type) : <span className="table-secondary">-</span>}
                   </td>
                   <td>
                     {row.latest ? (
@@ -3076,7 +3089,7 @@ function PovListPanel({ list, loading }) {
 // design (no edit/delete UI): a new submission naturally rolls the oldest of
 // the kept 2 rows off via enforceLatestNRows, same as member_stats.
 function PovLinkSubmitForm({ onSave, busy }) {
-  const [form, setForm] = useState({ title: "", link: "", recorded_date: "" });
+  const [form, setForm] = useState({ title: "", link: "", recorded_date: "", field_type: "" });
 
   function update(key, value) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -3085,7 +3098,7 @@ function PovLinkSubmitForm({ onSave, busy }) {
   async function submit(event) {
     event.preventDefault();
     const ok = await onSave(form);
-    if (ok) setForm({ title: "", link: "", recorded_date: "" });
+    if (ok) setForm({ title: "", link: "", recorded_date: "", field_type: "" });
   }
 
   return (
@@ -3111,6 +3124,16 @@ function PovLinkSubmitForm({ onSave, busy }) {
           onChange={(event) => update("recorded_date", event.target.value)}
           required
         />
+      </label>
+      <label>
+        <span>Field</span>
+        <select value={form.field_type} onChange={(event) => update("field_type", event.target.value)} required>
+          <option value="" disabled>
+            Select main or sub field
+          </option>
+          <option value="main">Main Field</option>
+          <option value="sub">Sub Field</option>
+        </select>
       </label>
       <div className="form-actions wide">
         <button className="primary-button" disabled={busy}>
