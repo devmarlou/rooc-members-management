@@ -1230,9 +1230,7 @@ function StatsFormFields({ form, onChange }) {
 
   return (
     <>
-      <p className="field-note wide">
-        Enter unbuffed stats only. No food, potions, or other temporary buffs.
-      </p>
+      <p className="field-note wide">NO BUFF / UNBUFFED</p>
       <label>
         <span>Damage type</span>
         <select
