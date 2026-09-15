@@ -1836,10 +1836,7 @@ function AccountScreen() {
                   disabled={visibilitySaving}
                   onChange={(event) => toggleShowStatsPublicly(event.target.checked)}
                 />
-                <span>
-                  Show in Public Stats board. Lets other logged-in members see
-                  your latest submitted stats at /public-stats.
-                </span>
+                <span>Show my stats on the Public Stats board.</span>
               </label>
             </>
           ) : (
@@ -2934,7 +2931,7 @@ function PublicStatsBoardScreen() {
         onViewMember={viewMember}
         eyebrow="guild board"
         title="Public stats"
-        description="Stats from members who've opted in to share with the rest of the guild. Check the box on your Account page to join this list."
+        description="Stats from members who opted in on their Account page."
       />
       {detail && <MemberStatsDetailView data={detail} onClose={() => setDetail(null)} />}
     </>
