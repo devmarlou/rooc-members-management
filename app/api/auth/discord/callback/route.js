@@ -3,6 +3,7 @@ import { createSessionToken, getSession, sessionDurationSeconds, SESSION_COOKIE 
 import {
   OAUTH_STATE_COOKIE,
   PENDING_REGISTRATION_COOKIE,
+  PENDING_REGISTRATION_TTL_MS,
   createPendingRegistrationToken,
   exchangeDiscordCode,
   fetchDiscordIdentity,
@@ -115,7 +116,7 @@ export async function GET(request) {
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
-      maxAge: 60 * 15
+      maxAge: PENDING_REGISTRATION_TTL_MS / 1000 // mirrors the token's own exp in lib/discordOAuth.js
     });
     return response;
   } catch (callbackError) {
