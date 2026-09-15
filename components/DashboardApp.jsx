@@ -2655,7 +2655,7 @@ function MemberStatsAdminPanel({
                 All stats
               </button>
             </div>
-            {summary.length > 5 && (
+            {summary.length > 0 && (
               <label className="search-box">
                 <Search size={15} />
                 <input
@@ -2960,7 +2960,7 @@ function PovListPanel({ list, loading }) {
           <h2>POV List</h2>
           <p>Every member&apos;s latest POV recording link.</p>
         </div>
-        {list.length > 5 && (
+        {list.length > 0 && (
           <div className="section-actions">
             <label className="search-box">
               <Search size={15} />
