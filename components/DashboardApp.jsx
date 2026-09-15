@@ -2946,12 +2946,22 @@ function PublicStatsBoardScreen() {
 function PovListPanel({ list, loading }) {
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
+  // Matches against every column actually shown in the table, not just
+  // name/class, so a search for a title or a recorded date finds the row too.
   const filtered = normalizedQuery
-    ? list.filter(
-        (row) =>
-          row.char_name.toLowerCase().includes(normalizedQuery) ||
-          row.char_class.toLowerCase().includes(normalizedQuery),
-      )
+    ? list.filter((row) => {
+        const haystack = [
+          row.char_name,
+          row.char_class,
+          row.latest?.title,
+          row.latest ? formatDateOnly(row.latest.recorded_date) : "",
+          row.latest?.link
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(normalizedQuery);
+      })
     : list;
 
   return (
@@ -2969,8 +2979,8 @@ function PovListPanel({ list, loading }) {
         <label className="search-box search-box-block">
           <Search size={15} />
           <input
-            aria-label="Search members"
-            placeholder="Search name or class"
+            aria-label="Search POV links"
+            placeholder="Search name, class, title, or date"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />

@@ -44,7 +44,10 @@ export async function GET(request) {
         latest: latestByMember.get(member.id) || null
       }))
       // Opted in but nothing submitted yet — nothing useful to show on the board.
-      .filter((entry) => entry.latest);
+      .filter((entry) => entry.latest)
+      // Most recently submitted stats first, so the top row is always the
+      // newest update rather than whoever's alphabetically first.
+      .sort((a, b) => new Date(b.latest.submitted_at) - new Date(a.latest.submitted_at));
 
     return NextResponse.json({ board });
   } catch (error) {

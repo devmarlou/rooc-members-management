@@ -52,7 +52,16 @@ export async function GET(request) {
         char_name: member.char_name,
         char_class: member.char_class,
         latest: latestByMember.get(member.id) || null
-      }));
+      }))
+      // Most recently submitted POV first, so the top of the list is always
+      // what's new — members with nothing submitted yet sort to the bottom,
+      // alphabetically among themselves (their relative order coming in).
+      .sort((a, b) => {
+        if (!a.latest && !b.latest) return 0;
+        if (!a.latest) return 1;
+        if (!b.latest) return -1;
+        return new Date(b.latest.submitted_at) - new Date(a.latest.submitted_at);
+      });
 
     return NextResponse.json({ links });
   } catch (error) {
