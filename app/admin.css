@@ -444,9 +444,12 @@
 .admin-navigation a:hover { border-color: var(--line); background: #1a2738; color: var(--text); }
 .admin-navigation a.active { border-color: #41628d; background: #203a5d; color: #dbe9ff; }
 .admin-navigation a.active svg { color: #8cbaff; }
-.nav-label-short { display: none; }
 .admin-navigation em { color: inherit; font-size: 14px !important; font-style: normal; }
 .sidebar-note { margin: auto 8px 4px; color: var(--muted); font-size: 14px !important; line-height: 1.55; }
+/* Desktop: brand sits directly in the sidebar's own flex column, so the row
+   wrapper stays transparent to layout, and the hamburger it holds never shows. */
+.sidebar-top-row { display: contents; }
+.mobile-nav-toggle { display: none; }
 .admin-workspace .topbar { position: sticky; top: 0; z-index: 5; }
 .admin-workspace .topbar-inner.compact { min-height: 64px; justify-content: flex-end; }
 .admin-workspace .dashboard { width: min(2400px, calc(100% - 64px)); }
@@ -458,13 +461,39 @@
 }
 @media (max-width: 760px) {
   .admin-console { display: block; }
-  .admin-sidebar { position: static; height: auto; flex-direction: row; align-items: center; gap: 10px; padding: 10px 12px; border-right: 0; border-bottom: 1px solid var(--line); }
-  .sidebar-brand, .sidebar-note { display: none; }
-  .admin-navigation { display: flex; width: 100%; gap: 4px; margin: 0; }
-  .admin-navigation a { flex: 1 1 0; grid-template-columns: 18px minmax(0, 1fr); gap: 5px; min-height: 40px; padding: 0 5px; white-space: nowrap; }
-  .admin-navigation em { display: none; }
-  .nav-label-full { display: none; }
-  .nav-label-short { display: inline; }
+  /* A cramped single row of icon+abbreviation for every nav item read as
+     clutter, not navigation — it's now a compact bar (brand + hamburger)
+     that expands into a full-width dropdown of full labels instead. */
+  .admin-sidebar { position: sticky; top: 0; z-index: 6; height: auto; flex-direction: column; align-items: stretch; gap: 0; padding: 10px 12px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .sidebar-note { display: none; }
+  .sidebar-top-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .sidebar-brand { min-height: 0; padding: 4px; }
+  .mobile-nav-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 0 14px;
+    border: 1px solid var(--line);
+    background: #1a2738;
+    color: var(--text);
+    font-weight: 700;
+    font-size: 13px;
+  }
+  .mobile-nav-toggle:hover { border-color: #6384af; }
+  .admin-navigation {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 4px;
+    margin: 0;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height .2s ease, opacity .15s ease;
+  }
+  .admin-navigation.is-open { max-height: 640px; opacity: 1; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .admin-navigation a { white-space: normal; }
   .admin-workspace .topbar { position: relative; }
   .admin-workspace .topbar-inner.compact { min-height: 56px; justify-content: flex-start; }
   .admin-workspace .dashboard { width: calc(100% - 24px); }
