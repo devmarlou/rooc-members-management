@@ -3130,7 +3130,7 @@ function PovLinkSubmitForm({ onSave, busy }) {
         <span>Field</span>
         <select value={form.field_type} onChange={(event) => update("field_type", event.target.value)} required>
           <option value="" disabled>
-            Select main or sub field
+            Select Main Field, Sub Field, or WoE
           </option>
           <option value="main">Main Field</option>
           <option value="sub">Sub Field</option>
