@@ -14,6 +14,7 @@ import {
 } from "react";
 import {
   LogOut,
+  Menu,
   Plus,
   Search,
   Shield,
@@ -3175,6 +3176,12 @@ function PovListScreen() {
 }
 
 function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role }) {
+  // Collapsed by default on narrow screens — a hamburger toggle opens it as a
+  // full-width dropdown instead of squeezing every item into one cramped row.
+  // Unused (and harmless) once the sidebar renders as the normal desktop
+  // column, since CSS hides the toggle button there.
+  const [navOpen, setNavOpen] = useState(false);
+
   // Account is reachable from the header (top right) on every page instead of
   // living here too — keep this list to the role's core views only.
   const navigation =
@@ -3183,21 +3190,18 @@ function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role 
           {
             href: "/public",
             label: "Auction view",
-            shortLabel: "Auction",
             icon: Gavel,
             page: "public",
           },
           {
             href: "/public-stats",
             label: "Public stats",
-            shortLabel: "Stats",
             icon: Users,
             page: "public-stats",
           },
           {
             href: "/pov-list",
             label: "POV List",
-            shortLabel: "POV",
             icon: Video,
             page: "pov-list",
           },
@@ -3206,7 +3210,6 @@ function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role 
           {
             href: "/",
             label: "Master list",
-            shortLabel: "Members",
             icon: List,
             count: memberCount,
             page: "members",
@@ -3214,7 +3217,6 @@ function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role 
           {
             href: "/parties",
             label: "Party list",
-            shortLabel: "Parties",
             icon: LayoutGrid,
             count: partyCount,
             page: "parties",
@@ -3222,14 +3224,12 @@ function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role 
           {
             href: "/auctions",
             label: "Auction list",
-            shortLabel: "Auctions",
             icon: Gavel,
             page: "auctions",
           },
           {
             href: "/pending",
             label: "Pending approvals",
-            shortLabel: "Pending",
             icon: Clock3,
             count: pendingCount,
             page: "pending",
@@ -3237,28 +3237,24 @@ function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role 
           {
             href: "/member-stats",
             label: "Member stats",
-            shortLabel: "Stats",
             icon: BarChart3,
             page: "member-stats",
           },
           {
             href: "/public-stats",
             label: "Public stats",
-            shortLabel: "Public",
             icon: Users,
             page: "public-stats",
           },
           {
             href: "/pov-list",
             label: "POV List",
-            shortLabel: "POV",
             icon: Video,
             page: "pov-list",
           },
           {
             href: "/job-classes",
             label: "Job classes",
-            shortLabel: "Classes",
             icon: Layers,
             page: "job-classes",
           },
@@ -3266,33 +3262,47 @@ function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role 
 
   return (
     <aside className="admin-sidebar">
-      <Link href="/" className="sidebar-brand">
-        <span className="brand-mark small">
-          <Shield size={20} />
-        </span>
-        <span>
-          <strong>ENCORE</strong>
-          <em>Guild management</em>
-        </span>
-      </Link>
-      <nav className="admin-navigation" aria-label="Admin navigation">
-        {navigation.map(
-          ({ href, label, shortLabel, icon: Icon, count, page }) => (
-            <Link
-              key={page}
-              href={href}
-              className={activePage === page ? "active" : ""}
-              aria-current={activePage === page ? "page" : undefined}
-            >
-              <Icon size={17} />
-              <span className="nav-label">
-                <span className="nav-label-full">{label}</span>
-                <span className="nav-label-short">{shortLabel}</span>
-              </span>
-              {Number.isFinite(count) && <em>{count}</em>}
-            </Link>
-          ),
-        )}
+      <div className="sidebar-top-row">
+        <Link href="/" className="sidebar-brand" onClick={() => setNavOpen(false)}>
+          <span className="brand-mark small">
+            <Shield size={20} />
+          </span>
+          <span>
+            <strong>ENCORE</strong>
+            <em>Guild management</em>
+          </span>
+        </Link>
+        {/* Desktop hides this via CSS — the full nav column is always visible
+            there, so there's nothing to toggle. */}
+        <button
+          type="button"
+          className="mobile-nav-toggle"
+          onClick={() => setNavOpen((open) => !open)}
+          aria-expanded={navOpen}
+          aria-controls="admin-navigation"
+        >
+          {navOpen ? <X size={18} /> : <Menu size={18} />}
+          Menu
+        </button>
+      </div>
+      <nav
+        id="admin-navigation"
+        className={navOpen ? "admin-navigation is-open" : "admin-navigation"}
+        aria-label="Admin navigation"
+      >
+        {navigation.map(({ href, label, icon: Icon, count, page }) => (
+          <Link
+            key={page}
+            href={href}
+            className={activePage === page ? "active" : ""}
+            aria-current={activePage === page ? "page" : undefined}
+            onClick={() => setNavOpen(false)}
+          >
+            <Icon size={17} />
+            <span className="nav-label">{label}</span>
+            {Number.isFinite(count) && <em>{count}</em>}
+          </Link>
+        ))}
       </nav>
       <p className="sidebar-note">
         Ragnarok Origin Classic
@@ -6422,6 +6432,12 @@ export default function DashboardApp({
         role: data.role || "",
       });
       loadData();
+      // The sidebar now shows for a signed-in admin/super_admin here too, so
+      // its "Pending" badge needs a real count instead of whatever stale
+      // value happens to be cached from an earlier admin-page visit.
+      if (data.authenticated && data.role !== "member") {
+        loadPendingAccounts();
+      }
       return;
     }
     const data = await api("/api/auth/session");
@@ -7456,25 +7472,30 @@ export default function DashboardApp({
     );
   }
 
+  // A signed-in visitor browsing the public board still gets the same sidebar
+  // nav they'd see anywhere else in the dashboard, instead of the stripped-down
+  // anonymous layout — consistent chrome for anyone who's actually logged in.
+  const showSidebar = !publicView || viewer.authenticated;
+
   return (
     <JobClassesContext.Provider value={jobClassesContextValue}>
     <div
       className={
-        publicView
-          ? "guild-console public-console"
-          : "guild-console admin-console"
+        showSidebar
+          ? "guild-console admin-console"
+          : "guild-console public-console"
       }
     >
-      {!publicView && (
+      {showSidebar && (
         <AdminSidebar
-          activePage={adminPage}
+          activePage={publicView ? "public" : adminPage}
           memberCount={members.length}
           partyCount={groups.length}
           pendingCount={pendingAccounts.length}
-          role={session.role}
+          role={publicView ? viewer.role : session.role}
         />
       )}
-      <div className={publicView ? "public-workspace" : "admin-workspace"}>
+      <div className={showSidebar ? "admin-workspace" : "public-workspace"}>
         <Header
           username={publicView ? viewer.username : session.username}
           role={publicView ? viewer.role : session.role}
@@ -7483,7 +7504,7 @@ export default function DashboardApp({
           accountView={accountView}
           publicView={publicView}
           publicGlAuction={publicGlAuction}
-          compact={!publicView}
+          compact={showSidebar}
           viewerAuthenticated={publicView ? viewer.authenticated : true}
         />
         <main className="dashboard">
