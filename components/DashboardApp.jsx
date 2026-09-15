@@ -2655,20 +2655,22 @@ function MemberStatsAdminPanel({
                 All stats
               </button>
             </div>
-            {summary.length > 0 && (
-              <label className="search-box">
-                <Search size={15} />
-                <input
-                  aria-label="Search members"
-                  placeholder="Search name or class"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                />
-              </label>
-            )}
           </div>
         </div>
       </div>
+      {/* Its own full-width row instead of squeezed alongside the view-toggle/
+          export buttons above, so it's easy to spot rather than easy to miss. */}
+      {summary.length > 0 && (
+        <label className="search-box search-box-block">
+          <Search size={15} />
+          <input
+            aria-label="Search members"
+            placeholder="Search name or class"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+      )}
       {loading ? (
         <div className="loading-panel">
           <Loader2 className="spin" size={20} />
@@ -2960,20 +2962,20 @@ function PovListPanel({ list, loading }) {
           <h2>POV List</h2>
           <p>Every member&apos;s latest POV recording link.</p>
         </div>
-        {list.length > 0 && (
-          <div className="section-actions">
-            <label className="search-box">
-              <Search size={15} />
-              <input
-                aria-label="Search members"
-                placeholder="Search name or class"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </label>
-          </div>
-        )}
       </div>
+      {/* Its own full-width row instead of squeezed into the heading, so it's
+          easy to spot rather than easy to miss. */}
+      {list.length > 0 && (
+        <label className="search-box search-box-block">
+          <Search size={15} />
+          <input
+            aria-label="Search members"
+            placeholder="Search name or class"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+      )}
       {loading ? (
         <div className="loading-panel">
           <Loader2 className="spin" size={20} />

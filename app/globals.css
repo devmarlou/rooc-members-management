@@ -601,6 +601,15 @@ label span {
   padding-left: 36px;
 }
 
+/* Full-width variant — its own row below a section's heading/actions instead
+   of sharing flex space with other buttons, so it reads as a block, not a
+   squeezed-in afterthought. */
+.search-box-block {
+  display: block;
+  width: 100%;
+  margin-bottom: 16px;
+}
+
 .toolbar select {
   width: 220px;
 }
