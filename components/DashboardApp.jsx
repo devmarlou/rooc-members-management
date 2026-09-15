@@ -1004,6 +1004,7 @@ function formatDateOnly(value) {
 function formatFieldType(value) {
   if (value === "sub") return "Sub Field";
   if (value === "main") return "Main Field";
+  if (value === "woe") return "WOE";
   return "";
 }
 
@@ -3133,6 +3134,7 @@ function PovLinkSubmitForm({ onSave, busy }) {
           </option>
           <option value="main">Main Field</option>
           <option value="sub">Sub Field</option>
+          <option value="woe">WOE</option>
         </select>
       </label>
       <div className="form-actions wide">
