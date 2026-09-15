@@ -17,6 +17,25 @@ export async function GET(request) {
 
   try {
     const supabase = getSupabaseAdmin();
+
+    // Reciprocity gate: a member only gets to see the board once they've
+    // opted their own stats into it. Admins/super_admins always see it, same
+    // as they see everything else.
+    if (session.role !== "admin" && session.role !== "super_admin") {
+      const { data: caller, error: callerError } = await supabase
+        .from("members")
+        .select("show_stats_publicly")
+        .eq("account_id", session.userId)
+        .maybeSingle();
+      if (callerError) throw callerError;
+      if (!caller?.show_stats_publicly) {
+        return NextResponse.json(
+          { error: "Opt in on your Account page to view the public stats board.", optInRequired: true },
+          { status: 403 }
+        );
+      }
+    }
+
     const [membersResult, statsResult] = await Promise.all([
       supabase
         .from("members")

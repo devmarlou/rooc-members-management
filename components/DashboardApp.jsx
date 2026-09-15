@@ -2891,10 +2891,16 @@ function MemberStatsDetailView({ data, onClose }) {
 // (own fetch, own state) rather than plugging into the main dashboard's
 // members/groups/session-gated load flow, since it's reachable by both member
 // and admin roles and only ever needs one thing: the opted-in board list.
+// Exact text of the API's reciprocity-gate error (app/api/member-stats/board/
+// route.js and its [memberId] sibling) — matched below to tell "you haven't
+// opted in yet" apart from any other fetch failure.
+const STATS_OPT_IN_REQUIRED_MESSAGE = "Opt in on your Account page to view the public stats board.";
+
 function PublicStatsBoardScreen() {
   const [board, setBoard] = useState(() => publicStatsBoardCache?.data || []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [optInRequired, setOptInRequired] = useState(false);
   const [detail, setDetail] = useState(null);
 
   useEffect(() => {
@@ -2908,7 +2914,10 @@ function PublicStatsBoardScreen() {
         publicStatsBoardCache = { data: data.board || [], loadedAt: Date.now() };
         setBoard(publicStatsBoardCache.data);
       })
-      .catch((err) => setError(err.message))
+      .catch((err) => {
+        if (err.message === STATS_OPT_IN_REQUIRED_MESSAGE) setOptInRequired(true);
+        else setError(err.message);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -2919,6 +2928,18 @@ function PublicStatsBoardScreen() {
     } catch (err) {
       setError(err.message);
     }
+  }
+
+  if (optInRequired) {
+    return (
+      <div className="alert-panel">
+        <AlertTriangle size={17} />
+        <span>{STATS_OPT_IN_REQUIRED_MESSAGE}</span>
+        <Link className="ghost-button" href="/account">
+          Account
+        </Link>
+      </div>
+    );
   }
 
   return (
