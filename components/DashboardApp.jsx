@@ -141,6 +141,11 @@ const AUCTION_PAGE_ITEM_ORDER = {
 };
 const SHARED_FEATHER_PAGE_KEYS = new Set(["feather_ld", "feather_ts"]);
 let adminSessionCache = null;
+// Same idea as adminSessionCache, but for the public board's real-viewer
+// identity — every app/**/page.js mounts a fresh DashboardApp, so without
+// this a signed-in member bouncing to /public sees the sidebar disappear
+// and reappear each time while the session check round-trips.
+let viewerCache = null;
 const dashboardDataCache = { admin: null, public: null };
 // Module-level (not React state) so pending approvals / member stats survive
 // a route change — every app/**/page.js mounts a fresh DashboardApp instance,
@@ -6284,7 +6289,9 @@ export default function DashboardApp({
   // visitors keep browsing (and realtime updates keep working) regardless of login.
   // `viewer` separately tracks whether there's a *real* signed-in member/admin
   // behind that, so the header can offer them Account/Log out instead of hiding them.
-  const [viewer, setViewer] = useState({ authenticated: false, username: "", role: "" });
+  const [viewer, setViewer] = useState(
+    () => viewerCache || { authenticated: false, username: "", role: "" },
+  );
   const [members, setMembers] = useState(cachedDashboardData?.members || []);
   const [groups, setGroups] = useState(cachedDashboardData?.groups || []);
   const [auctionItems, setAuctionItems] = useState(cachedDashboardData?.auctionItems || []);
@@ -6423,11 +6430,13 @@ export default function DashboardApp({
         mustResetPassword: false,
       });
       const data = await api("/api/auth/session");
-      setViewer({
+      const nextViewer = {
         authenticated: Boolean(data.authenticated),
         username: data.username || "",
         role: data.role || "",
-      });
+      };
+      viewerCache = nextViewer;
+      setViewer(nextViewer);
       loadData();
       // The sidebar now shows for a signed-in admin/super_admin here too, so
       // its "Pending" badge needs a real count instead of whatever stale
@@ -6454,6 +6463,7 @@ export default function DashboardApp({
       // profile/stats on /account until its own fetch resolves.
       accountCache = null;
       accountStatsCache = null;
+      viewerCache = null;
     }
     setSession(nextSession);
     if (data.authenticated && !data.mustResetPassword) {
@@ -6636,6 +6646,7 @@ export default function DashboardApp({
     if (publicView) {
       // The public board stays visible for anonymous visitors after logging out —
       // just drop the real viewer identity, don't wipe the board itself.
+      viewerCache = null;
       setViewer({ authenticated: false, username: "", role: "" });
       return;
     }
