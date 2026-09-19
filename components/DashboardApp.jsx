@@ -3089,8 +3089,12 @@ function PovListPanel({ list, loading }) {
 // Self-service submit form for the caller's own POV link — add-only by
 // design (no edit/delete UI): a new submission naturally rolls the oldest of
 // the kept 2 rows off via enforceLatestNRows, same as member_stats.
-function PovLinkSubmitForm({ onSave, busy }) {
-  const [form, setForm] = useState({ title: "", link: "", recorded_date: "", field_type: "" });
+//
+// Admins get one extra field: the member the POV belongs to, so they can file
+// clips members sent them directly (nothing else about the row differs).
+function PovLinkSubmitForm({ onSave, busy, isAdmin = false, members = [] }) {
+  const emptyForm = { member_id: "", title: "", link: "", recorded_date: "", field_type: "" };
+  const [form, setForm] = useState(emptyForm);
 
   function update(key, value) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -3099,11 +3103,30 @@ function PovLinkSubmitForm({ onSave, busy }) {
   async function submit(event) {
     event.preventDefault();
     const ok = await onSave(form);
-    if (ok) setForm({ title: "", link: "", recorded_date: "", field_type: "" });
+    if (ok) setForm(emptyForm);
   }
 
   return (
     <form onSubmit={submit} className="form-grid">
+      {isAdmin && (
+        <label>
+          <span>Member</span>
+          <select
+            value={form.member_id}
+            onChange={(event) => update("member_id", event.target.value)}
+            required
+          >
+            <option value="" disabled>
+              Select the member this POV belongs to
+            </option>
+            {members.map((member) => (
+              <option key={member.member_id} value={member.member_id}>
+                {member.char_name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label>
         <span>Title</span>
         <input value={form.title} onChange={(event) => update("title", event.target.value)} maxLength={80} required />
@@ -3151,7 +3174,8 @@ function PovLinkSubmitForm({ onSave, busy }) {
 // Own fetch, own state, reachable by every role (checkSession lets the member
 // role in without the usual /account redirect). POV is always public within
 // the app, so this shows everyone's latest entry, no opt-in.
-function PovListScreen() {
+function PovListScreen({ role }) {
+  const isAdmin = role === "admin" || role === "super_admin";
   const [list, setList] = useState(() => povLinksCache?.data || []);
   const [loading, setLoading] = useState(!povLinksCache);
   const [error, setError] = useState("");
@@ -3193,6 +3217,14 @@ function PovListScreen() {
     }
   }
 
+  // The list already carries every non-pending member, so the admin picker
+  // reuses it rather than fetching a second roster — alphabetical here, since
+  // the table's own order is by most recent submission.
+  const memberOptions = useMemo(
+    () => [...list].sort((a, b) => a.char_name.localeCompare(b.char_name)),
+    [list]
+  );
+
   return (
     <>
       {error && (
@@ -3205,9 +3237,13 @@ function PovListScreen() {
       <section className="content-section" aria-label="Submit a POV link">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">share your pov</p>
+            <p className="eyebrow">{isAdmin ? "submit a pov" : "share your pov"}</p>
             <h2>Submit a POV link</h2>
-            <p>Link, title, and the date it was recorded. Your last 2 submissions are kept.</p>
+            <p>
+              {isAdmin
+                ? "Pick the member this POV belongs to, then add the link, title, and the date it was recorded. Their last 2 submissions are kept."
+                : "Link, title, and the date it was recorded. Your last 2 submissions are kept."}
+            </p>
           </div>
         </div>
         {notice && (
@@ -3217,7 +3253,7 @@ function PovListScreen() {
             <button onClick={() => setNotice(null)}>Dismiss</button>
           </div>
         )}
-        <PovLinkSubmitForm onSave={submit} busy={saving} />
+        <PovLinkSubmitForm onSave={submit} busy={saving} isAdmin={isAdmin} members={memberOptions} />
       </section>
       <PovListPanel list={list} loading={loading} />
     </>
@@ -7568,7 +7604,7 @@ export default function DashboardApp({
           ) : publicStatsView ? (
             <PublicStatsBoardScreen />
           ) : povListView ? (
-            <PovListScreen />
+            <PovListScreen role={session.role} />
           ) : !publicView && session.role === "member" ? (
             <div className="alert-panel">
               <AlertTriangle size={17} />

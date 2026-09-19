@@ -7,11 +7,25 @@ import { buildPovLinkRow, POV_LINKS_SELECT } from "@/lib/povLinks";
 import { appendPovLinkRow } from "@/lib/googleSheets";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
+function isAdminRole(role) {
+  return role === "admin" || role === "super_admin";
+}
+
 async function findOwnMember(supabase, session) {
   const { data, error } = await supabase
     .from("members")
     .select("id,char_name,char_class")
     .eq("account_id", session.userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+async function findMemberById(supabase, memberId) {
+  const { data, error } = await supabase
+    .from("members")
+    .select("id,char_name,char_class")
+    .eq("id", memberId)
     .maybeSingle();
   if (error) throw error;
   return data || null;
@@ -69,19 +83,42 @@ export async function GET(request) {
   }
 }
 
-// Self-service submit for the caller's own member row — every role can post
-// here, not just members (an admin with a linked character can share their
-// own POV too; unlike /api/member-stats this route has no admin block).
+// Submit a POV link. A member posts their own — the member row is derived
+// from the session, never trusted from the client.
+//
+// Admin/super_admin accounts are never linked to a character, so they have no
+// "own" row to post to and must name the member via `member_id` (they file
+// clips members send them directly). The row is written exactly as that
+// member's own submission would be — same retention, same Sheets append — so
+// it lands in the list under their name; only the audit log records who
+// actually posted it.
 export async function POST(request) {
   const session = requireAuth(request);
   if (!session) return unauthorized();
 
   try {
     const supabase = getSupabaseAdmin();
-    const member = await findOwnMember(supabase, session);
-    if (!member) return NextResponse.json({ error: "No linked character found for this account." }, { status: 404 });
 
     const payload = await request.json().catch(() => ({}));
+    const isAdmin = isAdminRole(session.role);
+    const onBehalfOfId = payload.member_id || "";
+    if (onBehalfOfId && !isAdmin) {
+      return NextResponse.json({ error: "Only admins can submit a POV link for another member." }, { status: 403 });
+    }
+    if (isAdmin && !onBehalfOfId) {
+      return NextResponse.json({ error: "Select the member this POV link belongs to." }, { status: 400 });
+    }
+
+    const member = onBehalfOfId
+      ? await findMemberById(supabase, onBehalfOfId)
+      : await findOwnMember(supabase, session);
+    if (!member) {
+      return NextResponse.json(
+        { error: onBehalfOfId ? "Member not found." : "No linked character found for this account." },
+        { status: 404 }
+      );
+    }
+
     const { error: validationError, row: linkRow } = buildPovLinkRow(payload);
     if (validationError) {
       return NextResponse.json({ error: validationError }, { status: 400 });
@@ -127,8 +164,15 @@ export async function POST(request) {
       action: "pov_link.submitted",
       targetType: "member_pov_links",
       targetId: data.id,
-      summary: `Submitted a POV link for ${member.char_name}`,
-      metadata: { member_id: member.id, title: data.title, submitted_at: data.submitted_at }
+      summary: onBehalfOfId
+        ? `Submitted a POV link on behalf of ${member.char_name}`
+        : `Submitted a POV link for ${member.char_name}`,
+      metadata: {
+        member_id: member.id,
+        title: data.title,
+        submitted_at: data.submitted_at,
+        on_behalf: Boolean(onBehalfOfId)
+      }
     });
 
     return NextResponse.json({ link: data }, { status: 201 });
