@@ -13,7 +13,7 @@ export async function GET(request) {
     const [{ data: member, error: memberError }, { data: account, error: accountError }] = await Promise.all([
       supabase
         .from("members")
-        .select("id,char_name,char_class,group_id,joined_at,show_stats_publicly")
+        .select("id,char_name,char_class,group_id,joined_at")
         .eq("account_id", session.userId)
         .maybeSingle(),
       // Session tokens don't carry discord_user_id (lib/session.js only signs
@@ -40,13 +40,10 @@ export async function GET(request) {
   }
 }
 
-// Self-service edits to the caller's own character: renaming, and toggling
-// whether their stats appear on the public stats board. POV links have no
-// opt-in (they're always public at /pov-list). Every other roster field
-// (class, group, party slot, officer flag, etc.) stays admin-only via PATCH
-// /api/members/[id]. Fields are optional in the body and applied
-// independently so the same endpoint serves the name editor and the opt-in
-// checkbox without needing to resend the other.
+// Self-service edits to the caller's own character: renaming. Stats and POV
+// links have no opt-in — both are visible to every signed-in member. Every
+// other roster field (class, group, party slot, officer flag, etc.) stays
+// admin-only via PATCH /api/members/[id].
 export async function PATCH(request) {
   const session = requireAuth(request);
   if (!session) return unauthorized();
@@ -55,7 +52,7 @@ export async function PATCH(request) {
     const supabase = getSupabaseAdmin();
     const { data: member, error: memberError } = await supabase
       .from("members")
-      .select("id,char_name,show_stats_publicly")
+      .select("id,char_name")
       .eq("account_id", session.userId)
       .maybeSingle();
     if (memberError) throw memberError;
@@ -65,8 +62,7 @@ export async function PATCH(request) {
 
     const body = await request.json().catch(() => ({}));
     const hasCharName = typeof body.charName === "string";
-    const hasShowStatsPublicly = typeof body.showStatsPublicly === "boolean";
-    if (!hasCharName && !hasShowStatsPublicly) {
+    if (!hasCharName) {
       return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
     }
 
@@ -101,11 +97,6 @@ export async function PATCH(request) {
       }
     }
 
-    if (hasShowStatsPublicly && body.showStatsPublicly !== member.show_stats_publicly) {
-      updates.show_stats_publicly = body.showStatsPublicly;
-      auditEntries.push(body.showStatsPublicly ? "opted in to the public stats board" : "opted out of the public stats board");
-    }
-
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ member });
     }
@@ -114,7 +105,7 @@ export async function PATCH(request) {
       .from("members")
       .update(updates)
       .eq("id", member.id)
-      .select("id,char_name,char_class,group_id,joined_at,show_stats_publicly")
+      .select("id,char_name,char_class,group_id,joined_at")
       .single();
     if (updateError) throw updateError;
 
