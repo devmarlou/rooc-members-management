@@ -1535,7 +1535,6 @@ function AccountScreen() {
   const [nameValue, setNameValue] = useState("");
   const [nameSaving, setNameSaving] = useState(false);
   const [nameError, setNameError] = useState("");
-  const [visibilitySaving, setVisibilitySaving] = useState(false);
 
   // Same cache-then-refresh-if-stale pattern as PublicStatsBoardScreen — a
   // member bouncing between pages (account -> stats -> account) shouldn't
@@ -1710,25 +1709,6 @@ function AccountScreen() {
     }
   }
 
-  async function toggleShowStatsPublicly(checked) {
-    setVisibilitySaving(true);
-    try {
-      const data = await api("/api/account", {
-        method: "PATCH",
-        body: JSON.stringify({ showStatsPublicly: checked }),
-      });
-      setAccount((current) => {
-        const next = { ...current, member: { ...current.member, ...data.member } };
-        accountCache = { data: next, loadedAt: Date.now() };
-        return next;
-      });
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setVisibilitySaving(false);
-    }
-  }
-
   if (loading) {
     return (
       <div className="loading-panel">
@@ -1843,15 +1823,6 @@ function AccountScreen() {
               <label>
                 <span>Class</span>
                 <input value={account.member.char_class} disabled />
-              </label>
-              <label className="checkbox-row wide">
-                <input
-                  type="checkbox"
-                  checked={Boolean(account.member.show_stats_publicly)}
-                  disabled={visibilitySaving}
-                  onChange={(event) => toggleShowStatsPublicly(event.target.checked)}
-                />
-                <span>Show my stats on the Public Stats board.</span>
               </label>
             </>
           ) : (
@@ -2900,17 +2871,11 @@ function MemberStatsDetailView({ data, onClose }) {
 // A self-contained peer view of member_stats — mirrors AccountScreen's pattern
 // (own fetch, own state) rather than plugging into the main dashboard's
 // members/groups/session-gated load flow, since it's reachable by both member
-// and admin roles and only ever needs one thing: the opted-in board list.
-// Exact text of the API's reciprocity-gate error (app/api/member-stats/board/
-// route.js and its [memberId] sibling) — matched below to tell "you haven't
-// opted in yet" apart from any other fetch failure.
-const STATS_OPT_IN_REQUIRED_MESSAGE = "Opt in on your Account page to view the public stats board.";
-
+// and admin roles and only ever needs one thing: the board list.
 function PublicStatsBoardScreen() {
   const [board, setBoard] = useState(() => publicStatsBoardCache?.data || []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [optInRequired, setOptInRequired] = useState(false);
   const [detail, setDetail] = useState(null);
 
   useEffect(() => {
@@ -2924,10 +2889,7 @@ function PublicStatsBoardScreen() {
         publicStatsBoardCache = { data: data.board || [], loadedAt: Date.now() };
         setBoard(publicStatsBoardCache.data);
       })
-      .catch((err) => {
-        if (err.message === STATS_OPT_IN_REQUIRED_MESSAGE) setOptInRequired(true);
-        else setError(err.message);
-      })
+      .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
 
@@ -2938,18 +2900,6 @@ function PublicStatsBoardScreen() {
     } catch (err) {
       setError(err.message);
     }
-  }
-
-  if (optInRequired) {
-    return (
-      <div className="alert-panel">
-        <AlertTriangle size={17} />
-        <span>{STATS_OPT_IN_REQUIRED_MESSAGE}</span>
-        <Link className="ghost-button" href="/account">
-          Account
-        </Link>
-      </div>
-    );
   }
 
   return (
@@ -2967,7 +2917,7 @@ function PublicStatsBoardScreen() {
         onViewMember={viewMember}
         eyebrow="guild board"
         title="Public stats"
-        description="Stats from members who opted in on their Account page."
+        description="Latest stats submitted by every member."
       />
       {detail && <MemberStatsDetailView data={detail} onClose={() => setDetail(null)} />}
     </>
