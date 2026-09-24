@@ -5658,6 +5658,7 @@ function AuctionFoundation({
   onOpenGlobalLimits,
   onSaveSavepoint,
   onRestoreSavepoint,
+  onCreateLineup,
   canManageGlobalDefaults = false,
   onLockAuction,
   onDoneAuction,
@@ -5811,6 +5812,21 @@ function AuctionFoundation({
                   </li>
                 </ol>
                 <div className="auction-start-row">
+                  {!activeRound && (
+                    <button
+                      className="primary-button"
+                      type="button"
+                      onClick={onCreateLineup}
+                      disabled={busy}
+                    >
+                      {busy ? (
+                        <Loader2 className="spin" size={15} />
+                      ) : (
+                        <Swords size={16} />
+                      )}
+                      Generate lineup
+                    </button>
+                  )}
                   <button
                     className="primary-button"
                     type="button"
@@ -7340,6 +7356,23 @@ export default function DashboardApp({
     }
   }
 
+  // Creates the permanent rotation list. Confirmed because the shuffle is
+  // one-time — once locked, later roster changes append/remove rather than
+  // reshuffle (docs/specs/auction-logic-spec.md).
+  function requestCreateLineup() {
+    setConfirmAction({
+      title: "Generate the permanent auction lineup",
+      body: `Shuffle all ${members.length} members into a locked rotation order? This happens once — new members are appended to the end afterwards, and the order is never reshuffled.`,
+      confirmLabel: "Generate lineup",
+      tone: "default",
+      run: async () => {
+        const data = await api("/api/auctions/rounds", { method: "POST" });
+        setAuctionState(data.auctionState);
+        setToast("Auction lineup created");
+      },
+    });
+  }
+
   function requestLockAuction(auction) {
     if (!auction) return;
     setConfirmAction({
@@ -7651,6 +7684,7 @@ export default function DashboardApp({
                         onOpenGlobalLimits={() => setGlobalLimitsOpen(true)}
                         onSaveSavepoint={requestSaveAuctionSavepoint}
                         onRestoreSavepoint={requestRestoreAuctionSavepoint}
+                        onCreateLineup={requestCreateLineup}
                         canManageGlobalDefaults={false}
                         onLockAuction={requestLockAuction}
                         onDoneAuction={requestDoneAuction}
@@ -7725,6 +7759,7 @@ export default function DashboardApp({
                           onOpenGlobalLimits={() => setGlobalLimitsOpen(true)}
                           onSaveSavepoint={requestSaveAuctionSavepoint}
                           onRestoreSavepoint={requestRestoreAuctionSavepoint}
+                          onCreateLineup={requestCreateLineup}
                           canManageGlobalDefaults={[
                             "admin",
                             "super_admin",
