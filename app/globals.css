@@ -2227,12 +2227,6 @@ button.party-slot.empty:hover:not(:disabled) {
   gap: 5px;
 }
 
-.progress-status.priority {
-  border-color: rgba(251, 191, 36, 0.62);
-  background: rgba(120, 53, 15, 0.38);
-  color: #fde68a;
-}
-
 .progress-status.partial {
   border-color: rgba(56, 189, 248, 0.44);
   background: rgba(8, 47, 73, 0.42);

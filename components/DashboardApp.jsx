@@ -5413,11 +5413,9 @@ function progressReceivedTotal(row, limitedItems) {
   );
 }
 
-function progressRowQueueState(row, limitedItems, priorityMemberId) {
+function progressRowQueueState(row, limitedItems) {
   if (progressRowReady(row, limitedItems))
     return { label: "ready", state: "ready" };
-  if (row.member.id === priorityMemberId)
-    return { label: "priority", state: "priority" };
   if (progressReceivedTotal(row, limitedItems) > 0)
     return { label: "partial", state: "partial" };
   return { label: "in queue", state: "queue" };
@@ -5473,18 +5471,6 @@ function MemberProgressTable({ auctionItems, auctionState }) {
   );
   const rows = auctionState?.progress || [];
   const nowMs = Date.now();
-  const priorityMemberId =
-    [...rows]
-      .sort(
-        (a, b) =>
-          auctionPriorityRank(a.member) - auctionPriorityRank(b.member) ||
-          a.position - b.position,
-      )
-      .find(
-        (row) =>
-          !getAuctionCooldown(row.member, nowMs) &&
-          !progressRowReady(row, limitedItems),
-      )?.member.id || null;
   const activeBidStatus = buildActiveBidStatus(auctionState, limitedItems);
   if (!rows.length) {
     return (
@@ -5536,11 +5522,7 @@ function MemberProgressTable({ auctionItems, auctionState }) {
           <tbody>
             {rows.map((row) => {
               const nextNeed = progressRowNextNeed(row, limitedItems);
-              const queueState = progressRowQueueState(
-                row,
-                limitedItems,
-                priorityMemberId,
-              );
+              const queueState = progressRowQueueState(row, limitedItems);
               const activeBidItems = activeBidStatus.biddingByMemberId.get(
                 row.member.id,
               );
