@@ -5,12 +5,12 @@ import { updateMemberCapOverrides } from "@/lib/auctionEngine";
 import { validateCharClass, validateCharName } from "@/lib/validation";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
-const MEMBER_SELECT = "id,char_name,char_class,group_id,party_slot,is_officer,auction_priority_override,joined_at,notes,created_at,updated_at";
+const MEMBER_SELECT = "id,char_name,char_class,group_id,party_slot,is_officer,auction_priority_override,auction_priority_card,joined_at,notes,created_at,updated_at";
 const MEMBER_SELECT_FALLBACK = "id,char_name,char_class,group_id,joined_at,notes,created_at,updated_at";
 
 function isMissingPartySlotError(error) {
   const message = String(error?.message || "");
-  return error?.code === "42703" || message.includes("party_slot") || message.includes("auction_priority_override");
+  return error?.code === "42703" || message.includes("party_slot") || message.includes("auction_priority_override") || message.includes("auction_priority_card") || message.includes("auction_priority_card");
 }
 
 function cleanPartySlot(value) {
@@ -20,12 +20,12 @@ function cleanPartySlot(value) {
 }
 
 function withoutPartySlot(body) {
-  const { party_slot, is_officer, auction_priority_override, ...rest } = body;
+  const { party_slot, is_officer, auction_priority_override, auction_priority_card, ...rest } = body;
   return rest;
 }
 
 function withFallbackSlot(member) {
-  return member ? { ...member, party_slot: null, is_officer: false, auction_priority_override: false } : member;
+  return member ? { ...member, party_slot: null, is_officer: false, auction_priority_override: false, auction_priority_card: false } : member;
 }
 
 function cleanMemberPayload(payload) {
@@ -37,6 +37,7 @@ function cleanMemberPayload(payload) {
     party_slot: group_id ? cleanPartySlot(payload.party_slot) : null,
     is_officer: Boolean(payload.is_officer),
     auction_priority_override: Boolean(payload.auction_priority_override),
+    auction_priority_card: Boolean(payload.auction_priority_card),
     joined_at: payload.joined_at || null,
     notes: payload.notes ? String(payload.notes).trim() : null
   };

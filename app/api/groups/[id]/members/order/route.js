@@ -3,11 +3,11 @@ import { handleApiError, requireAdmin, unauthorized } from "@/lib/api";
 import { writeAuditLog } from "@/lib/auditLog";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
-const MEMBER_SELECT = "id,char_name,char_class,group_id,party_slot,is_officer,auction_priority_override,joined_at,notes,created_at,updated_at";
+const MEMBER_SELECT = "id,char_name,char_class,group_id,party_slot,is_officer,auction_priority_override,auction_priority_card,joined_at,notes,created_at,updated_at";
 
 function isMissingPartySlotError(error) {
   const message = String(error?.message || "");
-  return error?.code === "42703" || message.includes("party_slot") || message.includes("auction_priority_override");
+  return error?.code === "42703" || message.includes("party_slot") || message.includes("auction_priority_override") || message.includes("auction_priority_card");
 }
 
 export async function PATCH(request, { params }) {

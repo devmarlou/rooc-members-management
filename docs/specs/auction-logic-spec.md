@@ -64,7 +64,7 @@ A **round** is a complete cycle where every member receives their full per-round
 
 The system creates a **locked rotation list once** by randomly shuffling all existing members. This permanent list is the single source of truth for auction order.
 
-Priority members have an auction-level feather entitlement: at the start of every Guild or League auction they receive L&D and T&S first, even when stored cycle progress is already capped. Their `8 L&D / 10 T&S` limits remain hard within that individual auction, so an item crossing into a new cycle mid-auction cannot allocate a second batch to them. Puppet Card does not use priority; it follows the shared permanent rotation at one card per member.
+Priority members have an auction-level feather entitlement: at the start of every Guild or League auction they receive L&D and T&S first, even when stored cycle progress is already capped. Their `8 L&D / 10 T&S` limits remain hard within that individual auction, so an item crossing into a new cycle mid-auction cannot allocate a second batch to them. Puppet Card follows the shared permanent rotation at one card per member by default. A member can additionally be given **card priority** (`members.auction_priority_card`): they are slotted right after the cursor start for Puppet Card in every Guild or League auction, still hard-capped at one card per auction (Puppet Card never cycle-resets mid-auction, so no second card is ever handed out).
 
 - **At round start:** `SELECT * FROM members ORDER BY random()` → assign positions 1..N → lock
 - **Lock duration:** permanent; item-cycle completion never reshuffles it

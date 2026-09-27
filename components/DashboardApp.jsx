@@ -63,6 +63,7 @@ const emptyMember = {
   party_slot: null,
   is_officer: false,
   auction_priority_override: false,
+  auction_priority_card: false,
   joined_at: "",
   notes: "",
 };
@@ -176,7 +177,7 @@ function normalizePartyMemberName(name) {
 }
 
 function auctionPriorityRank(member) {
-  return member?.auction_priority_override ? 0 : 1;
+  return member?.auction_priority_override || member?.auction_priority_card ? 0 : 1;
 }
 
 function sortedPartyRoster(roster, groupName) {
@@ -2237,6 +2238,16 @@ function MemberForm({
         />
         <span>Feather priority. Receives L&D and T&S in every auction.</span>
       </label>
+      <label className="checkbox-row wide">
+        <input
+          type="checkbox"
+          checked={Boolean(form.auction_priority_card)}
+          onChange={(event) =>
+            update("auction_priority_card", event.target.checked)
+          }
+        />
+        <span>Card priority. Receives one Puppet Card in every auction.</span>
+      </label>
       {initial?.id &&
         auctionState?.activeRound &&
         cappedAuctionItems.length > 0 && (
@@ -3786,10 +3797,20 @@ function MembersSection({
                           {groupsById[member.group_id]?.name || "Unassigned"}
                         </td>
                         <td>
-                          {member.auction_priority_override ? (
-                            <span className="priority-badge">
-                              Feather priority
-                            </span>
+                          {member.auction_priority_override ||
+                          member.auction_priority_card ? (
+                            <>
+                              {member.auction_priority_override && (
+                                <span className="priority-badge">
+                                  Feather priority
+                                </span>
+                              )}
+                              {member.auction_priority_card && (
+                                <span className="priority-badge">
+                                  Card priority
+                                </span>
+                              )}
+                            </>
                           ) : (
                             <span className="table-secondary">Standard</span>
                           )}
@@ -3868,7 +3889,8 @@ function MembersSection({
                                 {member.is_officer && (
                                   <span className="officer-badge">Officer</span>
                                 )}
-                                {member.auction_priority_override && (
+                                {(member.auction_priority_override ||
+                                  member.auction_priority_card) && (
                                   <span className="priority-badge">
                                     Priority
                                   </span>
