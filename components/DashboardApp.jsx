@@ -4645,34 +4645,6 @@ function groupedAuctionBids(units = [], queue = []) {
   return rows;
 }
 
-function auctionSearchMatches(row, query) {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) return true;
-  return String(row.member?.char_name || "")
-    .toLowerCase()
-    .includes(normalizedQuery);
-}
-
-function auctionSearchLocation(row) {
-  if (!row) return "";
-  const positions = row.items
-    .map((item) => item.positions)
-    .filter(Boolean)
-    .join(" · ");
-  return positions || "";
-}
-
-function auctionInventorySummary(auction, auctionItems) {
-  const itemById = new Map(auctionItems.map((item) => [item.id, item]));
-  return (auction.inventory || [])
-    .map((row) => ({
-      item: itemById.get(row.item_id),
-      quantity: row.quantity || 0,
-    }))
-    .filter(({ item, quantity }) => item && quantity > 0)
-    .sort((a, b) => (a.item.sort_order || 0) - (b.item.sort_order || 0));
-}
-
 function ItemIcon({ itemKey, label = "Item" }) {
   const src = ITEM_ICON_SRC[itemKey];
   if (!src)
@@ -5715,7 +5687,6 @@ function AuctionFoundation({
   busy,
 }) {
   const [collapsed, setCollapsed] = useState(false);
-  const [auctionView, setAuctionView] = useState("list");
   const [auctionPages, setAuctionPages] = useState({});
   const [auctionPageItems, setAuctionPageItems] = useState({});
   const [auctionSearch, setAuctionSearch] = useState("");
@@ -5999,26 +5970,6 @@ function AuctionFoundation({
                     </button>
                   )}
                 </label>
-                <div className="auction-view-toggle" aria-label="Auction view">
-                  <button
-                    type="button"
-                    className={auctionView === "list" ? "active" : ""}
-                    onClick={() => setAuctionView("list")}
-                    aria-pressed={auctionView === "list"}
-                  >
-                    <List size={14} />
-                    By member
-                  </button>
-                  <button
-                    type="button"
-                    className={auctionView === "page" ? "active" : ""}
-                    onClick={() => setAuctionView("page")}
-                    aria-pressed={auctionView === "page"}
-                  >
-                    <LayoutGrid size={14} />
-                    By game page
-                  </button>
-                </div>
                 {!readOnly && (
                   <button
                     className="ghost-button auction-copy-bidders"
@@ -6046,12 +5997,7 @@ function AuctionFoundation({
                     displayAuction.units,
                     auction.queue || [],
                   );
-                  const inventorySummary = auctionInventorySummary(
-                    auction,
-                    auctionItems,
-                  );
                   const locked = auction.status === "locked";
-                  const activeView = auctionView;
                   const pageItemOptions = auctionPageItemOptions(
                     auction,
                     auctionItems,
@@ -6064,17 +6010,6 @@ function AuctionFoundation({
                   const pageStateKey = `${auction.id}:all`;
                   const currentPage = auctionPages[pageStateKey] || 1;
                   const searchQuery = auctionSearch;
-                  const filteredBidRows = searchQuery.trim()
-                    ? bidRows.filter((row) =>
-                        auctionSearchMatches(row, searchQuery),
-                      )
-                    : bidRows;
-                  const searchMatch = filteredBidRows[0] || null;
-                  const searchLocation = searchQuery.trim()
-                    ? searchMatch
-                      ? auctionSearchLocation(searchMatch)
-                      : "No matching bid"
-                    : "";
                   const cycleResetItems = [
                     ...new Set(
                       bidRows.flatMap((row) =>
@@ -6121,52 +6056,6 @@ function AuctionFoundation({
                           {auction.units?.length || 0} allocations
                         </span>
                       </div>
-                      {activeView !== "page" && (
-                        <div
-                          className="auction-prize-summary"
-                          aria-label="Auction prize inventory"
-                        >
-                          {inventorySummary.length ? (
-                            inventorySummary.map(({ item, quantity }) => (
-                              <span
-                                className={`auction-prize-pill prize-${item.item_key}`}
-                                key={item.id}
-                              >
-                                <ItemIcon
-                                  itemKey={item.item_key}
-                                  label={item.name || item.short_name}
-                                />
-                                <strong>{item.short_name}</strong>
-                                <em>x{quantity}</em>
-                              </span>
-                            ))
-                          ) : (
-                            <span className="auction-prize-empty">
-                              No prizes entered
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      {activeView !== "page" && searchLocation && (
-                        <div
-                          className={
-                            searchMatch
-                              ? "auction-search-result"
-                              : "auction-search-result empty"
-                          }
-                        >
-                          {searchMatch ? (
-                            <span>
-                              {searchMatch.member?.char_name} · {searchLocation}
-                            </span>
-                          ) : (
-                            <span>
-                              No member with active bids matches “
-                              {searchQuery.trim()}”.
-                            </span>
-                          )}
-                        </div>
-                      )}
                       {cycleResetItems.length > 0 && (
                         <div className="auction-cycle-note">
                           <RefreshCw size={15} />
@@ -6179,101 +6068,30 @@ function AuctionFoundation({
                         </div>
                       )}
                       <div className="auction-view-panel">
-                        {activeView === "page" ? (
-                          <AuctionPageView
-                            auction={displayAuction}
-                            auctionItems={auctionItems}
-                            page={currentPage}
-                            onPageChange={(page) =>
-                              setAuctionPages((current) => ({
-                                ...current,
-                                [pageStateKey]: page,
-                              }))
-                            }
-                            selectedItemId={selectedPageItemId}
-                            onSelectedItemChange={(itemId) => {
-                              setAuctionPageItems((current) => ({
-                                ...current,
-                                [auction.id]: itemId,
-                              }));
-                              setAuctionPages((current) => ({
-                                ...current,
-                                [`${auction.id}:${itemId}`]:
-                                  current[`${auction.id}:${itemId}`] || 1,
-                              }));
-                            }}
-                            searchQuery={searchQuery}
-                          />
-                        ) : (
-                          <div
-                            className="allocation-table-wrap"
-                            tabIndex={0}
-                            role="region"
-                            aria-label={`${auction.name || auctionTypeLabel(auction.type)} allocation table. Scroll horizontally to see all columns.`}
-                          >
-                            {filteredBidRows.length ? (
-                              <table className="allocation-table">
-                                <colgroup>
-                                  <col className="allocation-col-member" />
-                                  <col />
-                                </colgroup>
-                                <thead>
-                                  <tr>
-                                    <th>Member</th>
-                                    <th>Bid instructions</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {filteredBidRows.map((row) => (
-                                    <tr key={`${auction.id}-${row.member_id}`}>
-                                      <td>
-                                        <strong>
-                                          {row.member?.char_name || "Unknown"}
-                                        </strong>
-                                        {Number.isFinite(row.queuePosition) &&
-                                          row.queuePosition !==
-                                            Number.MAX_SAFE_INTEGER && (
-                                            <span>
-                                              Line {row.queuePosition}
-                                            </span>
-                                          )}
-                                        {row.cycle_reset && (
-                                          <span>cycle reset</span>
-                                        )}
-                                      </td>
-                                      <td>
-                                        <div className="bid-stack">
-                                          {row.items.map((item) => (
-                                            <div
-                                              className="bid-line"
-                                              key={`${item.item_id}-${item.positions}`}
-                                            >
-                                              <ItemIcon
-                                                itemKey={
-                                                  item.units?.[0]?.item_key
-                                                }
-                                                label={item.item}
-                                              />
-                                              <strong>{item.item}</strong>
-                                              <code>{item.positions}</code>
-                                              <span>x{item.quantity}</span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            ) : (
-                              <div className="empty-panel compact">
-                                {searchQuery.trim()
-                                  ? "No matching member has active bids in this auction."
-                                  : "No allocations for this auction."}
-                              </div>
-                            )}
-                          </div>
-                        )}
+                        <AuctionPageView
+                          auction={displayAuction}
+                          auctionItems={auctionItems}
+                          page={currentPage}
+                          onPageChange={(page) =>
+                            setAuctionPages((current) => ({
+                              ...current,
+                              [pageStateKey]: page,
+                            }))
+                          }
+                          selectedItemId={selectedPageItemId}
+                          onSelectedItemChange={(itemId) => {
+                            setAuctionPageItems((current) => ({
+                              ...current,
+                              [auction.id]: itemId,
+                            }));
+                            setAuctionPages((current) => ({
+                              ...current,
+                              [`${auction.id}:${itemId}`]:
+                                current[`${auction.id}:${itemId}`] || 1,
+                            }));
+                          }}
+                          searchQuery={searchQuery}
+                        />
                       </div>
                       {!readOnly && (
                         <div className="active-actions">
