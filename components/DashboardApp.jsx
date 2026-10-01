@@ -4408,11 +4408,52 @@ function auctionUnitDisplaySlot(unit) {
   return unit.displaySlot || unit.slot;
 }
 
+// Re-position units to match the in-game page layout (same walk as
+// buildAuctionPages): items in game order, every inventory unit takes a slot,
+// even leftovers nobody was allocated. Stored engine page/slot can differ.
 function displayPositionedAuctionUnits(auction, auctionItems) {
-  return (auction.units || []).map((unit) => ({
+  const units = auction.units || [];
+  const quantityByItemId = new Map(
+    (auction.inventory || []).map((row) => [row.item_id, row.quantity || 0]),
+  );
+  const unitsByItemId = new Map();
+  for (const unit of units) {
+    const itemUnits = unitsByItemId.get(unit.item_id) || [];
+    itemUnits.push(unit);
+    unitsByItemId.set(unit.item_id, itemUnits);
+  }
+  const displayByUnit = new Map();
+  let displayIndex = 0;
+  const applicableItems = auctionItems
+    .filter((item) => itemAppliesTo(item, auction.type))
+    .sort(
+      (a, b) =>
+        auctionDisplayItemOrder(a) - auctionDisplayItemOrder(b) ||
+        (a.sort_order || 0) - (b.sort_order || 0),
+    );
+  for (const item of applicableItems) {
+    const quantity = quantityByItemId.get(item.id) || 0;
+    const itemUnits = [...(unitsByItemId.get(item.id) || [])].sort(
+      (a, b) => a.page - b.page || a.slot - b.slot,
+    );
+    for (let index = 0; index < quantity; index += 1) {
+      const unit = itemUnits[index];
+      if (unit) {
+        displayByUnit.set(unit, {
+          displayPage: Math.floor(displayIndex / 4) + 1,
+          displaySlot: (displayIndex % 4) + 1,
+        });
+      }
+      displayIndex += 1;
+    }
+  }
+
+  return units.map((unit) => ({
     ...unit,
-    displayPage: unit.page,
-    displaySlot: unit.slot,
+    ...(displayByUnit.get(unit) || {
+      displayPage: unit.page,
+      displaySlot: unit.slot,
+    }),
   }));
 }
 
