@@ -386,6 +386,7 @@ function LoginScreen({ onLogin, registerStep = "", authError = "" }) {
         method: "POST",
         body: JSON.stringify({ username, password }),
       });
+      storeAuctionView(null);
       onLogin();
     } catch (err) {
       setError(err.message);
@@ -467,7 +468,11 @@ function LoginScreen({ onLogin, registerStep = "", authError = "" }) {
             <span>or</span>
           </div>
           <div className="login-discord-links">
-            <a className="ghost-button" href="/api/auth/discord/start">
+            <a
+              className="ghost-button"
+              href="/api/auth/discord/start"
+              onClick={() => storeAuctionView(null)}
+            >
               Continue with Discord
             </a>
           </div>
@@ -4786,6 +4791,218 @@ function buildAuctionPages(auction, auctionItems, selectedItemId = null) {
   return pages;
 }
 
+// List view rows are derived from the exact game-page slots (buildAuctionPages),
+// so every page/slot shown here matches the game view one-to-one.
+function auctionListRowsFromPages(pages, queue = []) {
+  const queueByMemberId = new Map(queue.map((row) => [row.member_id, row]));
+  const memberMap = new Map();
+  for (const page of pages) {
+    for (const slot of page.slots) {
+      if (!slot.member || !slot.item) continue;
+      const memberId = slot.unit?.member_id || slot.member.id;
+      if (!memberMap.has(memberId)) {
+        memberMap.set(memberId, {
+          member: slot.member,
+          member_id: memberId,
+          queuePosition:
+            queueByMemberId.get(memberId)?.position || Number.MAX_SAFE_INTEGER,
+          items: new Map(),
+          quantity: 0,
+        });
+      }
+      const row = memberMap.get(memberId);
+      if (!row.items.has(slot.item.id)) {
+        row.items.set(slot.item.id, {
+          item_id: slot.item.id,
+          item_key: slot.item.item_key,
+          item: slot.item.short_name || slot.item.name,
+          slots: [],
+        });
+      }
+      row.items.get(slot.item.id).slots.push(slot);
+      row.quantity += 1;
+    }
+  }
+  // Pages are walked in order, so each member's first slot is its first entry.
+  return [...memberMap.values()].map((row) => ({
+    ...row,
+    items: [...row.items.values()].map((item) => ({
+      ...item,
+      quantity: item.slots.length,
+      positions: compactSlots(item.slots),
+    })),
+  }));
+}
+
+function AuctionListView({ auction, auctionItems, searchQuery = "" }) {
+  const rows = auctionListRowsFromPages(
+    buildAuctionPages(auction, auctionItems, null),
+    auction.queue || [],
+  );
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredRows = normalizedSearch
+    ? rows.filter((row) =>
+        String(row.member?.char_name || "")
+          .toLowerCase()
+          .includes(normalizedSearch),
+      )
+    : rows;
+
+  return (
+    <div
+      className="allocation-table-wrap"
+      tabIndex={0}
+      role="region"
+      aria-label={`${auction.name || auctionTypeLabel(auction.type)} list view`}
+    >
+      {filteredRows.length ? (
+        <table className="allocation-table">
+          <colgroup>
+            <col className="allocation-col-member" />
+            <col />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Member</th>
+              <th>Your slots</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredRows.map((row) => (
+              <tr key={row.member_id}>
+                <td>
+                  <strong>{row.member?.char_name || "Unknown"}</strong>
+                  {row.member?.char_class && (
+                    <span>{row.member.char_class}</span>
+                  )}
+                </td>
+                <td>
+                  <div className="bid-stack">
+                    {row.items.map((item) => (
+                      <div className="bid-line" key={item.item_id}>
+                        <ItemIcon itemKey={item.item_key} label={item.item} />
+                        <strong>{item.item}</strong>
+                        <code>{item.positions}</code>
+                        <span>x{item.quantity}</span>
+                      </div>
+                    ))}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <div className="empty-panel compact">
+          {normalizedSearch
+            ? `No matching bids for “${searchQuery.trim()}”.`
+            : "No allocations for this auction."}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const AUCTION_VIEW_STORAGE_KEY = "encore_auction_view";
+
+// Per-tab, per-login choice: cleared on logout so the next login asks again.
+function readStoredAuctionView() {
+  try {
+    const value = window.sessionStorage.getItem(AUCTION_VIEW_STORAGE_KEY);
+    return value === "list" || value === "page" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeAuctionView(value) {
+  try {
+    if (value) window.sessionStorage.setItem(AUCTION_VIEW_STORAGE_KEY, value);
+    else window.sessionStorage.removeItem(AUCTION_VIEW_STORAGE_KEY);
+  } catch {}
+}
+
+function AuctionViewPicker({ onPick }) {
+  return (
+    <div className="auction-view-picker">
+      <div className="auction-view-picker-head">
+        <strong>How do you want to see the auction list?</strong>
+        <span>You can switch anytime. Both views show the same slots.</span>
+      </div>
+      <div className="auction-view-picker-options">
+        <button type="button" onClick={() => onPick("list")}>
+          <div className="auction-view-preview list" aria-hidden="true">
+            <div className="preview-head">
+              <span>Member</span>
+              <span>Your slots</span>
+            </div>
+            {[
+              ["DocxBR", "Page 1 and Slot 3", "Page 22 and Slot 1"],
+              ["WAIS", "Page 1 and Slot 1", null],
+              ["Mamark", "Page 1 and Slot 4", "Page 63 and Slot 2"],
+            ].map(([name, first, second], index) => (
+              <div
+                className={`preview-row${index === 0 ? " hit" : ""}`}
+                key={name}
+              >
+                <b>{name}</b>
+                <span>
+                  <i />
+                  {first}
+                  {second && (
+                    <>
+                      <br />
+                      <i />
+                      {second}
+                    </>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="auction-view-picker-label">
+            <List size={16} />
+            <strong>List view</strong>
+          </div>
+          <em>
+            One row per member. Search your name to see all your pages and
+            slots at once.
+          </em>
+        </button>
+        <button type="button" onClick={() => onPick("page")}>
+          <div className="auction-view-preview page" aria-hidden="true">
+            <div className="preview-head">
+              <span>Guild Auction</span>
+              <span>Page 1</span>
+            </div>
+            {["WAIS", "BanoobsBG", "DocxBR", "Mamark"].map((name, index) => (
+              <div
+                className={`preview-row${index === 2 ? " hit" : ""}`}
+                key={name}
+              >
+                <b>Slot {index + 1}</b>
+                <span>
+                  <i />
+                  Puppet Card
+                </span>
+                <span>{name}</span>
+              </div>
+            ))}
+          </div>
+          <div className="auction-view-picker-label">
+            <LayoutGrid size={16} />
+            <strong>Game view</strong>
+          </div>
+          <em>
+            Looks like the in-game auction pages. Flip page by page, 4 slots
+            each, just like in game.
+          </em>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AuctionPageView({
   auction,
   auctionItems,
@@ -5684,12 +5901,27 @@ function AuctionFoundation({
   onCopyAuctionList,
   onCopyBidderNames,
   readOnly = false,
+  askViewChoice = false,
   busy,
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  // Members pick list or game view once per login; admins default to game view.
+  const [auctionView, setAuctionView] = useState(
+    askViewChoice ? null : "page",
+  );
   const [auctionPages, setAuctionPages] = useState({});
   const [auctionPageItems, setAuctionPageItems] = useState({});
   const [auctionSearch, setAuctionSearch] = useState("");
+  useEffect(() => {
+    if (askViewChoice) setAuctionView(readStoredAuctionView());
+    else setAuctionView((current) => current || "page");
+  }, [askViewChoice]);
+
+  function pickAuctionView(view) {
+    setAuctionView(view);
+    if (askViewChoice) storeAuctionView(view);
+  }
+
   const activeRound = auctionState?.activeRound;
   const activeAuctions =
     auctionState?.activeAuctions ||
@@ -5970,6 +6202,28 @@ function AuctionFoundation({
                     </button>
                   )}
                 </label>
+                {auctionView && (
+                  <div className="auction-view-toggle" aria-label="Auction view">
+                    <button
+                      type="button"
+                      className={auctionView === "list" ? "active" : ""}
+                      onClick={() => pickAuctionView("list")}
+                      aria-pressed={auctionView === "list"}
+                    >
+                      <List size={14} />
+                      List view
+                    </button>
+                    <button
+                      type="button"
+                      className={auctionView === "page" ? "active" : ""}
+                      onClick={() => pickAuctionView("page")}
+                      aria-pressed={auctionView === "page"}
+                    >
+                      <LayoutGrid size={14} />
+                      Game view
+                    </button>
+                  </div>
+                )}
                 {!readOnly && (
                   <button
                     className="ghost-button auction-copy-bidders"
@@ -5984,8 +6238,12 @@ function AuctionFoundation({
               </div>
             ) : null}
 
+            {activeAuctions.length > 0 && !auctionView && (
+              <AuctionViewPicker onPick={pickAuctionView} />
+            )}
             <div
               className={`auction-grid${activeAuctions.length > 1 ? " two-up" : ""}`}
+              hidden={activeAuctions.length > 0 && !auctionView}
             >
               {activeAuctions.length ? (
                 activeAuctions.map((auction) => {
@@ -6068,30 +6326,38 @@ function AuctionFoundation({
                         </div>
                       )}
                       <div className="auction-view-panel">
-                        <AuctionPageView
-                          auction={displayAuction}
-                          auctionItems={auctionItems}
-                          page={currentPage}
-                          onPageChange={(page) =>
-                            setAuctionPages((current) => ({
-                              ...current,
-                              [pageStateKey]: page,
-                            }))
-                          }
-                          selectedItemId={selectedPageItemId}
-                          onSelectedItemChange={(itemId) => {
-                            setAuctionPageItems((current) => ({
-                              ...current,
-                              [auction.id]: itemId,
-                            }));
-                            setAuctionPages((current) => ({
-                              ...current,
-                              [`${auction.id}:${itemId}`]:
-                                current[`${auction.id}:${itemId}`] || 1,
-                            }));
-                          }}
-                          searchQuery={searchQuery}
-                        />
+                        {auctionView === "list" ? (
+                          <AuctionListView
+                            auction={displayAuction}
+                            auctionItems={auctionItems}
+                            searchQuery={searchQuery}
+                          />
+                        ) : (
+                          <AuctionPageView
+                            auction={displayAuction}
+                            auctionItems={auctionItems}
+                            page={currentPage}
+                            onPageChange={(page) =>
+                              setAuctionPages((current) => ({
+                                ...current,
+                                [pageStateKey]: page,
+                              }))
+                            }
+                            selectedItemId={selectedPageItemId}
+                            onSelectedItemChange={(itemId) => {
+                              setAuctionPageItems((current) => ({
+                                ...current,
+                                [auction.id]: itemId,
+                              }));
+                              setAuctionPages((current) => ({
+                                ...current,
+                                [`${auction.id}:${itemId}`]:
+                                  current[`${auction.id}:${itemId}`] || 1,
+                              }));
+                            }}
+                            searchQuery={searchQuery}
+                          />
+                        )}
                       </div>
                       {!readOnly && (
                         <div className="active-actions">
@@ -6548,6 +6814,8 @@ export default function DashboardApp({
 
   async function logout() {
     await api("/api/auth/logout", { method: "POST" });
+    // Next login should be asked for list vs game view again.
+    storeAuctionView(null);
     adminSessionCache = null;
     dashboardDataCache.admin = null;
     // Same reasoning as checkSession's unauthenticated branch above: these are
@@ -7556,6 +7824,10 @@ export default function DashboardApp({
                         onCopyAuctionList={copyAuctionList}
                         onCopyBidderNames={copyBidderNames}
                         readOnly
+                        askViewChoice={
+                          viewer.role !== "admin" &&
+                          viewer.role !== "super_admin"
+                        }
                       />
                       <PartiesSection
                         members={members}
