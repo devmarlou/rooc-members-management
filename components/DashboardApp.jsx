@@ -368,6 +368,8 @@ const DISCORD_AUTH_ERROR_MESSAGES = {
   discord_not_installed:
     "Discord sign-in isn't set up yet. Contact a guild officer.",
   discord_failed: "Could not sign in with Discord. Please try again.",
+  discord_reset_not_linked:
+    "That Discord account isn't linked to a guild account. Ask a guild officer to reset your password.",
 };
 
 function LoginScreen({ onLogin, registerStep = "", authError = "" }) {
@@ -401,6 +403,10 @@ function LoginScreen({ onLogin, registerStep = "", authError = "" }) {
 
   if (mode === "local-register") {
     return <LocalRegistrationCompleteScreen onBack={() => setMode("login")} />;
+  }
+
+  if (mode === "forgot") {
+    return <ForgotPasswordScreen onBack={() => setMode("login")} />;
   }
 
   const authErrorMessage = DISCORD_AUTH_ERROR_MESSAGES[authError] || null;
@@ -476,6 +482,9 @@ function LoginScreen({ onLogin, registerStep = "", authError = "" }) {
               Continue with Discord
             </a>
           </div>
+          <button type="button" className="link-button" onClick={() => setMode("forgot")}>
+            Forgot password?
+          </button>
           <button type="button" className="link-button" onClick={() => setMode("local-register")}>
             Register without Discord
           </button>
@@ -868,7 +877,59 @@ function LocalRegistrationCompleteScreen({ onBack }) {
   );
 }
 
-function ResetPasswordScreen({ username, onReset }) {
+// Accounts have no email, so recovery is either Discord (self-serve) or an
+// officer-issued temporary password (see .codex/PASSWORD_RESET_RUNBOOK.md).
+function ForgotPasswordScreen({ onBack }) {
+  return (
+    <main className="login-page">
+      <section className="login-shell" aria-labelledby="forgot-title">
+        <aside className="login-brand">
+          <div className="brand-mark">
+            <Shield size={28} />
+          </div>
+          <div>
+            <h1>ENCORE</h1>
+            <p>Ragnarok Origin Classic</p>
+            <p>Prontera 6</p>
+          </div>
+          <p className="login-brand-note">
+            Guild management.
+          </p>
+        </aside>
+        <section className="login-card">
+          <p className="login-kicker">
+            <KeyRound size={14} />
+            Account recovery
+          </p>
+          <h2 id="forgot-title">Forgot password</h2>
+          <p className="login-intro">
+            If your account is linked to Discord, confirm with Discord and
+            choose a new password.
+          </p>
+          <div className="login-discord-links">
+            <a
+              className="ghost-button"
+              href="/api/auth/discord/start?intent=reset"
+              onClick={() => storeAuctionView(null)}
+            >
+              Reset with Discord
+            </a>
+          </div>
+          <p className="login-intro">
+            No Discord linked? Ask a guild officer to reset your password. They
+            will give you a temporary password, and you will choose a new one
+            when you sign in.
+          </p>
+          <button type="button" className="link-button" onClick={onBack}>
+            Back to sign in
+          </button>
+        </section>
+      </section>
+    </main>
+  );
+}
+
+function ResetPasswordScreen({ username, resetVerified = false, onReset }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -903,6 +964,11 @@ function ResetPasswordScreen({ username, onReset }) {
     }
   }
 
+  async function signOut() {
+    await api("/api/auth/logout", { method: "POST" }).catch(() => {});
+    onReset();
+  }
+
   return (
     <main className="login-page">
       <section className="login-shell" aria-labelledby="reset-title">
@@ -922,30 +988,34 @@ function ResetPasswordScreen({ username, onReset }) {
         <section className="login-card">
           <p className="login-kicker">
             <KeyRound size={14} />
-            First sign in
+            {resetVerified ? "Account recovery" : "First sign in"}
           </p>
           <h2 id="reset-title">Set a new password</h2>
           <p className="login-intro">
-            Signed in as {username}. Change the default password before opening
-            the dashboard.
+            {resetVerified
+              ? `Verified with Discord as ${username}. Choose a new password to continue.`
+              : `Signed in as ${username}. Change your temporary password before opening the dashboard.`}
           </p>
           <form onSubmit={submit} className="login-form">
-            <label>
-              <span>Current password</span>
-              <input
-                value={currentPassword}
-                onChange={(event) => setCurrentPassword(event.target.value)}
-                type="password"
-                autoFocus
-                autoComplete="current-password"
-              />
-            </label>
+            {!resetVerified && (
+              <label>
+                <span>Current password</span>
+                <input
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  type="password"
+                  autoFocus
+                  autoComplete="current-password"
+                />
+              </label>
+            )}
             <label>
               <span>New password</span>
               <input
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
                 type="password"
+                autoFocus={resetVerified}
                 autoComplete="new-password"
                 minLength={8}
               />
@@ -976,6 +1046,9 @@ function ResetPasswordScreen({ username, onReset }) {
               Save password
             </button>
           </form>
+          <button type="button" className="link-button" onClick={signOut}>
+            Sign out
+          </button>
         </section>
       </section>
     </main>
@@ -2121,6 +2194,7 @@ function MemberForm({
   onCancel,
   onSave,
   onCatchUp,
+  onResetPassword,
   busy,
 }) {
   const { classes } = useJobClasses();
@@ -2320,6 +2394,17 @@ function MemberForm({
           >
             <RefreshCw size={15} />
             Catch up cycles
+          </button>
+        )}
+        {initial?.id && (
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => onResetPassword?.(initial)}
+            disabled={busy}
+          >
+            <KeyRound size={15} />
+            Reset password
           </button>
         )}
         <button className="primary-button" disabled={busy}>
@@ -6494,6 +6579,7 @@ export default function DashboardApp({
   const [globalLimitsOpen, setGlobalLimitsOpen] = useState(false);
   const [partyPickerGroup, setPartyPickerGroup] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
+  const [tempPassword, setTempPassword] = useState(null);
   const [finalizePreview, setFinalizePreview] = useState(null);
   const [auditLogs, setAuditLogs] = useState(() => auditLogsCache?.data || []);
   const [auditLogsLoading, setAuditLogsLoading] = useState(false);
@@ -6631,6 +6717,7 @@ export default function DashboardApp({
       username: data.username || "",
       role: data.role || "",
       mustResetPassword: Boolean(data.mustResetPassword),
+      resetVerified: Boolean(data.resetVerified),
     };
     adminSessionCache = nextSession;
     if (!nextSession.authenticated) {
@@ -6975,6 +7062,27 @@ export default function DashboardApp({
             ? "Member cycles caught up"
             : "Member was already caught up",
         );
+      },
+    });
+  }
+
+  function requestResetMemberPassword(member) {
+    if (!member?.id) return;
+    setMemberModal(null);
+    setConfirmAction({
+      title: "Reset password",
+      body: `Reset the login password for ${member.char_name}? They will get a temporary password and must choose a new one at their next sign in.`,
+      confirmLabel: "Reset password",
+      tone: "danger",
+      run: async () => {
+        const data = await api(`/api/members/${member.id}/reset-password`, {
+          method: "POST",
+        });
+        setTempPassword({
+          charName: member.char_name,
+          username: data.username,
+          password: data.temporaryPassword,
+        });
       },
     });
   }
@@ -7673,7 +7781,11 @@ export default function DashboardApp({
 
   if (!publicView && session.mustResetPassword) {
     return (
-      <ResetPasswordScreen username={session.username} onReset={checkSession} />
+      <ResetPasswordScreen
+        username={session.username}
+        resetVerified={session.resetVerified}
+        onReset={checkSession}
+      />
     );
   }
 
@@ -7958,6 +8070,7 @@ export default function DashboardApp({
             onCancel={() => setMemberModal(null)}
             onSave={saveMember}
             onCatchUp={requestCatchUpMemberCycles}
+            onResetPassword={requestResetMemberPassword}
             busy={saving}
           />
         </Modal>
@@ -8098,6 +8211,48 @@ export default function DashboardApp({
           onCancel={() => setConfirmAction(null)}
           onConfirm={runConfirmAction}
         />
+      )}
+
+      {tempPassword && (
+        <Modal title="Temporary password" onClose={() => setTempPassword(null)}>
+          <div className="confirm-body">
+            <div className="confirm-icon">
+              <KeyRound size={18} />
+            </div>
+            <p>
+              Send this to {tempPassword.charName} (username{" "}
+              <strong>{tempPassword.username}</strong>). It is shown only once.
+              They will choose a new password when they sign in.
+            </p>
+          </div>
+          <div className="form-grid">
+            <label>
+              <span>Temporary password</span>
+              <input value={tempPassword.password} readOnly onFocus={(event) => event.target.select()} />
+            </label>
+          </div>
+          <div className="form-actions wide">
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(tempPassword.password);
+                  setToast("Temporary password copied");
+                } catch {
+                  setToast("Could not copy. Select the password and copy it manually.");
+                }
+              }}
+            >
+              <Copy size={15} />
+              Copy
+            </button>
+            <button type="button" className="primary-button" onClick={() => setTempPassword(null)}>
+              <Check size={15} />
+              Done
+            </button>
+          </div>
+        </Modal>
       )}
 
       {toast && (

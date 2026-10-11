@@ -87,6 +87,30 @@ export async function GET(request) {
 
     const account = Array.isArray(data) ? data[0] : data;
 
+    // "Forgot password?" — Discord proves identity, so issue a session that can
+    // only reach the set-new-password screen (mustResetPassword gates every
+    // other route via requireAuth). Never falls through to registration.
+    if (stateData.intent === "reset") {
+      if (!account) return redirectToLogin(request, "discord_reset_not_linked");
+      if (account.status === "disabled") return redirectToLogin(request, "account_disabled");
+      if (account.status === "pending") return redirectToLogin(request, "account_pending");
+
+      const response = NextResponse.redirect(new URL("/", request.url));
+      response.cookies.delete(OAUTH_STATE_COOKIE);
+      response.cookies.set(
+        SESSION_COOKIE,
+        createSessionToken({ ...account, must_reset_password: true, resetVerified: true }),
+        {
+          httpOnly: true,
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
+          path: "/",
+          maxAge: sessionDurationSeconds(account.role) // mirrors the token exp in lib/session.js
+        }
+      );
+      return response;
+    }
+
     if (account) {
       if (account.status === "disabled") {
         return redirectToLogin(request, "account_disabled");

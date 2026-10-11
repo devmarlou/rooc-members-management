@@ -7,6 +7,7 @@ export async function GET(request) {
     authenticated: Boolean(session),
     username: session?.username || null,
     role: session?.role || null,
-    mustResetPassword: Boolean(session?.mustResetPassword)
+    mustResetPassword: Boolean(session?.mustResetPassword),
+    resetVerified: Boolean(session?.resetVerified)
   });
 }

@@ -486,7 +486,7 @@ Store backups in Google Drive, Dropbox, or just locally.
 | **Supabase connection error** | Double-check `NEXT_PUBLIC_SUPABASE_URL` and `_KEY` in both `.env.local` AND Vercel. They must match Supabase project |
 | **"Auth secret missing"** | Run `openssl rand -base64 32`, add it as `SESSION_SECRET` |
 | **Database project paused** | Visit Supabase dashboard, wait ~1 min for resume |
-| **Forgot user password** | In Supabase SQL Editor, update that row's `password_hash` with `extensions.crypt('new-default-password', extensions.gen_salt('bf'))` and set `must_reset_password = true` |
+| **Forgot user password** | Discord-linked users: "Forgot password?" on the login screen. Others: an admin opens the member and clicks "Reset password" to issue a temporary password. Needs `.codex/PASSWORD_RESET_RUNBOOK.md` run once |
 | **Need to inspect data** | Supabase dashboard → Table Editor (built-in) or connect TablePlus using DB credentials |
 
 ---
