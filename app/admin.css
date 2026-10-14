@@ -387,6 +387,20 @@
 .guild-console .stats-history-field strong.stat-trend { display: inline-flex; align-items: center; gap: 2px; }
 .guild-console .stats-history-field strong.stat-trend-up { color: #34d399; }
 .guild-console .stats-history-field strong.stat-trend-down { color: #f87171; }
+/* Base stats (stat_baselines): a small "Base N" note under any stat with a
+   base set, and an amber warning on values below it. */
+.guild-console .stat-base-note { display: block; color: #fbbf24; font-size: 10px; font-weight: 500; opacity: 0.85; }
+.guild-console .stats-history-field.stat-below-base {
+  border-radius: 6px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  background: rgba(245, 158, 11, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.45);
+}
+.guild-console .stats-history-field.stat-below-base span { display: inline-flex; align-items: center; gap: 3px; color: #fbbf24; }
+.guild-console .roster-table td.stat-below-base { background: rgba(245, 158, 11, 0.18); color: #fcd34d; font-weight: 600; }
+.guild-console .base-stats-group { margin-top: 16px; }
+.guild-console .base-stats-group .auction-form-items input.has-base { border-color: rgba(245, 158, 11, 0.6); }
 .guild-console .history-badge {
   display: inline-flex;
   align-items: center;

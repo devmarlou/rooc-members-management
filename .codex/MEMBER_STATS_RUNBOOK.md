@@ -97,3 +97,28 @@ ALTER TABLE member_stats
 If the table already has rows by the time you run this, drop the inline `NOT NULL`, backfill
 `damage_type` for existing rows first, then add the `NOT NULL` constraint as a follow-up
 `ALTER TABLE member_stats ALTER COLUMN damage_type SET NOT NULL;`.
+
+## Migration — race matchups trimmed to reduction vs Medium / Demi-Human
+
+No SQL needed. The app stopped collecting and reading `dmg_vs_small`, `dmg_vs_medium`,
+`dmg_vs_large`, `dmg_vs_brute`, `dmg_vs_demi_human`, `dmg_reduction_vs_small`,
+`dmg_reduction_vs_large` and `dmg_reduction_vs_brute`. The columns are left in place (nullable) so
+older rows aren't touched. Drop them later only if you're sure nothing else reads them.
+
+## Block 2 — create `stat_baselines` (Base Stats admin page)
+
+```sql
+CREATE TABLE stat_baselines (
+  -- a member_stats column name, e.g. 'effective_pdef' (validated app-side
+  -- against STAT_BASELINE_KEYS in lib/memberStats.js)
+  stat_key    TEXT PRIMARY KEY,
+  -- 0 = no base for this stat (never flagged)
+  base_value  NUMERIC NOT NULL DEFAULT 0 CHECK (base_value >= 0),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE stat_baselines DISABLE ROW LEVEL SECURITY;
+```
+
+No seed rows needed: a missing row is treated the same as 0. Until this block is run, the app reads
+every base as 0 and saving on the Base Stats page returns a clear error.

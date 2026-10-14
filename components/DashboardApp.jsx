@@ -49,6 +49,7 @@ import {
   Users,
   Video,
   Download,
+  Gauge,
 } from "lucide-react";
 import { colorGroups } from "@/components/data";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
@@ -158,6 +159,7 @@ let publicStatsBoardCache = null; // { data, loadedAt } — owned by PublicStats
 let povLinksCache = null; // { data, loadedAt } — owned by PovListScreen
 let accountCache = null; // { data, loadedAt } — owned by AccountScreen
 let accountStatsCache = null; // { data, loadedAt } — owned by AccountScreen
+let statBaselinesCache = null; // { data, loadedAt } — owned by useStatBaselines
 let auditLogsCache = null; // { data, loadedAt }
 // /account and /public-stats skip loadData() entirely (see checkSession), so
 // JobClassesContext would otherwise stay empty for them and ClassIcon would
@@ -1190,15 +1192,7 @@ const STATS_OPTIONAL_GROUPS = [
   {
     title: "Race matchups",
     fields: [
-      { key: "dmg_vs_small", label: "Dmg vs Small" },
-      { key: "dmg_reduction_vs_small", label: "Dmg reduction vs Small" },
-      { key: "dmg_vs_medium", label: "Dmg vs Medium" },
       { key: "dmg_reduction_vs_medium", label: "Dmg reduction vs Medium" },
-      { key: "dmg_vs_large", label: "Dmg vs Large" },
-      { key: "dmg_reduction_vs_large", label: "Dmg reduction vs Large" },
-      { key: "dmg_vs_brute", label: "Dmg vs Brute" },
-      { key: "dmg_reduction_vs_brute", label: "Dmg reduction vs Brute" },
-      { key: "dmg_vs_demi_human", label: "Dmg vs Demi-Human" },
       {
         key: "dmg_reduction_vs_demi_human",
         label: "Dmg reduction vs Demi-Human",
@@ -1224,6 +1218,43 @@ const STATS_ALL_TABLE_GROUPS = [
   ...STATS_OPTIONAL_GROUPS,
 ];
 const STATS_ALL_TABLE_FIELDS = STATS_ALL_TABLE_GROUPS.flatMap((group) => group.fields);
+
+// Admin-set base (minimum) value per stat from /api/stat-baselines, as
+// { [key]: value } with only keys above 0. Shared module cache so every stats
+// view on a page reuses one fetch.
+function useStatBaselines() {
+  const [baselines, setBaselines] = useState(() => statBaselinesCache?.data || {});
+  useEffect(() => {
+    const cached = statBaselinesCache;
+    if (cached && Date.now() - cached.loadedAt < DASHBOARD_CACHE_MAX_AGE_MS) return;
+    let cancelled = false;
+    api("/api/stat-baselines")
+      .then((data) => {
+        statBaselinesCache = { data: data.baselines || {}, loadedAt: Date.now() };
+        if (!cancelled) setBaselines(statBaselinesCache.data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return baselines;
+}
+
+// A stat only gets flagged when it has a base above 0 and a submitted value
+// below it. Blank optional stats count as below (the member didn't meet it).
+function isBelowBaseline(baselines, key, value) {
+  const base = baselines?.[key];
+  if (!base) return false;
+  const num = Number(value);
+  return value === null || value === undefined || value === "" || !Number.isFinite(num) || num < base;
+}
+
+function StatBaseNote({ baselines, fieldKey }) {
+  const base = baselines?.[fieldKey];
+  if (!base) return null;
+  return <small className="stat-base-note">Base {base}</small>;
+}
 
 function csvCell(value) {
   const str = String(value ?? "");
@@ -1313,6 +1344,7 @@ function computeEffectiveDef(rawDef, pct) {
 // DiscordRegistrationCompleteScreen (the mandatory initial submission collected
 // during registration), so the ~38-field layout only exists once.
 function StatsFormFields({ form, onChange }) {
+  const baselines = useStatBaselines();
   const effectivePdef = computeEffectiveDef(form.equipment_pdef, form.equipment_pdef_pct);
   const effectiveMdef = computeEffectiveDef(form.equipment_mdef, form.equipment_mdef_pct);
 
@@ -1347,6 +1379,7 @@ function StatsFormFields({ form, onChange }) {
                 onChange={(event) => onChange(field.key, event.target.value)}
                 required
               />
+              <StatBaseNote baselines={baselines} fieldKey={field.key} />
             </label>
           ))}
         </div>
@@ -1358,10 +1391,12 @@ function StatsFormFields({ form, onChange }) {
           <div className="stats-history-field">
             <span>Effective PDEF</span>
             <strong>{effectivePdef === null ? "-" : formatStatDecimal(effectivePdef)}</strong>
+            <StatBaseNote baselines={baselines} fieldKey="effective_pdef" />
           </div>
           <div className="stats-history-field">
             <span>Effective MDEF</span>
             <strong>{effectiveMdef === null ? "-" : formatStatDecimal(effectiveMdef)}</strong>
+            <StatBaseNote baselines={baselines} fieldKey="effective_mdef" />
           </div>
         </div>
       </div>
@@ -1379,6 +1414,7 @@ function StatsFormFields({ form, onChange }) {
                   value={form[field.key] ?? ""}
                   onChange={(event) => onChange(field.key, event.target.value)}
                 />
+                <StatBaseNote baselines={baselines} fieldKey={field.key} />
               </label>
             ))}
           </div>
@@ -1516,8 +1552,28 @@ function StatTrendValue({ fieldKey, value, trends, invert }) {
 // as (UPDATED, OLD) — the OLD card passes `invert` so each priority stat is
 // colored from its own row's perspective (bigger number = green/winner,
 // smaller = red/loser), like a head-to-head comparison chart.
+// One stat cell on a history card — trend coloring plus the below-base
+// warning (see isBelowBaseline) and a small "Base N" note when one is set.
+function StatsHistoryField({ fieldKey, label, rawValue, value, trends, invert, baselines }) {
+  const belowBase = isBelowBaseline(baselines, fieldKey, rawValue);
+  return (
+    <div
+      className={`stats-history-field ${belowBase ? "stat-below-base" : ""}`}
+      title={belowBase ? `Below base stat (${baselines[fieldKey]})` : undefined}
+    >
+      <span>
+        {belowBase && <AlertTriangle size={12} />}
+        {label}
+      </span>
+      <StatTrendValue fieldKey={fieldKey} value={value} trends={trends} invert={invert} />
+      <StatBaseNote baselines={baselines} fieldKey={fieldKey} />
+    </div>
+  );
+}
+
 function StatsHistoryCard({ row, label, trends, onEdit }) {
   const isOld = label !== "updated";
+  const baselines = useStatBaselines();
   return (
     <article className={`stats-history-card ${isOld ? "" : "is-updated"}`}>
       <header>
@@ -1558,39 +1614,48 @@ function StatsHistoryCard({ row, label, trends, onEdit }) {
       </header>
       <div className="auction-form-items compact">
         {STATS_CORE_FIELDS.map((field) => (
-          <div className="stats-history-field" key={field.key}>
-            <span>{field.label}</span>
-            <StatTrendValue fieldKey={field.key} value={row[field.key]} trends={trends} invert={isOld} />
-          </div>
+          <StatsHistoryField
+            key={field.key}
+            fieldKey={field.key}
+            label={field.label}
+            rawValue={row[field.key]}
+            value={row[field.key]}
+            trends={trends}
+            invert={isOld}
+            baselines={baselines}
+          />
         ))}
-        <div className="stats-history-field">
-          <span>Effective PDEF</span>
-          <StatTrendValue
-            fieldKey="effective_pdef"
-            value={formatStatDecimal(row.effective_pdef)}
+        {[
+          { key: "effective_pdef", label: "Effective PDEF" },
+          { key: "effective_mdef", label: "Effective MDEF" },
+        ].map((field) => (
+          <StatsHistoryField
+            key={field.key}
+            fieldKey={field.key}
+            label={field.label}
+            rawValue={row[field.key]}
+            value={formatStatDecimal(row[field.key])}
             trends={trends}
             invert={isOld}
+            baselines={baselines}
           />
-        </div>
-        <div className="stats-history-field">
-          <span>Effective MDEF</span>
-          <StatTrendValue
-            fieldKey="effective_mdef"
-            value={formatStatDecimal(row.effective_mdef)}
-            trends={trends}
-            invert={isOld}
-          />
-        </div>
+        ))}
       </div>
       {STATS_OPTIONAL_GROUPS.map((group) => (
         <div key={group.title}>
           <h4 className="form-subsection-title">{group.title}</h4>
           <div className="auction-form-items compact">
             {group.fields.map((field) => (
-              <div className="stats-history-field" key={field.key}>
-                <span>{field.label}</span>
-                <StatTrendValue fieldKey={field.key} value={row[field.key]} trends={trends} invert={isOld} />
-              </div>
+              <StatsHistoryField
+                key={field.key}
+                fieldKey={field.key}
+                label={field.label}
+                rawValue={row[field.key]}
+                value={row[field.key]}
+                trends={trends}
+                invert={isOld}
+                baselines={baselines}
+              />
             ))}
           </div>
         </div>
@@ -1607,6 +1672,9 @@ function AccountScreen() {
   const [statsLoading, setStatsLoading] = useState(!accountStatsCache);
   const [statsNotice, setStatsNotice] = useState(null);
   const [statsFormCollapsed, setStatsFormCollapsed] = useState(true);
+  // Collapsed by default so the history card's Edit button isn't mistaken
+  // for the "Update stats" (new submission) toggle above it.
+  const [statsHistoryCollapsed, setStatsHistoryCollapsed] = useState(true);
   const [editingStats, setEditingStats] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [linkNotice, setLinkNotice] = useState(null);
@@ -1946,14 +2014,23 @@ function AccountScreen() {
             )}
           </section>
           <section className="content-section" aria-label="Your stats">
-            <div className="section-heading">
-              <div>
+            <button
+              type="button"
+              className="stats-submit-toggle"
+              onClick={() => setStatsHistoryCollapsed((current) => !current)}
+              aria-expanded={!statsHistoryCollapsed}
+            >
+              <span className="stats-submit-toggle-heading">
                 <p className="eyebrow">history</p>
                 <h2>Your stats</h2>
-                <p>Your last 2 submissions.</p>
-              </div>
-            </div>
-            {statsLoading ? (
+                <p>Your last 2 submissions. Use Edit here only to fix a typo in your latest one.</p>
+              </span>
+              <span className="ghost-button">
+                {statsHistoryCollapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+                {statsHistoryCollapsed ? "View stats" : "Collapse"}
+              </span>
+            </button>
+            {statsHistoryCollapsed ? null : statsLoading ? (
               <div className="loading-panel">
                 <Loader2 className="spin" size={20} />
                 Loading stats
@@ -2675,6 +2752,7 @@ function MemberStatsAdminPanel({
   const [view, setView] = useState("all");
   const [exportMode, setExportMode] = useState("both");
   const [hoveredField, setHoveredField] = useState(null);
+  const baselines = useStatBaselines();
   const normalizedQuery = query.trim().toLowerCase();
   const filtered = normalizedQuery
     ? summary.filter(
@@ -2795,6 +2873,7 @@ function MemberStatsAdminPanel({
                     onMouseLeave={() => setHoveredField(null)}
                   >
                     {field.label}
+                    <StatBaseNote baselines={baselines} fieldKey={field.key} />
                   </th>
                 ))}
               </tr>
@@ -2816,7 +2895,17 @@ function MemberStatsAdminPanel({
                   {STATS_ALL_TABLE_FIELDS.map((field) => (
                     <td
                       key={field.key}
-                      className={hoveredField === field.key ? "stats-col-hover" : ""}
+                      className={[
+                        hoveredField === field.key ? "stats-col-hover" : "",
+                        row.latest && isBelowBaseline(baselines, field.key, row.latest[field.key])
+                          ? "stat-below-base"
+                          : "",
+                      ].join(" ")}
+                      title={
+                        row.latest && isBelowBaseline(baselines, field.key, row.latest[field.key])
+                          ? `Below base stat (${baselines[field.key]})`
+                          : undefined
+                      }
                       onMouseEnter={() => setHoveredField(field.key)}
                       onMouseLeave={() => setHoveredField(null)}
                     >
@@ -2898,12 +2987,18 @@ function MemberStatsAdminPanel({
                       <span className="table-secondary">No submissions</span>
                     )}
                   </td>
-                  <td>
-                    {row.latest ? formatStatDecimal(row.latest.effective_pdef) : "-"}
-                  </td>
-                  <td>
-                    {row.latest ? formatStatDecimal(row.latest.effective_mdef) : "-"}
-                  </td>
+                  {["effective_pdef", "effective_mdef"].map((key) => {
+                    const belowBase = row.latest && isBelowBaseline(baselines, key, row.latest[key]);
+                    return (
+                      <td
+                        key={key}
+                        className={belowBase ? "stat-below-base" : ""}
+                        title={belowBase ? `Below base stat (${baselines[key]})` : undefined}
+                      >
+                        {row.latest ? formatStatDecimal(row.latest[key]) : "-"}
+                      </td>
+                    );
+                  })}
                   <td>
                     {row.latest?.video_link ? (
                       <a
@@ -3311,6 +3406,115 @@ function PovListScreen({ role }) {
   );
 }
 
+// Admin editor for stat_baselines: one number per stat, 0 = no base. Members
+// below a stat's base get an amber warning on that stat everywhere it's shown.
+function BaseStatsPanel() {
+  const baselines = useStatBaselines();
+  const [form, setForm] = useState({});
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState(null);
+
+  // Mirror the loaded values into the form until the admin starts typing.
+  useEffect(() => {
+    if (!dirty) setForm(baselines);
+  }, [baselines, dirty]);
+
+  function update(key, value) {
+    setDirty(true);
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function save(event) {
+    event.preventDefault();
+    setSaving(true);
+    setNotice(null);
+    try {
+      const payload = Object.fromEntries(
+        STATS_ALL_TABLE_FIELDS.map((field) => [field.key, form[field.key] ?? 0]),
+      );
+      const data = await api("/api/stat-baselines", {
+        method: "PUT",
+        body: JSON.stringify({ baselines: payload }),
+      });
+      statBaselinesCache = { data: data.baselines || {}, loadedAt: Date.now() };
+      setForm(statBaselinesCache.data);
+      setDirty(false);
+      setNotice({ type: "success", message: "Base stats saved." });
+    } catch (err) {
+      setNotice({ type: "error", message: err.message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const activeCount = Object.keys(baselines).length;
+
+  return (
+    <section className="content-section" aria-label="Base stats">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">requirements</p>
+          <h2>Base stats</h2>
+          <p>
+            Minimum value per stat. 0 = no base, so that stat is never flagged. Members below a
+            base get a warning on that stat. {activeCount} stat{activeCount === 1 ? "" : "s"} have a base right now.
+          </p>
+        </div>
+      </div>
+      {notice && (
+        <div className={notice.type === "error" ? "alert-panel" : "success-panel"}>
+          {notice.type === "error" ? <AlertTriangle size={17} /> : <Check size={17} />}
+          <span>{notice.message}</span>
+          <button onClick={() => setNotice(null)}>Dismiss</button>
+        </div>
+      )}
+      <form onSubmit={save}>
+        {STATS_ALL_TABLE_GROUPS.map((group) => (
+          <div className="base-stats-group" key={group.title}>
+            <h3 className="form-subsection-title">{group.title}</h3>
+            <div className="auction-form-items">
+              {group.fields.map((field) => (
+                <label key={field.key}>
+                  <span>{field.label}</span>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    inputMode="decimal"
+                    className={Number(form[field.key]) > 0 ? "has-base" : ""}
+                    value={form[field.key] ?? 0}
+                    onChange={(event) => update(field.key, event.target.value)}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+        <div className="form-actions">
+          <button className="primary-button" disabled={saving || !dirty}>
+            {saving ? <Loader2 className="spin" size={15} /> : <Save size={15} />}
+            Save base stats
+          </button>
+          {dirty && (
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => {
+                setDirty(false);
+                setForm(baselines);
+              }}
+              disabled={saving}
+            >
+              Reset
+            </button>
+          )}
+        </div>
+      </form>
+    </section>
+  );
+}
+
 function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role }) {
   // Collapsed by default on narrow screens — a hamburger toggle opens it as a
   // full-width dropdown instead of squeezing every item into one cramped row.
@@ -3387,6 +3591,12 @@ function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role 
             label: "POV List",
             icon: Video,
             page: "pov-list",
+          },
+          {
+            href: "/base-stats",
+            label: "Base stats",
+            icon: Gauge,
+            page: "base-stats",
           },
           {
             href: "/job-classes",
@@ -8038,6 +8248,8 @@ export default function DashboardApp({
                           allowExport
                         />
                       )}
+
+                      {adminPage === "base-stats" && <BaseStatsPanel />}
 
                       {adminPage === "job-classes" && (
                         <JobClassesPanel
