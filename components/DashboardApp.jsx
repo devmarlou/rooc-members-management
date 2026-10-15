@@ -55,7 +55,7 @@ import { colorGroups } from "@/components/data";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import { auctionPageNavigation } from "@/lib/auctionPageSearch";
 import { GUILD_MEMBER_LIMIT } from "@/lib/constants";
-import { ensureAbsoluteUrl } from "@/lib/memberStats";
+import { DEFAULT_COMPARE_KEYS, ensureAbsoluteUrl } from "@/lib/memberStats";
 
 const emptyMember = {
   char_name: "",
@@ -159,7 +159,7 @@ let publicStatsBoardCache = null; // { data, loadedAt } — owned by PublicStats
 let povLinksCache = null; // { data, loadedAt } — owned by PovListScreen
 let accountCache = null; // { data, loadedAt } — owned by AccountScreen
 let accountStatsCache = null; // { data, loadedAt } — owned by AccountScreen
-let statBaselinesCache = null; // { data, loadedAt } — owned by useStatBaselines
+let statSettingsCache = null; // { data, loadedAt } — owned by useStatSettings
 let auditLogsCache = null; // { data, loadedAt }
 // /account and /public-stats skip loadData() entirely (see checkSession), so
 // JobClassesContext would otherwise stay empty for them and ClassIcon would
@@ -1112,23 +1112,6 @@ const STATS_CORE_FIELDS = [
 ];
 
 
-// The subset of stats worth flagging when they change between the OLD and
-// UPDATED submissions — the rest are tracked but not important enough to
-// highlight (would be too noisy). All ten are "higher is better" stats, so
-// up = green (improved), down = red (regressed) holds consistently.
-const PRIORITY_STAT_KEYS = new Set([
-  "pdef",
-  "mdef",
-  "equipment_pdef",
-  "equipment_mdef",
-  "equipment_pdef_pct",
-  "equipment_mdef_pct",
-  "effective_pdef",
-  "effective_mdef",
-  "pdmg_reduction",
-  "mdmg_reduction",
-]);
-
 // Tiny diffs are float noise from the equipment-% formula, not a real change.
 function compareStatTrend(current, previous) {
   const a = Number(current);
@@ -1139,16 +1122,17 @@ function compareStatTrend(current, previous) {
   return diff > 0 ? "up" : "down";
 }
 
-// One trend per priority field, computed once from the (newer, older) pair —
+// One trend per compared field (admin-picked on the Base Stats page, see
+// useStatSettings), computed once from the (newer, older) pair —
 // "up" means the newer submission is the bigger (better) number for that
 // stat. Shared by both history cards, which read it like a comparison chart:
 // whichever row actually holds the bigger number is the "winner" for that
 // field, regardless of which card (OLD or UPDATED) it happens to be in — see
 // StatTrendValue's `invert` handling.
-function buildStatTrends(newerRow, olderRow) {
+function buildStatTrends(newerRow, olderRow, compareKeys) {
   const trends = {};
   if (!newerRow || !olderRow) return trends;
-  for (const key of PRIORITY_STAT_KEYS) {
+  for (const key of compareKeys) {
     trends[key] = compareStatTrend(newerRow[key], olderRow[key]);
   }
   return trends;
@@ -1219,26 +1203,36 @@ const STATS_ALL_TABLE_GROUPS = [
 ];
 const STATS_ALL_TABLE_FIELDS = STATS_ALL_TABLE_GROUPS.flatMap((group) => group.fields);
 
-// Admin-set base (minimum) value per stat from /api/stat-baselines, as
-// { [key]: value } with only keys above 0. Shared module cache so every stats
-// view on a page reuses one fetch.
-function useStatBaselines() {
-  const [baselines, setBaselines] = useState(() => statBaselinesCache?.data || {});
+// Admin-set per-stat settings from /api/stat-baselines:
+// - baselines: { [key]: base value }, only keys with a base above 0
+// - compare: keys that show the OLD vs UPDATED up/down comparison
+// Shared module cache so every stats view on a page reuses one fetch.
+const DEFAULT_STAT_SETTINGS = { baselines: {}, compare: DEFAULT_COMPARE_KEYS };
+
+function toStatSettings(data) {
+  return {
+    baselines: data?.baselines || {},
+    compare: Array.isArray(data?.compare) ? data.compare : DEFAULT_COMPARE_KEYS,
+  };
+}
+
+function useStatSettings() {
+  const [settings, setSettings] = useState(() => statSettingsCache?.data || DEFAULT_STAT_SETTINGS);
   useEffect(() => {
-    const cached = statBaselinesCache;
+    const cached = statSettingsCache;
     if (cached && Date.now() - cached.loadedAt < DASHBOARD_CACHE_MAX_AGE_MS) return;
     let cancelled = false;
     api("/api/stat-baselines")
       .then((data) => {
-        statBaselinesCache = { data: data.baselines || {}, loadedAt: Date.now() };
-        if (!cancelled) setBaselines(statBaselinesCache.data);
+        statSettingsCache = { data: toStatSettings(data), loadedAt: Date.now() };
+        if (!cancelled) setSettings(statSettingsCache.data);
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, []);
-  return baselines;
+  return settings;
 }
 
 // A stat only gets flagged when it has a base above 0 and a submitted value
@@ -1344,7 +1338,7 @@ function computeEffectiveDef(rawDef, pct) {
 // DiscordRegistrationCompleteScreen (the mandatory initial submission collected
 // during registration), so the ~38-field layout only exists once.
 function StatsFormFields({ form, onChange }) {
-  const baselines = useStatBaselines();
+  const { baselines } = useStatSettings();
   const effectivePdef = computeEffectiveDef(form.equipment_pdef, form.equipment_pdef_pct);
   const effectiveMdef = computeEffectiveDef(form.equipment_mdef, form.equipment_mdef_pct);
 
@@ -1549,7 +1543,7 @@ function StatTrendValue({ fieldKey, value, trends, invert }) {
 // for the previous one — passed by the caller based on position in the
 // already-newest-first `stats` array, not derived here. `trends`, when given,
 // is the shared per-field up/down map (see buildStatTrends), always computed
-// as (UPDATED, OLD) — the OLD card passes `invert` so each priority stat is
+// as (UPDATED, OLD) — the OLD card passes `invert` so each compared stat is
 // colored from its own row's perspective (bigger number = green/winner,
 // smaller = red/loser), like a head-to-head comparison chart.
 // One stat cell on a history card — trend coloring plus the below-base
@@ -1573,7 +1567,7 @@ function StatsHistoryField({ fieldKey, label, rawValue, value, trends, invert, b
 
 function StatsHistoryCard({ row, label, trends, onEdit }) {
   const isOld = label !== "updated";
-  const baselines = useStatBaselines();
+  const { baselines } = useStatSettings();
   return (
     <article className={`stats-history-card ${isOld ? "" : "is-updated"}`}>
       <header>
@@ -1813,7 +1807,8 @@ function AccountScreen() {
     }
   }
 
-  const statTrends = useMemo(() => buildStatTrends(stats[0], stats[1]), [stats]);
+  const { compare: compareKeys } = useStatSettings();
+  const statTrends = useMemo(() => buildStatTrends(stats[0], stats[1], compareKeys), [stats, compareKeys]);
 
   function startEditingName() {
     setNameValue(account.member.char_name);
@@ -2752,7 +2747,7 @@ function MemberStatsAdminPanel({
   const [view, setView] = useState("all");
   const [exportMode, setExportMode] = useState("both");
   const [hoveredField, setHoveredField] = useState(null);
-  const baselines = useStatBaselines();
+  const { baselines } = useStatSettings();
   const normalizedQuery = query.trim().toLowerCase();
   const filtered = normalizedQuery
     ? summary.filter(
@@ -3039,7 +3034,8 @@ function MemberStatsAdminPanel({
 
 function MemberStatsDetailView({ data, onClose }) {
   const stats = data?.stats || [];
-  const trends = buildStatTrends(stats[0], stats[1]);
+  const { compare: compareKeys } = useStatSettings();
+  const trends = buildStatTrends(stats[0], stats[1], compareKeys);
   return (
     <Modal
       title={`${data?.member?.char_name || "Member"} stats history`}
@@ -3406,23 +3402,39 @@ function PovListScreen({ role }) {
   );
 }
 
-// Admin editor for stat_baselines: one number per stat, 0 = no base. Members
-// below a stat's base get an amber warning on that stat everywhere it's shown.
+// Admin editor for stat_baselines: per stat, a base value (0 = no base) and a
+// Compare toggle. Members below a stat's base get an amber warning on that
+// stat everywhere it's shown; compared stats get the OLD vs UPDATED up/down.
 function BaseStatsPanel() {
-  const baselines = useStatBaselines();
-  const [form, setForm] = useState({});
+  const settings = useStatSettings();
+  const [form, setForm] = useState(() => ({ baselines: settings.baselines, compare: new Set(settings.compare) }));
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState(null);
 
-  // Mirror the loaded values into the form until the admin starts typing.
-  useEffect(() => {
-    if (!dirty) setForm(baselines);
-  }, [baselines, dirty]);
+  function resetForm(next) {
+    setForm({ baselines: next.baselines, compare: new Set(next.compare) });
+    setDirty(false);
+  }
 
-  function update(key, value) {
+  // Mirror the loaded values into the form until the admin starts editing.
+  useEffect(() => {
+    if (!dirty) setForm({ baselines: settings.baselines, compare: new Set(settings.compare) });
+  }, [settings, dirty]);
+
+  function updateBase(key, value) {
     setDirty(true);
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => ({ ...current, baselines: { ...current.baselines, [key]: value } }));
+  }
+
+  function toggleCompare(key) {
+    setDirty(true);
+    setForm((current) => {
+      const compare = new Set(current.compare);
+      if (compare.has(key)) compare.delete(key);
+      else compare.add(key);
+      return { ...current, compare };
+    });
   }
 
   async function save(event) {
@@ -3430,16 +3442,15 @@ function BaseStatsPanel() {
     setSaving(true);
     setNotice(null);
     try {
-      const payload = Object.fromEntries(
-        STATS_ALL_TABLE_FIELDS.map((field) => [field.key, form[field.key] ?? 0]),
+      const baselines = Object.fromEntries(
+        STATS_ALL_TABLE_FIELDS.map((field) => [field.key, form.baselines[field.key] ?? 0]),
       );
       const data = await api("/api/stat-baselines", {
         method: "PUT",
-        body: JSON.stringify({ baselines: payload }),
+        body: JSON.stringify({ baselines, compare: [...form.compare] }),
       });
-      statBaselinesCache = { data: data.baselines || {}, loadedAt: Date.now() };
-      setForm(statBaselinesCache.data);
-      setDirty(false);
+      statSettingsCache = { data: toStatSettings(data), loadedAt: Date.now() };
+      resetForm(statSettingsCache.data);
       setNotice({ type: "success", message: "Base stats saved." });
     } catch (err) {
       setNotice({ type: "error", message: err.message });
@@ -3448,7 +3459,7 @@ function BaseStatsPanel() {
     }
   }
 
-  const activeCount = Object.keys(baselines).length;
+  const activeCount = Object.keys(settings.baselines).length;
 
   return (
     <section className="content-section" aria-label="Base stats">
@@ -3457,8 +3468,10 @@ function BaseStatsPanel() {
           <p className="eyebrow">requirements</p>
           <h2>Base stats</h2>
           <p>
-            Minimum value per stat. 0 = no base, so that stat is never flagged. Members below a
-            base get a warning on that stat. {activeCount} stat{activeCount === 1 ? "" : "s"} have a base right now.
+            Minimum value per stat. 0 or blank = no base, so that stat is never flagged. Members
+            below a base get a warning on that stat. Tick Compare to show the up/down arrows
+            between a member&apos;s OLD and UPDATED stats. {activeCount} stat
+            {activeCount === 1 ? "" : "s"} have a base right now.
           </p>
         </div>
       </div>
@@ -3475,18 +3488,28 @@ function BaseStatsPanel() {
             <h3 className="form-subsection-title">{group.title}</h3>
             <div className="auction-form-items">
               {group.fields.map((field) => (
-                <label key={field.key}>
-                  <span>{field.label}</span>
-                  <input
-                    type="number"
-                    step="any"
-                    min="0"
-                    inputMode="decimal"
-                    className={Number(form[field.key]) > 0 ? "has-base" : ""}
-                    value={form[field.key] ?? 0}
-                    onChange={(event) => update(field.key, event.target.value)}
-                  />
-                </label>
+                <div className="base-stats-field" key={field.key}>
+                  <label>
+                    <span>{field.label}</span>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      inputMode="decimal"
+                      className={Number(form.baselines[field.key]) > 0 ? "has-base" : ""}
+                      value={form.baselines[field.key] ?? 0}
+                      onChange={(event) => updateBase(field.key, event.target.value)}
+                    />
+                  </label>
+                  <label className="base-stats-compare">
+                    <input
+                      type="checkbox"
+                      checked={form.compare.has(field.key)}
+                      onChange={() => toggleCompare(field.key)}
+                    />
+                    Compare
+                  </label>
+                </div>
               ))}
             </div>
           </div>
@@ -3497,15 +3520,7 @@ function BaseStatsPanel() {
             Save base stats
           </button>
           {dirty && (
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => {
-                setDirty(false);
-                setForm(baselines);
-              }}
-              disabled={saving}
-            >
+            <button type="button" className="ghost-button" onClick={() => resetForm(settings)} disabled={saving}>
               Reset
             </button>
           )}

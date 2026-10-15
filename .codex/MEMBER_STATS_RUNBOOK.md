@@ -122,3 +122,25 @@ ALTER TABLE stat_baselines DISABLE ROW LEVEL SECURITY;
 
 No seed rows needed: a missing row is treated the same as 0. Until this block is run, the app reads
 every base as 0 and saving on the Base Stats page returns a clear error.
+
+## Migration — add `compare` to `stat_baselines` (Compare checkbox on Base Stats)
+
+Run after Block 2. Adds the per-stat Compare toggle (OLD vs UPDATED up/down arrows) and ticks the
+10 stats that were hardcoded before, so nothing changes visually until an admin edits it.
+
+```sql
+ALTER TABLE stat_baselines
+  ADD COLUMN compare BOOLEAN NOT NULL DEFAULT false;
+
+INSERT INTO stat_baselines (stat_key, base_value, compare)
+VALUES
+  ('pdef', 0, true), ('mdef', 0, true),
+  ('equipment_pdef', 0, true), ('equipment_mdef', 0, true),
+  ('equipment_pdef_pct', 0, true), ('equipment_mdef_pct', 0, true),
+  ('effective_pdef', 0, true), ('effective_mdef', 0, true),
+  ('pdmg_reduction', 0, true), ('mdmg_reduction', 0, true)
+ON CONFLICT (stat_key) DO UPDATE SET compare = true;
+```
+
+Until this runs, the app uses those same 10 stats as the default and saving on Base Stats returns a
+clear error.

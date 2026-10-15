@@ -379,8 +379,8 @@
 .guild-console .stats-history-field { display: flex; flex-direction: column; gap: 1px; }
 .guild-console .stats-history-field span { color: var(--muted); font-size: 11px; }
 .guild-console .stats-history-field strong { font-size: 13px; }
-/* Priority stats (see PRIORITY_STAT_KEYS) shown like a head-to-head
-   comparison chart — all ten are "higher is better", so whichever card
+/* Compared stats (Compare checkbox on Base Stats) shown like a head-to-head
+   comparison chart, treated as "higher is better", so whichever card
    (OLD or UPDATED) actually holds the bigger number for a given stat gets
    the "up"/green treatment and the smaller one gets "down"/red, regardless
    of which card that happens to be (see StatTrendValue's `invert` prop). */
@@ -401,6 +401,9 @@
 .guild-console .roster-table td.stat-below-base { background: rgba(245, 158, 11, 0.18); color: #fcd34d; font-weight: 600; }
 .guild-console .base-stats-group { margin-top: 16px; }
 .guild-console .base-stats-group .auction-form-items input.has-base { border-color: rgba(245, 158, 11, 0.6); }
+.guild-console .base-stats-field { display: flex; flex-direction: column; gap: 6px; }
+.guild-console .base-stats-field .base-stats-compare { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; cursor: pointer; }
+.guild-console .base-stats-field .base-stats-compare input { width: auto; min-height: 0; margin: 0; }
 .guild-console .history-badge {
   display: inline-flex;
   align-items: center;
