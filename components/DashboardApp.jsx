@@ -46,7 +46,6 @@ import {
   BarChart3,
   Layers,
   ExternalLink,
-  Users,
   Video,
   Download,
   Gauge,
@@ -2746,6 +2745,7 @@ function MemberStatsAdminPanel({
   const [query, setQuery] = useState("");
   const [view, setView] = useState("all");
   const [exportMode, setExportMode] = useState("both");
+  const [sortBy, setSortBy] = useState("updated");
   const [hoveredField, setHoveredField] = useState(null);
   const { baselines } = useStatSettings();
   const normalizedQuery = query.trim().toLowerCase();
@@ -2756,6 +2756,16 @@ function MemberStatsAdminPanel({
           row.char_class.toLowerCase().includes(normalizedQuery),
       )
     : summary;
+  // "updated" puts the newest submissions on top so recent updates are easy
+  // to spot; members with no submissions always sink to the bottom.
+  const sorted =
+    sortBy === "updated"
+      ? [...filtered].sort(
+          (a, b) =>
+            (b.latest ? new Date(b.latest.submitted_at) : 0) -
+            (a.latest ? new Date(a.latest.submitted_at) : 0),
+        )
+      : [...filtered].sort((a, b) => a.char_name.localeCompare(b.char_name));
 
   function handleExport() {
     // Always exports the full roster, ignoring any active search filter, so
@@ -2793,6 +2803,14 @@ function MemberStatsAdminPanel({
             </div>
           )}
           <div className="section-actions">
+            <select
+              aria-label="Sort members"
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value)}
+            >
+              <option value="updated">Latest updated</option>
+              <option value="name">Name (A-Z)</option>
+            </select>
             <div className="view-toggle" aria-label="Stats table view">
               <button
                 type="button"
@@ -2874,7 +2892,7 @@ function MemberStatsAdminPanel({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((row) => (
+              {sorted.map((row) => (
                 <tr key={row.member_id}>
                   <td className="stats-sticky-col">
                     <strong>{row.char_name}</strong>
@@ -2964,7 +2982,7 @@ function MemberStatsAdminPanel({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((row) => (
+              {sorted.map((row) => (
                 <tr key={row.member_id}>
                   <td>
                     <strong>{row.char_name}</strong>
@@ -3108,7 +3126,7 @@ function PublicStatsBoardScreen() {
         loading={loading}
         onViewMember={viewMember}
         eyebrow="guild board"
-        title="Public stats"
+        title="Member stats"
         description="Latest stats submitted by every member."
       />
       {detail && <MemberStatsDetailView data={detail} onClose={() => setDetail(null)} />}
@@ -3550,8 +3568,8 @@ function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role 
           },
           {
             href: "/public-stats",
-            label: "Public stats",
-            icon: Users,
+            label: "Member stats",
+            icon: BarChart3,
             page: "public-stats",
           },
           {
@@ -3594,12 +3612,6 @@ function AdminSidebar({ activePage, memberCount, partyCount, pendingCount, role 
             label: "Member stats",
             icon: BarChart3,
             page: "member-stats",
-          },
-          {
-            href: "/public-stats",
-            label: "Public stats",
-            icon: Users,
-            page: "public-stats",
           },
           {
             href: "/pov-list",
@@ -8061,13 +8073,13 @@ export default function DashboardApp({
               <AlertTriangle size={17} />
               <span>
                 Member accounts can only view the public auction board, the
-                public stats board, the POV list, and their account page.
+                member stats board, the POV list, and their account page.
               </span>
               <Link className="ghost-button" href="/public">
                 Auction view
               </Link>
               <Link className="ghost-button" href="/public-stats">
-                Public stats
+                Member stats
               </Link>
               <Link className="ghost-button" href="/pov-list">
                 POV List
