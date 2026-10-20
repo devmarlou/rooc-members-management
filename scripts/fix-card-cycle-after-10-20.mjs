@@ -35,7 +35,7 @@ const [members, items, progress, rotation, auctions] = await Promise.all([
   supabase.from("auction_items").select("id,item_key"),
   supabase.from("member_round_progress").select("id,member_id,received").eq("round_id", round.id),
   supabase.from("rotation_list").select("member_id,position").eq("round_id", round.id),
-  supabase.from("auctions").select("id,name,started_at,auction_allocations(member_id,item_id,quantity,fulfilled)").eq("round_id", round.id).eq("status", "done").gte("started_at", CYCLE_START)
+  supabase.from("auctions").select("id,name,started_at,auction_allocations(member_id,item_id,quantity,fulfilled,page_assignments)").eq("round_id", round.id).eq("status", "done").gte("started_at", CYCLE_START)
 ]);
 for (const result of [members, items, progress, rotation, auctions]) if (result.error) throw result.error;
 
@@ -45,13 +45,16 @@ const nameById = new Map(members.data.map((member) => [member.id, member.char_na
 const positionByMemberId = new Map(rotation.data.map((row) => [row.member_id, row.position]));
 
 // The 10-15 auction reset the cycle mid-auction; only its post-reset cards
-// (positions 1-18) belong to the current cycle, plus everything after it.
+// (recorded with a higher item_cycle) belong to the current cycle, plus every
+// card handed out in the auctions after it. Rotation positions have changed
+// since, so this keys on the stored cycle number, not on position.
 const servedThisCycle = new Set();
 for (const auction of auctions.data) {
+  const isResetAuction = auction.name.startsWith("GL-10-15");
   for (const allocation of auction.auction_allocations || []) {
     if (allocation.item_id !== item.id || allocation.fulfilled === false || !(allocation.quantity > 0)) continue;
-    const position = positionByMemberId.get(allocation.member_id) || 0;
-    if (auction.name.startsWith("GL-10-15") && position > 18) continue;
+    const cycles = (allocation.page_assignments || []).map((assignment) => Number(assignment.item_cycle || 0));
+    if (isResetAuction && !cycles.some((cycle) => cycle > 0)) continue;
     servedThisCycle.add(allocation.member_id);
   }
 }
