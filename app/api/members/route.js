@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { handleApiError, requireAdmin, unauthorized } from "@/lib/api";
 import { writeAuditLog } from "@/lib/auditLog";
-import { enrollMemberInActiveRound } from "@/lib/memberRoundEnrollment";
+import { enrollMemberInActiveRound, moveMemberIntoPriorityBlock } from "@/lib/memberRoundEnrollment";
 import { validateCharClass, validateCharName } from "@/lib/validation";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { GUILD_MEMBER_LIMIT } from "@/lib/constants";
@@ -86,6 +86,9 @@ export async function POST(request) {
     if (error) throw error;
 
     await enrollMemberInActiveRound(supabase, data.id);
+    if (data.auction_priority_override || data.auction_priority_card) {
+      await moveMemberIntoPriorityBlock(supabase, data.id);
+    }
 
     await writeAuditLog(supabase, request, {
       action: "member.created",

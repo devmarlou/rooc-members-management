@@ -177,10 +177,6 @@ function normalizePartyMemberName(name) {
   return PARTY_MEMBER_ORDER_ALIASES[normalized] || normalized;
 }
 
-function auctionPriorityRank(member) {
-  return member?.auction_priority_override || member?.auction_priority_card ? 0 : 1;
-}
-
 function sortedPartyRoster(roster, groupName) {
   const hasSavedSlots = roster.some((member) =>
     Number.isInteger(member.party_slot),

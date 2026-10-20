@@ -71,6 +71,7 @@ Priority members have an auction-level feather entitlement: at the start of ever
 - **Mid-round changes:**
   - Member leaves the guild → removed from the rotation list (and cascades to any in-progress auction)
   - New member joins → appended to the END of the list with the next position number
+  - Member is given priority (feather or card) → moved up the list, right after the members who already hold priority. The move is permanent: removing the priority later leaves them in that slot, where they wait for the next item cycle like everyone else. A locked auction queue is not affected; the new order applies from the next auction.
 - **New members:** appended to the end and become auction-eligible after the 96-hour cooldown
 
 > The queue for every auction in the round is derived from this locked list. There is no other ordering logic — the rotation list IS the rotation. Carry-overs and skips operate within the framework of this list, not by replacing it.

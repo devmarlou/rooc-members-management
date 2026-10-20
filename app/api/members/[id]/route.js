@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { handleApiError, requireAdmin, unauthorized } from "@/lib/api";
 import { writeAuditLog } from "@/lib/auditLog";
-import { updateMemberCapOverrides } from "@/lib/auctionEngine";
+import { getAuctionState, updateMemberCapOverrides } from "@/lib/auctionEngine";
+import { emitDashboardEvent } from "@/lib/dashboardEvents";
+import { moveMemberIntoPriorityBlock } from "@/lib/memberRoundEnrollment";
 import { validateCharClass, validateCharName } from "@/lib/validation";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -95,12 +97,25 @@ export async function PATCH(request, { params }) {
       }
     }
 
+    // Gaining auction priority moves the member up the locked rotation for good.
+    const before = beforeResult.data;
+    const hadPriority = Boolean(before?.auction_priority_override || before?.auction_priority_card);
+    const hasPriority = Boolean(data.auction_priority_override || data.auction_priority_card);
+    let rotationMoved = false;
+    if (!hadPriority && hasPriority) {
+      rotationMoved = (await moveMemberIntoPriorityBlock(supabase, id)) > 0;
+      if (rotationMoved) {
+        auctionState = await getAuctionState(supabase);
+        await emitDashboardEvent(supabase, "rotation_updated");
+      }
+    }
+
     await writeAuditLog(supabase, request, {
       action: "member.updated",
       targetType: "member",
       targetId: data.id,
       summary: `Updated member ${data.char_name}`,
-      metadata: { before: beforeResult.data || null, after: data, memberCapOverrides: payload.memberCapOverrides || null, capOverridesError }
+      metadata: { before: beforeResult.data || null, after: data, memberCapOverrides: payload.memberCapOverrides || null, capOverridesError, rotationMoved }
     });
     return NextResponse.json({ member: data, auctionState, capOverridesError });
   } catch (error) {
