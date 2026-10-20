@@ -118,3 +118,41 @@ assert.deepEqual(fullResult.units.map((unit) => unit.item_cycle), [0, 1, 1]);
 assert.equal(fullResult.units.filter((unit) => unit.member_id === "c-prio").length, 1);
 
 console.log("card cycle reset check passed");
+
+// Feather cycle walk: positions 1-10 are priority (cap 9), 11-70 are already
+// full for the cycle, 71-80 still need theirs. Priority gets its share first,
+// 71-80 close the cycle, and the leftover starts the next cycle at the first
+// non-priority member (11), never at the priority members again.
+const walkMembers = Array.from({ length: 80 }, (_, index) => ({
+  id: `w${index + 1}`,
+  char_name: `W${index + 1}`,
+  auction_priority_override: index < 10,
+  auction_priority_card: false
+}));
+const walkContext = {
+  items: [ld],
+  allItems: [ld],
+  membersById: new Map(walkMembers.map((member) => [member.id, member])),
+  rotation: walkMembers.map((member, index) => ({ member_id: member.id, position: index + 1 })),
+  progressByMemberId: new Map(walkMembers.map((member, index) => [
+    member.id,
+    { member_id: member.id, received: { feather_ld: index >= 10 && index < 70 ? 3 : 0 } }
+  ])),
+  capResolver: {
+    capFor(memberId) { return Number(memberId.slice(1)) <= 10 ? 9 : 3; },
+    hasMemberCap() { return false; }
+  }
+};
+const walk = buildAllocationRows({ context: walkContext, inventoryByItemId: new Map([[ld.id, 10 * 9 + 10 * 3 + 12]]) });
+const walkOrder = [];
+for (const unit of walk.units) if (walkOrder.at(-1) !== unit.member_id) walkOrder.push(unit.member_id);
+assert.deepEqual(walkOrder, [
+  ...Array.from({ length: 10 }, (_, index) => `w${index + 1}`),
+  ...Array.from({ length: 10 }, (_, index) => `w${index + 71}`),
+  "w11", "w12", "w13", "w14"
+]);
+assert.equal(walk.units.length, 132);
+for (let index = 1; index <= 10; index += 1) assert.equal(walk.units.filter((unit) => unit.member_id === `w${index}`).length, 9);
+assert.deepEqual([...new Set(walk.units.filter((unit) => unit.member_id === "w11").map((unit) => unit.item_cycle))], [1]);
+
+console.log("feather cycle walk check passed");
