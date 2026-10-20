@@ -50,10 +50,12 @@ const result = buildAllocationRows({
 const namesById = new Map(members.map((member) => [member.id, member.char_name]));
 const orderedNames = result.units.map((unit) => namesById.get(unit.member_id));
 
+// Feather priority members are served strictly first, in rotation order,
+// then the walk resumes from the first non-priority member with room.
 assert.deepEqual(orderedNames, [
-  ...Array(5).fill("fredplays"),
   ...Array(8).fill("BanoobsDR"),
   ...Array(8).fill("DocxBR"),
+  ...Array(5).fill("fredplays"),
   ...Array(5).fill("NextNeed")
 ]);
 assert.equal(result.units.length, 26);
@@ -63,8 +65,8 @@ assert.equal(result.units.filter((unit) => unit.member_id === "prio-b").length, 
 console.log("auction priority order check passed");
 
 // Card priority: a member deep in the rotation with `auction_priority_card`
-// is slotted right after the cursor start for Puppet Card, gets exactly one
-// card, and leftover inventory never loops into a second card for anyone.
+// is served strictly first for Puppet Card, gets exactly one card, and
+// leftover inventory never loops into a second card for anyone.
 const card = {
   id: "card",
   item_key: "puppet_card",
@@ -91,10 +93,28 @@ const cardContext = {
   capResolver: { capFor() { return 1; }, hasMemberCap() { return false; } }
 };
 const cardResult = buildAllocationRows({ context: cardContext, inventoryByItemId: new Map([[card.id, 3]]) });
-assert.deepEqual(cardResult.units.map((unit) => unit.member_id), ["c-start", "c-prio", "c-next"]);
+assert.deepEqual(cardResult.units.map((unit) => unit.member_id), ["c-prio", "c-start", "c-next"]);
 
 const cardOverflow = buildAllocationRows({ context: cardContext, inventoryByItemId: new Map([[card.id, 9]]) });
-assert.deepEqual(cardOverflow.units.map((unit) => unit.member_id), ["c-start", "c-prio", "c-next", "c-feather", "c-last"]);
+assert.deepEqual(cardOverflow.units.map((unit) => unit.member_id), ["c-prio", "c-start", "c-next", "c-feather", "c-last"]);
 assert.equal(cardOverflow.units.filter((unit) => unit.member_id === "c-prio").length, 1);
 
 console.log("card priority order check passed");
+
+// Card cycle reset: when every member already has their card for the cycle,
+// the card-priority member still gets one first, then the cycle resets to zero
+// and the walk continues from the cursor, skipping the priority member. Held
+// totals never change the order.
+const fullContext = {
+  ...cardContext,
+  progressByMemberId: new Map(cardMembers.map((member) => [
+    member.id,
+    { member_id: member.id, received: { puppet_card: 1, __held_totals: { puppet_card: member.id === "c-prio" ? 7 : 2 } } }
+  ]))
+};
+const fullResult = buildAllocationRows({ context: fullContext, inventoryByItemId: new Map([[card.id, 3]]) });
+assert.deepEqual(fullResult.units.map((unit) => unit.member_id), ["c-prio", "c-start", "c-next"]);
+assert.deepEqual(fullResult.units.map((unit) => unit.item_cycle), [0, 1, 1]);
+assert.equal(fullResult.units.filter((unit) => unit.member_id === "c-prio").length, 1);
+
+console.log("card cycle reset check passed");
