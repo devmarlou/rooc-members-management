@@ -59,6 +59,10 @@ for (const auction of auctions.data) {
   }
 }
 
+// Admin decision: porkchop69 keeps his current-cycle card (moved to the
+// priority block; his next card comes with the next cycle).
+for (const member of members.data) if (member.char_name === "porkchop69") servedThisCycle.add(member.id);
+
 const updates = [];
 for (const row of progress.data) {
   const received = row.received && typeof row.received === "object" ? row.received : {};
