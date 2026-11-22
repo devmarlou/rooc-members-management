@@ -134,11 +134,16 @@ const PARTY_MEMBER_ORDER = Object.fromEntries(
     ),
   ]),
 );
+// In-game listing order. Astrocores are free for all and open the first page.
 const AUCTION_PAGE_ITEM_ORDER = {
-  puppet_card: 1,
-  puppet_fragment: 2,
-  feather_ld: 3,
-  feather_ts: 4,
+  astrocore_big_blue: 1,
+  astrocore_big_red: 2,
+  astrocore_small_blue: 3,
+  astrocore_small_red: 4,
+  puppet_card: 5,
+  puppet_fragment: 6,
+  feather_ld: 7,
+  feather_ts: 8,
 };
 const SHARED_FEATHER_PAGE_KEYS = new Set(["feather_ld", "feather_ts"]);
 let adminSessionCache = null;

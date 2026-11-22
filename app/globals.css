@@ -2059,6 +2059,25 @@ button.party-slot.empty:hover:not(:disabled) {
   box-shadow: 0 0 14px rgba(96, 165, 250, 0.48);
 }
 
+.auction-item-dot.item-astrocore_big_blue,
+.auction-item-dot.item-astrocore_small_blue {
+  background: #38bdf8;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.5);
+}
+
+.auction-item-dot.item-astrocore_big_red,
+.auction-item-dot.item-astrocore_small_red {
+  background: #ef4444;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.5);
+}
+
+/* Small astrocores use a smaller dot than the big ones. */
+.auction-item-dot.item-astrocore_small_blue,
+.auction-item-dot.item-astrocore_small_red {
+  width: 7px;
+  height: 7px;
+}
+
 .auction-slot-item strong,
 .auction-slot-member strong {
   overflow: hidden;

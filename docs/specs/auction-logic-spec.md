@@ -34,6 +34,11 @@ Two parallel auction types are supported. Both use the same algorithm, same UI, 
 - Queue: members who **didn't get a full haul from GL/WoE** (overflow / unfilled members)
 - **Caps are shared across both auction types** within the same round. If Alice got 1 Puppet in GL/WoE (her cap), she's not eligible for Puppet in League Prize.
 
+### Astrocores (free for all)
+- Four bonus items list first in both auction types, in the in-game order: **Big Blue → Big Red → Small Blue → Small Red**, then Puppet Card and the rest as usual.
+- They are `gates_round_completion=false` like the Illusion Card Fragment: they take up page slots so later page numbers stay correct, but no member is assigned, there are no limits, and they never touch cycle progress.
+- Added with `scripts/add-astrocore-items.mjs`.
+
 ### Running sequentially
 - Admin starts GL/WoE first → it goes `active`
 - Admin marks GL/WoE `done` when in-game auction is complete (round progress updates)
